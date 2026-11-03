@@ -1,7 +1,7 @@
 # ĐẶC TẢ GIAO DIỆN LẬP TRÌNH ỨNG DỤNG (API SPECIFICATION)
 
 > **Giao thức:** RESTful HTTP / JSON  
-> **Cơ sở dữ liệu:** MongoDB Atlas  
+> **Cơ sở dữ liệu:** Aiven Cloud MySQL (Sequelize ORM)  
 > **Mã hóa & Xác thực:** JWT Bearer Token trong Header `Authorization: Bearer <token>`  
 > **Định dạng chuẩn phản hồi:**
 > ```json

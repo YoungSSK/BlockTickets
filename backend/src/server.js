@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import sequelize, { connectDB } from "./config/db.js";
-
+import "./models/index.js";
 dotenv.config();
 
 const app = express();
@@ -14,7 +14,7 @@ app.use(
   cors({
     origin: CLIENT_URL,
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -34,7 +34,8 @@ connectDB().then(async () => {
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Máy chủ BlockTickets API (Aiven MySQL) đang hoạt động bình thường",
+    message:
+      "Máy chủ BlockTickets API (Aiven MySQL) đang hoạt động bình thường",
     timestamp: new Date().toISOString(),
   });
 });
