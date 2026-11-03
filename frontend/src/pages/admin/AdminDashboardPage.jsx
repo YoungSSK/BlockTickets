@@ -802,6 +802,15 @@ const AdminDashboardPage = () => {
                                             height: 24,
                                         }}
                                     />
+                                    <Button
+                                        size="small"
+                                        variant="text"
+                                        color="primary"
+                                        onClick={() => navigate('/admin/events')}
+                                        sx={{ p: 0, minWidth: 'auto', fontSize: '0.75rem', fontWeight: 600 }}
+                                    >
+                                        Duyệt ngay →
+                                    </Button>
                                 </Stack>
                                 <Typography variant="caption" color="text.secondary">
                                     {metrics.activeEventsCount} đang mở bán • {metrics.endedEventsCount} đã hoàn tất
@@ -852,9 +861,20 @@ const AdminDashboardPage = () => {
                                         sx={{ height: 6, borderRadius: 3 }}
                                     />
                                 </Box>
-                                <Typography variant="caption" color="text.secondary">
-                                    {metrics.connectedWallets.toLocaleString('vi-VN')} ví hoạt động • 155 Organizer
-                                </Typography>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {metrics.connectedWallets.toLocaleString('vi-VN')} ví hoạt động • 155 Organizer
+                                    </Typography>
+                                    <Button
+                                        size="small"
+                                        variant="text"
+                                        color="primary"
+                                        onClick={() => navigate('/admin/users')}
+                                        sx={{ p: 0, minWidth: 'auto', fontSize: '0.75rem', fontWeight: 600 }}
+                                    >
+                                        Quản lý →
+                                    </Button>
+                                </Stack>
                             </CardContent>
                         </Card>
                     </Grid>

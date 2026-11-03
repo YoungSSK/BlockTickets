@@ -4,6 +4,7 @@ import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import EventApprovalPage from './pages/admin/EventApprovalPage';
+import UserManagementPage from './pages/admin/UserManagementPage';
 
 const App = () => {
     return (
@@ -16,6 +17,8 @@ const App = () => {
             <Route path="/admin/events" element={<EventApprovalPage />} />
             <Route path="/admin/events/pending" element={<EventApprovalPage />} />
             <Route path="/admin/approvals" element={<EventApprovalPage />} />
+            <Route path="/admin/users" element={<UserManagementPage />} />
+            <Route path="/admin/user-management" element={<UserManagementPage />} />
         </Routes>
     );
 };
