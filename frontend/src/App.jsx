@@ -5,6 +5,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import EventApprovalPage from './pages/admin/EventApprovalPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
+import CheckoutPage from './pages/customer/CheckoutPage';
 
 const App = () => {
     return (
@@ -19,6 +20,8 @@ const App = () => {
             <Route path="/admin/approvals" element={<EventApprovalPage />} />
             <Route path="/admin/users" element={<UserManagementPage />} />
             <Route path="/admin/user-management" element={<UserManagementPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/customer/checkout" element={<CheckoutPage />} />
         </Routes>
     );
 };
