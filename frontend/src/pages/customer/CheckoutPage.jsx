@@ -223,7 +223,7 @@ const CheckoutPage = () => {
                     if (accounts && accounts.length > 0) {
                         // Tạo mock TxHash hoặc gửi giao dịch thật nếu contract đã deploy
                         const randomHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-                        
+
                         // Chờ người dùng xác nhận trên MetaMask
                         await new Promise((resolve) => setTimeout(resolve, 2200));
 
