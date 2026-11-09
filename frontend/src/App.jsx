@@ -9,6 +9,10 @@ import CheckoutPage from './pages/customer/CheckoutPage';
 import EventDetailPage from './pages/customer/EventDetailPage';
 import HomePage from './pages/customer/HomePage';
 import MyTicketsPage from './pages/customer/MyTicketsPage';
+import MarketplacePage from './pages/marketplace/MarketplacePage';
+import CheckInScannerPage from './pages/organizer/CheckInScannerPage';
+import CreateEventPage from './pages/organizer/CreateEventPage';
+import OrganizerDashboardPage from './pages/organizer/OrganizerDashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 const App = () => {
@@ -46,6 +50,24 @@ const App = () => {
             <Route path="/tickets" element={<MyTicketsPage />} />
             <Route path="/customer/tickets" element={<MyTicketsPage />} />
             <Route path="/customer/my-tickets" element={<MyTicketsPage />} />
+
+            {/* Phân hệ Chợ vé thứ cấp (Marketplace - BR-02 Trần giá 120%) */}
+            <Route path="/marketplace" element={<MarketplacePage />} />
+            <Route path="/resale" element={<MarketplacePage />} />
+            <Route path="/customer/marketplace" element={<MarketplacePage />} />
+            <Route path="/customer/resale" element={<MarketplacePage />} />
+
+            {/* Phân hệ Ban tổ chức (Organizer): Dashboard, Soát vé Check-in & Tạo sự kiện */}
+            <Route path="/organizer" element={<Navigate to="/organizer/dashboard" replace />} />
+            <Route path="/organizer/dashboard" element={<OrganizerDashboardPage />} />
+            <Route path="/organizer-dashboard" element={<OrganizerDashboardPage />} />
+            <Route path="/organizer/check-in" element={<CheckInScannerPage />} />
+            <Route path="/check-in" element={<CheckInScannerPage />} />
+            <Route path="/scanner" element={<CheckInScannerPage />} />
+            <Route path="/organizer/scanner" element={<CheckInScannerPage />} />
+            <Route path="/organizer/create-event" element={<CreateEventPage />} />
+            <Route path="/create-event" element={<CreateEventPage />} />
+            <Route path="/events/create" element={<CreateEventPage />} />
 
             {/* Tuyến đường bắt lỗi 404 */}
             <Route path="*" element={<NotFoundPage />} />

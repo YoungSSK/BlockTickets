@@ -92,7 +92,11 @@ const Navbar = () => {
     const navLinks = [
         { label: 'Trang chủ', path: '/' },
         { label: 'Khám phá sự kiện', path: '/events' },
+        { label: 'Chợ vé thứ cấp', path: '/marketplace' },
         { label: 'Kho vé của tôi', path: '/my-tickets' },
+        { label: 'Bảng điều khiển Organizer', path: '/organizer/dashboard' },
+        { label: 'Tạo sự kiện', path: '/organizer/create-event' },
+        { label: 'Soát vé tại cổng', path: '/organizer/check-in' },
         { label: 'Bảng điều khiển Admin', path: '/admin/dashboard' },
         { label: 'Duyệt sự kiện', path: '/admin/events' },
         { label: 'Quản lý người dùng', path: '/admin/users' },

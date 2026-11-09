@@ -700,7 +700,7 @@ const HomePage = () => {
                                     variant="contained"
                                     color="primary"
                                     component={RouterLink}
-                                    to="/events/EVT-2026-002"
+                                    to="/marketplace"
                                     sx={{ height: 44, borderRadius: '8px', fontWeight: 600 }}
                                 >
                                     Khám Phá Vé Đang Rao Bán
