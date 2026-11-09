@@ -7,7 +7,7 @@ import Order from "./Order.js";
 import ResaleListing from "./ResaleListing.js";
 import CheckInLog from "./CheckInLog.js";
 import AuditLog from "./AuditLog.js";
-
+import Session from "./Session.js";
 // 1. User <-> Event (Organizer tạo nhiều sự kiện)
 User.hasMany(Event, {
   foreignKey: "organizer_id",
@@ -95,6 +95,13 @@ User.hasMany(AuditLog, {
   onDelete: "RESTRICT",
 });
 AuditLog.belongsTo(User, { foreignKey: "user_id", as: "user" });
+// 9. User <-> Session (Người dùng có nhiều phiên đăng nhập)
+User.hasMany(Session, {
+  foreignKey: "user_id",
+  as: "sessions",
+  onDelete: "CASCADE",
+});
+Session.belongsTo(User, { foreignKey: "user_id", as: "user" });
 
 export {
   sequelize,
@@ -106,6 +113,7 @@ export {
   ResaleListing,
   CheckInLog,
   AuditLog,
+  Session,
 };
 
 export default {
@@ -118,4 +126,5 @@ export default {
   ResaleListing,
   CheckInLog,
   AuditLog,
+  Session,
 };
