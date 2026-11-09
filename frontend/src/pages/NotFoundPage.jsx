@@ -10,6 +10,10 @@ import {
   Chip,
   useTheme,
 } from '@mui/material';
+import {
+  Home as HomeIcon,
+  ArrowBack as ArrowBackIcon,
+} from '@mui/icons-material';
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
@@ -149,6 +153,7 @@ export default function NotFoundPage() {
             <Button
               variant="contained"
               size="large"
+              startIcon={<HomeIcon />}
               onClick={() => navigate('/')}
               sx={{
                 px: 3,
@@ -162,6 +167,7 @@ export default function NotFoundPage() {
             <Button
               variant="outlined"
               size="large"
+              startIcon={<ArrowBackIcon />}
               onClick={() => navigate(-1)}
               sx={{
                 px: 3,

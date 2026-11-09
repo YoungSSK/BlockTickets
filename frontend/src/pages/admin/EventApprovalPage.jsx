@@ -497,14 +497,24 @@ const EventApprovalPage = () => {
                     >
                         {/* Tiêu đề & Nút quay lại */}
                         <Box>
-                            <Button
-                                size="small"
-                                startIcon={<ArrowBack />}
-                                onClick={() => navigate('/admin/dashboard')}
-                                sx={{ mb: 0.5, color: 'text.secondary', px: 0, '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}
-                            >
-                                Quay lại Bảng điều khiển Quản trị
-                            </Button>
+                            <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+                                <Button
+                                    size="small"
+                                    onClick={() => navigate('/')}
+                                    sx={{ color: 'text.secondary', px: 0, minWidth: 'auto', '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}
+                                >
+                                    Trang chủ
+                                </Button>
+                                <Typography variant="caption" color="text.disabled">/</Typography>
+                                <Button
+                                    size="small"
+                                    startIcon={<ArrowBack />}
+                                    onClick={() => navigate('/admin/dashboard')}
+                                    sx={{ color: 'text.secondary', px: 0, '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}
+                                >
+                                    Bảng điều khiển Quản trị
+                                </Button>
+                            </Stack>
                             <Stack direction="row" alignItems="center" spacing={1.5}>
                                 <Typography variant="h2" color="text.primary">
                                     Hàng Đợi Phê Duyệt Sự Kiện
