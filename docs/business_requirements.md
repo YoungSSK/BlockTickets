@@ -1,7 +1,7 @@
 # TÀI LIỆU YÊU CẦU NGHIỆP VỤ (BUSINESS REQUIREMENTS)
 
 > **Hệ thống:** BlockTickets – Nền tảng bán vé và chuyển nhượng vé sự kiện ứng dụng Blockchain & NFT  
-> **Cơ sở dữ liệu:** MongoDB Atlas  
+> **Cơ sở dữ liệu:** Aiven Cloud MySQL (Sequelize ORM)  
 > **Frontend:** React + JavaScript (Vite)  
 > **Mạng Blockchain:** Ethereum Sepolia Testnet  
 
@@ -12,7 +12,7 @@
 1. **Giải quyết vấn nạn vé giả:** Sử dụng Smart Contract (chuẩn ERC-721) để phát hành vé dưới dạng NFT. Mỗi vé là duy nhất, có thể xác thực công khai quyền sở hữu trên blockchain.
 2. **Kiểm soát nạn phe vé / đầu cơ vé chợ đen:** Thiết lập quy tắc bất biến trong Smart Contract: Giá bán lại trên thị trường thứ cấp (Marketplace) **không được vượt quá 120% giá gốc phát hành**.
 3. **Quy trình soát vé một lần (Check-in an toàn):** Áp dụng mã QR động có chữ ký số HMAC, ngăn chặn hoàn toàn việc chụp màn hình vé gửi cho nhiều người hoặc sử dụng vé lặp lại.
-4. **Minh bạch tài chính:** Báo cáo doanh thu thời gian thực, đối soát dễ dàng giữa dữ liệu ngoài chuỗi (MongoDB Atlas) và dữ liệu trên chuỗi (Sepolia Testnet).
+4. **Minh bạch tài chính:** Báo cáo doanh thu thời gian thực, đối soát dễ dàng giữa dữ liệu ngoài chuỗi (Aiven Cloud MySQL) và dữ liệu trên chuỗi (Sepolia Testnet).
 
 ---
 
@@ -63,4 +63,4 @@
 
 ### BR-05: Chống quét vé lặp lại (Atomic One-Time Check-In)
 - Mã QR check-in được tạo động từ backend với thời hạn nhất định và chứa chuỗi chữ ký bảo mật HMAC.
-- Khi nhân viên soát vé quét mã QR, backend sẽ kiểm tra trạng thái vé và cập nhật cờ `isUsed = true` dưới dạng thao tác nguyên tử (atomic operation) trên MongoDB Atlas / Smart Contract. Lần quét thứ hai trở đi sẽ bị hệ thống từ chối ngay lập tức kèm thời gian đã check-in trước đó.
+- Khi nhân viên soát vé quét mã QR, backend sẽ kiểm tra trạng thái vé và cập nhật cờ `is_used = true` dưới dạng thao tác nguyên tử (atomic transaction / row locking) trên MySQL / Smart Contract. Lần quét thứ hai trở đi sẽ bị hệ thống từ chối ngay lập tức kèm thời gian đã check-in trước đó.

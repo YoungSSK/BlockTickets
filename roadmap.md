@@ -139,20 +139,20 @@ thật trong môi trường testnet.
 -   Hoàn thành khi server chạy được, có endpoint health-check và không
     commit secret lên Git.
 
-## BE-02. Kết nối MongoDB Atlas và thiết kế dữ liệu
+## BE-02. Kết nối Aiven Cloud MySQL và thiết kế dữ liệu
 
--   Thiết lập cụm MongoDB Atlas (Cluster M0/M10), cấu hình Network Access (IP Whitelist/0.0.0.0/0 cho test) và Database User.
--   Kết nối an toàn qua Mongoose bằng biến môi trường `MONGODB_URI` trong `.env`.
--   Tạo Mongoose models tối thiểu:
-    -   `User`: tên hiển thị, email, mật khẩu đã hash nếu dùng đăng nhập mật khẩu, role (`admin`, `organizer`, `customer`), trạng thái tài khoản, wallet address đã liên kết, nonce dùng một lần.
-    -   `Event`: organizerId, thông tin sự kiện, địa điểm, thời gian, ảnh banner, trạng thái duyệt (`draft`, `pending`, `approved`, `rejected`), trạng thái bán vé, địa chỉ contract/chain nếu có.
-    -   `TicketType`: eventId, tên loại vé, originalPrice, maxSupply, currentSupply, saleStart, saleEnd và các trường đồng bộ từ blockchain.
-    -   `Ticket`: tokenId, eventId, ticketTypeId, owner wallet, transaction hash, trạng thái đồng bộ, check-in status; dữ liệu quyền sở hữu phải được đối chiếu với chain.
-    -   `Order` / `Transaction`: buyer, event, loại vé, số lượng, giá, trạng thái, chainId, transaction hash, idempotency key.
-    -   `ResaleListing`: tokenId, seller, giá chào bán (giới hạn <= 120% originalPrice), trạng thái và transaction hash; trạng thái on-chain là nguồn xác thực cho listing.
-    -   `CheckInLog`: tokenId, eventId, thời điểm, nhân viên/quầy check-in, kết quả và mã yêu cầu.
-    -   `AuditLog` và `SupportTicket` nếu có.
--   Thiết lập index trên MongoDB Atlas cho email, wallet address, eventId, tokenId, thời gian và các trường tìm kiếm text. Không lưu dữ liệu nhạy cảm hoặc private key.
+-   Thiết lập cơ sở dữ liệu Aiven Cloud MySQL (Service Managed MySQL 8.0+), cấu hình SSL Mode (`REQUIRED`).
+-   Kết nối an toàn qua Sequelize ORM & `mysql2` bằng biến môi trường `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` trong `.env`.
+-   Tạo Sequelize models và thiết lập quan hệ (Associations):
+    -   `User`: id, email, password_hash, full_name, role (`admin`, `organizer`, `customer`), status, wallet_address, nonce.
+    -   `Event`: id, organizer_id (FK -> User), title, description, category, banner_url, venue (name, address, city), start_time, end_time, status (`draft`, `pending`, `approved`, `rejected`, `published`, `ended`, `cancelled`), rejection_reason, on_chain_event_id.
+    -   `TicketType`: id, event_id (FK -> Event), name, description, original_price (DECIMAL), currency, max_supply, current_supply, sale_start_time, sale_end_time.
+    -   `Ticket`: id, token_id (unique, on-chain), event_id (FK), ticket_type_id (FK), owner_wallet, original_buyer_wallet, original_price, tx_hash, is_used, used_at, is_listed_for_resale.
+    -   `Order`: id, buyer_wallet, event_id (FK), ticket_type_id (FK), quantity, total_price, currency, tx_hash, status, idempotency_key (unique).
+    -   `ResaleListing`: id, token_id, ticket_id (FK), event_id (FK), seller_wallet, original_price, resale_price (<= 120% original_price), max_allowed_price, listing_tx_hash, buyer_wallet, sold_tx_hash, status.
+    -   `CheckInLog`: id, token_id, event_id (FK), scanned_by (FK -> User), status, qr_nonce, scanned_at.
+    -   `AuditLog`: id, user_id (FK -> User), user_role, action, target_id, ip_address, details (JSON), created_at.
+-   Thiết lập index, composite index (`status, start_time`), fulltext index và ràng buộc khóa ngoại (Foreign Keys: CASCADE/RESTRICT) trên MySQL. Áp dụng Transaction & Row-level Locking (`FOR UPDATE`) khi bán vé & check-in.
 
 ## BE-03. Xác thực, phân quyền và bảo mật API
 

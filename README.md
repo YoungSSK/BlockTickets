@@ -15,7 +15,7 @@
 
 ## 🛠 Công nghệ sử dụng
 
-- **Frontend:** React (JavaScript / JSX), Vite, React Router DOM, ethers.js, Material UI / Lucide Icons *(Không sử dụng TypeScript ở frontend)*.
+- **Frontend:** React (JavaScript / JSX), Vite, React Router DOM, ethers.js, Material UI / Lucide Icons.
 - **Backend:** Node.js, Express.js, Mongoose ODM, JSON Web Token (JWT), Zod validator.
 - **Cơ sở dữ liệu:** **MongoDB Atlas** (Cloud Database Cluster).
 - **Blockchain:** Solidity (0.8.20+), Hardhat framework, OpenZeppelin Contracts, mạng Ethereum Sepolia Testnet.

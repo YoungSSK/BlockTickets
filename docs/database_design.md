@@ -1,226 +1,220 @@
-# THIẾT KẾ CƠ SỞ DỮ LIỆU (DATABASE DESIGN - MONGODB ATLAS)
+# THIẾT KẾ CƠ SỞ DỮ LIỆU (DATABASE DESIGN - AIVEN CLOUD MYSQL)
 
-> **Cơ sở dữ liệu:** MongoDB Atlas (Cloud Cluster)  
-> **Thư viện kết nối:** Mongoose ODM (Node.js)  
-> **Nguyên tắc:** MongoDB Atlas lưu trữ dữ liệu nghiệp vụ, tìm kiếm nhanh và lịch sử hiển thị giao diện. Quyền sở hữu vé, giới hạn nguồn cung và trần giá 120% được bảo vệ bất biến trên Blockchain Ethereum Sepolia.
+> **Cơ sở dữ liệu:** Aiven Cloud MySQL (Managed MySQL 8.0+, SSL Required)  
+> **Thư viện kết nối / ORM:** Sequelize v6+ & driver `mysql2` (Node.js ES Modules)  
+> **Bảng mã & Đối chiếu (Charset & Collation):** `utf8mb4` / `utf8mb4_unicode_ci`  
+> **Storage Engine:** InnoDB (hỗ trợ ACID Transactions, Row-level Locking, Foreign Key Constraints)  
+> **Nguyên tắc cốt lõi:** MySQL lưu trữ dữ liệu nghiệp vụ ngoài chuỗi (off-chain), hỗ trợ truy vấn quan hệ nhanh, quản lý giao dịch an toàn và hiển thị giao diện. Quyền sở hữu vé NFT, trần giá 120% và tổng cung tối đa được bảo chứng bất biến trên Blockchain Ethereum Sepolia.
 
 ---
 
-## 1. MỐI QUAN HỆ VÀ KIẾN TRÚC LƯU TRỮ
+## 1. MỐI QUAN HỆ THỰC THỂ (ENTITY RELATIONSHIP DIAGRAM - ERD)
 
 ```text
 +-------------------+            1:N           +---------------------+
-|      User         | -----------------------> |       Event         |
+|      users        | -----------------------> |       events        |
 | (Admin/Org/Cust)  |                          | (Draft/Approved/...) |
 +-------------------+                          +---------------------+
           |                                               | 1:N
           | 1:N                                           v
           |                                    +---------------------+
-          |                                    |     TicketType      |
-          |                                    | (VIP, maxSupply...) |
+          |                                    |    ticket_types     |
+          |                                    | (VIP, max_supply...) |
           |                                    +---------------------+
           v                                               | 1:N
 +-------------------+                                     v
-|      Order        | -----------------------> +---------------------+
-| (buyer, txHash)   |            1:N           |       Ticket        |
-+-------------------+                          | (tokenId, owner...) |
+|      orders       | -----------------------> +---------------------+
+| (buyer, tx_hash)  |            1:N           |       tickets       |
++-------------------+                          | (token_id, owner...) |
                                                +---------------------+
                                                  | 1:1          | 1:N
                                                  v              v
                                       +------------------+  +------------------+
-                                      |  ResaleListing   |  |   CheckInLog     |
-                                      | (price <= 120%)  |  | (scannedAt...)   |
+                                      | resale_listings  |  |  check_in_logs   |
+                                      | (price <= 120%)  |  |  (scanned_at...) |
                                       +------------------+  +------------------+
 ```
 
 ---
 
-## 2. CHI TIẾT CÁC COLLECTIONS & SCHEMAS
+## 2. CHI TIẾT CÁC BẢNG (TABLES & SCHEMAS)
 
-### 2.1. Collection: `users`
-Lưu trữ thông tin người dùng và liên kết địa chỉ ví blockchain.
+### 2.1. Bảng: `users`
+Lưu trữ thông tin tài khoản người dùng, phân quyền vai trò và liên kết địa chỉ ví blockchain.
 
-```javascript
-{
-  _id: ObjectId,
-  email: { type: String, required: true, unique: true, index: true },
-  passwordHash: { type: String, required: false }, // Cho đăng nhập truyền thống
-  fullName: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'organizer', 'customer'], default: 'customer', index: true },
-  walletAddress: { type: String, lowercase: true, unique: true, sparse: true, index: true },
-  nonce: { type: String, default: null }, // Chuỗi ngẫu nhiên phục vụ ký ví xác thực (Sign-In with Ethereum)
-  status: { type: String, enum: ['active', 'suspended'], default: 'active' },
-  avatarUrl: { type: String, default: '' },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-}
-```
-
-### 2.2. Collection: `events`
-Lưu trữ thông tin sự kiện do Organizer khởi tạo.
-
-```javascript
-{
-  _id: ObjectId,
-  organizerId: { type: ObjectId, ref: 'User', required: true, index: true },
-  title: { type: String, required: true, index: 'text' },
-  description: { type: String, required: true },
-  category: { type: String, enum: ['music', 'technology', 'sports', 'workshop'], required: true },
-  bannerUrl: { type: String, required: true },
-  venue: {
-    name: { type: String, required: true },
-    address: { type: String, required: true },
-    city: { type: String, required: true, index: true }
-  },
-  startTime: { type: Date, required: true, index: true },
-  endTime: { type: Date, required: true },
-  status: { 
-    type: String, 
-    enum: ['draft', 'pending', 'approved', 'rejected', 'published', 'ended', 'cancelled'], 
-    default: 'draft',
-    index: true 
-  },
-  rejectionReason: { type: String, default: '' },
-  onChainEventId: { type: Number, default: null }, // ID sự kiện trên Smart Contract nếu có
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-}
-```
-
-### 2.3. Collection: `ticket_types`
-Lưu trữ các hạng vé thuộc về một sự kiện.
-
-```javascript
-{
-  _id: ObjectId,
-  eventId: { type: ObjectId, ref: 'Event', required: true, index: true },
-  name: { type: String, required: true }, // Ví dụ: "Standard", "VIP", "Early Bird"
-  description: { type: String, default: '' },
-  originalPrice: { type: Number, required: true }, // Giá gốc phát hành (đơn vị: ETH hoặc WEI)
-  currency: { type: String, default: 'ETH' },
-  maxSupply: { type: Number, required: true }, // Giới hạn số lượng vé phát hành tối đa
-  currentSupply: { type: Number, default: 0 }, // Số lượng vé đã được mint
-  saleStartTime: { type: Date, required: true },
-  saleEndTime: { type: Date, required: true },
-  createdAt: { type: Date, default: Date.now }
-}
-```
-
-### 2.4. Collection: `tickets`
-Bản ghi vé NFT sau khi giao dịch mua trên blockchain được xác thực thành công.
-
-```javascript
-{
-  _id: ObjectId,
-  tokenId: { type: Number, required: true, unique: true, index: true }, // Token ID ERC-721 on-chain
-  eventId: { type: ObjectId, ref: 'Event', required: true, index: true },
-  ticketTypeId: { type: ObjectId, ref: 'TicketType', required: true },
-  ownerWallet: { type: String, lowercase: true, required: true, index: true }, // Ví hiện đang sở hữu vé
-  originalBuyerWallet: { type: String, lowercase: true, required: true },
-  originalPrice: { type: Number, required: true }, // Giá ban đầu để đối soát trần giá 120%
-  txHash: { type: String, required: true, unique: true }, // Transaction Hash mint vé trên Sepolia
-  isUsed: { type: Boolean, default: false, index: true }, // Trạng thái đã check-in hay chưa
-  usedAt: { type: Date, default: null },
-  isListedForResale: { type: Boolean, default: false, index: true }, // Có đang được rao bán trên chợ không
-  createdAt: { type: Date, default: Date.now }
-}
-```
-
-### 2.5. Collection: `orders`
-Quản lý lịch sử đặt mua vé và trạng thái xác minh giao dịch với blockchain.
-
-```javascript
-{
-  _id: ObjectId,
-  buyerWallet: { type: String, lowercase: true, required: true, index: true },
-  eventId: { type: ObjectId, ref: 'Event', required: true },
-  ticketTypeId: { type: ObjectId, ref: 'TicketType', required: true },
-  quantity: { type: Number, required: true, min: 1 },
-  totalPrice: { type: Number, required: true },
-  currency: { type: String, default: 'ETH' },
-  txHash: { type: String, sparse: true, index: true }, // Hash giao dịch do MetaMask gửi
-  status: { 
-    type: String, 
-    enum: ['pending_payment', 'verifying', 'confirmed', 'failed', 'cancelled'], 
-    default: 'pending_payment',
-    index: true 
-  },
-  idempotencyKey: { type: String, unique: true, required: true }, // Chống tạo đơn trùng khi gửi request lặp
-  createdAt: { type: Date, default: Date.now }
-}
-```
-
-### 2.6. Collection: `resale_listings`
-Thông tin vé đang được niêm yết bán lại trên thị trường thứ cấp.
-
-```javascript
-{
-  _id: ObjectId,
-  tokenId: { type: Number, required: true, index: true },
-  ticketId: { type: ObjectId, ref: 'Ticket', required: true },
-  eventId: { type: ObjectId, ref: 'Event', required: true },
-  sellerWallet: { type: String, lowercase: true, required: true, index: true },
-  originalPrice: { type: Number, required: true },
-  resalePrice: { type: Number, required: true }, // BẮT BUỘC <= originalPrice * 1.2
-  maxAllowedPrice: { type: Number, required: true }, // originalPrice * 1.2
-  listingTxHash: { type: String, default: '' },
-  buyerWallet: { type: String, lowercase: true, default: null },
-  soldTxHash: { type: String, default: null },
-  status: { 
-    type: String, 
-    enum: ['active', 'sold', 'cancelled'], 
-    default: 'active',
-    index: true 
-  },
-  createdAt: { type: Date, default: Date.now },
-  soldAt: { type: Date, default: null }
-}
-```
-
-### 2.7. Collection: `check_in_logs`
-Nhật ký quét mã QR soát vé tại cửa sự kiện.
-
-```javascript
-{
-  _id: ObjectId,
-  tokenId: { type: Number, required: true, index: true },
-  eventId: { type: ObjectId, ref: 'Event', required: true, index: true },
-  scannedBy: { type: ObjectId, ref: 'User', required: true }, // Nhân viên soát vé
-  status: { 
-    type: String, 
-    enum: ['success', 'already_used', 'invalid_ticket', 'wrong_event', 'invalid_signature'], 
-    required: true 
-  },
-  qrNonce: { type: String, required: true },
-  scannedAt: { type: Date, default: Date.now, index: true }
-}
-```
-
-### 2.8. Collection: `audit_logs`
-Lưu vết các hành động quản trị nhạy cảm.
-
-```javascript
-{
-  _id: ObjectId,
-  userId: { type: ObjectId, ref: 'User', required: true, index: true },
-  userRole: { type: String, required: true },
-  action: { type: String, required: true }, // Vd: "APPROVE_EVENT", "REJECT_EVENT", "SUSPEND_USER"
-  targetId: { type: String, required: true },
-  ipAddress: { type: String, default: '' },
-  details: { type: Object, default: {} },
-  createdAt: { type: Date, default: Date.now }
-}
-```
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính |
+| `email` | `VARCHAR(255)` | `NOT NULL`, `UNIQUE`, `INDEX` | Email định danh |
+| `password_hash` | `VARCHAR(255)` | `NULL` | Mật khẩu hash bằng bcrypt (null nếu chỉ đăng nhập ví) |
+| `full_name` | `VARCHAR(255)` | `NOT NULL` | Họ tên hiển thị |
+| `role` | `ENUM('admin', 'organizer', 'customer')` | `DEFAULT 'customer'`, `INDEX` | Phân quyền truy cập |
+| `wallet_address` | `VARCHAR(42)` | `NULL`, `UNIQUE`, `INDEX` | Địa chỉ ví Ethereum (chữ thường, vd: `0x...`) |
+| `nonce` | `VARCHAR(255)` | `NULL` | Chuỗi ngẫu nhiên phục vụ Sign-In with Ethereum (SIWE) |
+| `status` | `ENUM('active', 'suspended')` | `DEFAULT 'active'` | Trạng thái tài khoản |
+| `avatar_url` | `VARCHAR(500)` | `DEFAULT ''` | Đường dẫn ảnh đại diện |
+| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Thời điểm tạo |
+| `updated_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Thời điểm cập nhật |
 
 ---
 
-## 3. CHIẾN LƯỢC TỐI ƯU HÓA TRÊN MONGODB ATLAS
+### 2.2. Bảng: `events`
+Lưu trữ thông tin chi tiết sự kiện do Organizer khởi tạo.
 
-1. **Compound Indexes (Chỉ mục kết hợp):**
-   - `tickets`: `{ eventId: 1, ownerWallet: 1 }` -> Tối ưu tốc độ lấy vé của user trong sự kiện.
-   - `events`: `{ status: 1, startTime: 1 }` -> Tối ưu hiển thị sự kiện công khai trên trang chủ.
-   - `resale_listings`: `{ status: 1, eventId: 1 }` -> Tối ưu tìm kiếm vé đang rao bán.
-2. **Atomic Updates (Cập nhật nguyên tử):**
-   - Sử dụng `findOneAndUpdate` với điều kiện `{ tokenId: id, isUsed: false }` khi check-in để đảm bảo không thể xảy ra race-condition khi 2 máy quét mã cùng lúc.
-3. **Atlas Security & Whitelisting:**
-   - Cấu hình Network Access trên MongoDB Atlas chỉ cho phép IP của máy chủ backend truy cập (hoặc `0.0.0.0/0` kèm username/password phức tạp trong giai đoạn demo/test).
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính |
+| `organizer_id` | `INT` | `NOT NULL`, `FOREIGN KEY (users.id) ON DELETE CASCADE` | ID người tổ chức |
+| `title` | `VARCHAR(255)` | `NOT NULL`, `FULLTEXT INDEX` | Tiêu đề sự kiện |
+| `description` | `TEXT` | `NOT NULL` | Mô tả chi tiết nội dung sự kiện |
+| `category` | `ENUM('music', 'technology', 'sports', 'workshop')` | `NOT NULL` | Phân loại sự kiện |
+| `banner_url` | `VARCHAR(500)` | `NOT NULL` | Link ảnh poster/banner |
+| `venue_name` | `VARCHAR(255)` | `NOT NULL` | Tên địa điểm tổ chức |
+| `venue_address` | `VARCHAR(500)` | `NOT NULL` | Địa chỉ chi tiết |
+| `venue_city` | `VARCHAR(100)` | `NOT NULL`, `INDEX` | Tỉnh / Thành phố |
+| `start_time` | `DATETIME` | `NOT NULL`, `INDEX` | Thời gian bắt đầu sự kiện |
+| `end_time` | `DATETIME` | `NOT NULL` | Thời gian kết thúc sự kiện |
+| `status` | `ENUM('draft', 'pending', 'approved', 'rejected', 'published', 'ended', 'cancelled')` | `DEFAULT 'draft'`, `INDEX` | Trạng thái phê duyệt & bán |
+| `rejection_reason` | `TEXT` | `NULL` | Lý do Admin từ chối (nếu có) |
+| `on_chain_event_id` | `BIGINT` | `NULL` | Mã ID sự kiện ghi nhận trên Smart Contract |
+| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Thời gian tạo |
+| `updated_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Thời gian cập nhật |
+
+> **Chỉ mục kết hợp (Composite Index):** `INDEX idx_events_status_start_time (status, start_time)` giúp trang chủ load danh sách sự kiện đã duyệt cực nhanh.
+
+---
+
+### 2.3. Bảng: `ticket_types`
+Lưu trữ các hạng vé (Standard, VIP, Early Bird...) thuộc về một sự kiện.
+
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính |
+| `event_id` | `INT` | `NOT NULL`, `FOREIGN KEY (events.id) ON DELETE CASCADE` | Thuộc sự kiện nào |
+| `name` | `VARCHAR(100)` | `NOT NULL` | Tên hạng vé (vd: "VIP Diamond", "Standard") |
+| `description` | `TEXT` | `NULL` | Quyền lợi của hạng vé |
+| `original_price` | `DECIMAL(18, 6)` | `NOT NULL` | Giá gốc phát hành ban đầu (đơn vị ETH) |
+| `currency` | `VARCHAR(10)` | `DEFAULT 'ETH'` | Đơn vị tiền tệ |
+| `max_supply` | `INT` | `NOT NULL` | Số lượng vé phát hành trần |
+| `current_supply` | `INT` | `DEFAULT 0` | Số lượng vé đã được mint on-chain |
+| `sale_start_time` | `DATETIME` | `NOT NULL` | Thời điểm bắt đầu mở bán |
+| `sale_end_time` | `DATETIME` | `NOT NULL` | Thời điểm kết thúc đợt bán |
+| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Thời điểm tạo |
+| `updated_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Thời điểm cập nhật |
+
+---
+
+### 2.4. Bảng: `tickets`
+Bản ghi vé NFT sau khi giao dịch mua trên Sepolia Testnet được xác thực thành công.
+
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính nội bộ |
+| `token_id` | `BIGINT` | `NOT NULL`, `UNIQUE`, `INDEX` | Token ID ERC-721 đại diện trên Blockchain |
+| `event_id` | `INT` | `NOT NULL`, `FOREIGN KEY (events.id) ON DELETE RESTRICT` | Liên kết sự kiện |
+| `ticket_type_id` | `INT` | `NOT NULL`, `FOREIGN KEY (ticket_types.id) ON DELETE RESTRICT` | Liên kết hạng vé |
+| `owner_wallet` | `VARCHAR(42)` | `NOT NULL`, `INDEX` | Ví hiện đang sở hữu vé (lowercase) |
+| `original_buyer_wallet` | `VARCHAR(42)` | `NOT NULL` | Ví người mua ban đầu |
+| `original_price` | `DECIMAL(18, 6)` | `NOT NULL` | Giá gốc (đối soát trần 120% khi bán lại) |
+| `tx_hash` | `VARCHAR(66)` | `NOT NULL`, `UNIQUE` | Hash giao dịch mint vé on-chain |
+| `is_used` | `TINYINT(1)` / `BOOLEAN` | `DEFAULT 0`, `INDEX` | Trạng thái check-in (1 = đã dùng, 0 = chưa) |
+| `used_at` | `DATETIME` | `NULL` | Thời điểm quét vé thành công |
+| `is_listed_for_resale` | `TINYINT(1)` / `BOOLEAN` | `DEFAULT 0`, `INDEX` | Cờ đánh dấu đang niêm yết trên chợ |
+| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Ngày tạo |
+| `updated_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Ngày cập nhật |
+
+> **Chỉ mục kết hợp:** `INDEX idx_tickets_event_owner (event_id, owner_wallet)` giúp lấy vé của người dùng trong sự kiện tức thì.
+
+---
+
+### 2.5. Bảng: `orders`
+Lịch sử đặt mua vé và trạng thái xác minh giao dịch với blockchain.
+
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính |
+| `buyer_wallet` | `VARCHAR(42)` | `NOT NULL`, `INDEX` | Địa chỉ ví người mua |
+| `event_id` | `INT` | `NOT NULL`, `FOREIGN KEY (events.id) ON DELETE RESTRICT` | Sự kiện |
+| `ticket_type_id` | `INT` | `NOT NULL`, `FOREIGN KEY (ticket_types.id) ON DELETE RESTRICT` | Hạng vé |
+| `quantity` | `INT` | `NOT NULL DEFAULT 1` | Số lượng vé đặt mua |
+| `total_price` | `DECIMAL(18, 6)` | `NOT NULL` | Tổng tiền thanh toán (ETH) |
+| `currency` | `VARCHAR(10)` | `DEFAULT 'ETH'` | Loại tiền |
+| `tx_hash` | `VARCHAR(66)` | `NULL`, `INDEX` | Transaction Hash người dùng gửi từ MetaMask |
+| `status` | `ENUM('pending_payment', 'verifying', 'confirmed', 'failed', 'cancelled')` | `DEFAULT 'pending_payment'`, `INDEX` | Trạng thái đơn |
+| `idempotency_key` | `VARCHAR(255)` | `NOT NULL`, `UNIQUE` | Khóa chống tạo đơn trùng khi bấm nhiều lần |
+| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Thời điểm tạo đơn |
+| `updated_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Thời điểm cập nhật |
+
+---
+
+### 2.6. Bảng: `resale_listings`
+Thông tin vé đang được niêm yết bán lại trên Marketplace.
+
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính |
+| `token_id` | `BIGINT` | `NOT NULL`, `INDEX` | Token ID trên blockchain |
+| `ticket_id` | `INT` | `NOT NULL`, `FOREIGN KEY (tickets.id) ON DELETE RESTRICT` | Liên kết bản ghi vé |
+| `event_id` | `INT` | `NOT NULL`, `FOREIGN KEY (events.id) ON DELETE RESTRICT` | Liên kết sự kiện |
+| `seller_wallet` | `VARCHAR(42)` | `NOT NULL`, `INDEX` | Ví người bán |
+| `original_price` | `DECIMAL(18, 6)` | `NOT NULL` | Giá gốc ban đầu |
+| `resale_price` | `DECIMAL(18, 6)` | `NOT NULL` | Giá chào bán (**BẮT BUỘC <= max_allowed_price**) |
+| `max_allowed_price` | `DECIMAL(18, 6)` | `NOT NULL` | Trần giá 120% (`original_price * 1.2`) |
+| `listing_tx_hash` | `VARCHAR(66)` | `NULL` | Transaction hash gọi hàm `listTicket` on-chain |
+| `buyer_wallet` | `VARCHAR(42)` | `NULL` | Ví người mua lại |
+| `sold_tx_hash` | `VARCHAR(66)` | `NULL` | Transaction hash người mua lại gọi `buyTicket` |
+| `status` | `ENUM('active', 'sold', 'cancelled')` | `DEFAULT 'active'`, `INDEX` | Trạng thái niêm yết |
+| `sold_at` | `DATETIME` | `NULL` | Thời điểm hoàn tất giao dịch bán |
+| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Thời điểm đăng tin |
+| `updated_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Thời điểm cập nhật |
+
+> **Chỉ mục kết hợp:** `INDEX idx_resale_status_event (status, event_id)` tối ưu tìm kiếm vé đang rao bán trong từng sự kiện.
+
+---
+
+### 2.7. Bảng: `check_in_logs`
+Nhật ký quét mã QR soát vé tại cửa sự kiện (truy vết kiểm soát vào cổng).
+
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính |
+| `token_id` | `BIGINT` | `NOT NULL`, `INDEX` | Token ID của vé |
+| `event_id` | `INT` | `NOT NULL`, `FOREIGN KEY (events.id) ON DELETE RESTRICT` | Sự kiện |
+| `scanned_by` | `INT` | `NOT NULL`, `FOREIGN KEY (users.id) ON DELETE RESTRICT` | Nhân viên thực hiện quét |
+| `status` | `ENUM('success', 'already_used', 'invalid_ticket', 'wrong_event', 'invalid_signature')` | `NOT NULL` | Kết quả soát vé |
+| `qr_nonce` | `VARCHAR(255)` | `NOT NULL` | Chuỗi nonce HMAC bảo mật |
+| `scanned_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP`, `INDEX` | Thời điểm quét |
+
+---
+
+### 2.8. Bảng: `audit_logs`
+Lưu vết các thao tác nhạy cảm của Admin và Organizer (phục vụ kiểm toán).
+
+| Cột (Column) | Kiểu dữ liệu | Thuộc tính | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `id` | `INT` | `AUTO_INCREMENT`, `PRIMARY KEY` | Khóa chính |
+| `user_id` | `INT` | `NOT NULL`, `FOREIGN KEY (users.id) ON DELETE RESTRICT` | Người thực hiện |
+| `user_role` | `VARCHAR(50)` | `NOT NULL` | Vai trò khi thực hiện thao tác |
+| `action` | `VARCHAR(100)` | `NOT NULL` | Hành động (vd: `APPROVE_EVENT`, `REJECT_EVENT`, `SUSPEND_USER`) |
+| `target_id` | `VARCHAR(100)` | `NOT NULL` | ID đối tượng bị tác động |
+| `ip_address` | `VARCHAR(45)` | `NULL` | Địa chỉ IP (IPv4 hoặc IPv6) |
+| `details` | `JSON` | `NULL` | Chi tiết thao tác dạng JSON |
+| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Thời điểm ghi log |
+
+---
+
+## 3. CHIẾN LƯỢC TỐI ƯU HÓA TRÊN AIVEN CLOUD MYSQL
+
+1. **Khóa dòng & Giao dịch an toàn (Row-level Locking & Transactions):**
+   - Khi check-in vé hoặc cập nhật số lượng vé mở bán, hệ thống sử dụng cú pháp:
+     ```sql
+     START TRANSACTION;
+     SELECT * FROM tickets WHERE token_id = ? AND is_used = 0 FOR UPDATE;
+     UPDATE tickets SET is_used = 1, used_at = NOW() WHERE id = ?;
+     COMMIT;
+     ```
+   - Cơ chế này chặn đứng tình trạng race-condition (2 máy quét QR cùng một lúc hoặc 2 người cùng mua chiếc vé cuối cùng).
+2. **Bảo mật kết nối SSL/TLS:**
+   - Aiven Cloud MySQL bắt buộc kết nối có mã hóa (`ssl: { require: true, rejectUnauthorized: false }`), đảm bảo không thể bị nghe lén (Man-In-The-Middle) khi dữ liệu truyền qua Internet.
+3. **Foreign Keys Toàn vẹn:**
+   - Các khóa ngoại đảm bảo dữ liệu quan hệ luôn nhất quán. Ví dụ: Sự kiện bị xóa sẽ tự động dọn dẹp các hạng vé tương ứng (`ON DELETE CASCADE`), nhưng vé đã phát hành on-chain sẽ được bảo vệ không thể xóa bừa bãi (`ON DELETE RESTRICT`).

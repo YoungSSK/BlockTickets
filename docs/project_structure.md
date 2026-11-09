@@ -1,9 +1,9 @@
 # CẤU TRÚC THƯ MỤC CHI TIẾT HỆ THỐNG BLOCKTICKETS
 
 > **Dự án:** BlockTickets – Hệ thống phân phối & chuyển nhượng vé sự kiện ứng dụng Blockchain & NFT.  
-> **Cơ sở dữ liệu:** MongoDB Atlas (Cloud Database).  
+> **Cơ sở dữ liệu:** Aiven Cloud MySQL (Managed MySQL 8.0+, SSL Required).  
 > **Frontend:** React + JavaScript (Vite, JSX/JS thuần, không sử dụng TypeScript).  
-> **Backend:** Node.js + Express.js + Mongoose ODM.  
+> **Backend:** Node.js + Express.js + Sequelize ORM & mysql2.  
 > **Blockchain:** Solidity + Hardhat (Chuẩn ERC-721, triển khai trên Ethereum Sepolia Testnet).  
 
 ---
@@ -35,12 +35,12 @@ BlockTickets/
 │   ├── package.json            # Khai báo thư viện phụ thuộc Frontend
 │   └── .env.example            # Mẫu biến môi trường Frontend
 │
-├── backend/                    # Máy chủ API & Nghiệp vụ (Node.js + Express.js + MongoDB Atlas)
+├── backend/                    # Máy chủ API & Nghiệp vụ (Node.js + Express.js + Aiven Cloud MySQL + Sequelize)
 │   ├── src/                    # Mã nguồn server
-│   │   ├── config/             # Cấu hình hệ thống (db.js kết nối MongoDB Atlas)
+│   │   ├── config/             # Cấu hình hệ thống (db.js kết nối Aiven Cloud MySQL)
 │   │   ├── controllers/        # Điều hướng request (authController.js, eventController.js)
 │   │   ├── middleware/         # Xác thực & bắt lỗi (authMiddleware.js, errorMiddleware.js)
-│   │   ├── models/             # Mongoose Schemas (User.js, Event.js, Ticket.js)
+│   │   ├── models/             # Sequelize Models (User.js, Event.js, Ticket.js)
 │   │   ├── routes/             # Định tuyến API (authRoutes.js, eventRoutes.js)
 │   │   └── server.js           # Điểm khởi chạy server Express
 │   ├── package.json            # Khai báo thư viện phụ thuộc Backend
@@ -205,27 +205,28 @@ frontend/
 
 ---
 
-## 3. CHI TIẾT MODULE `backend/` (Node.js + Express.js + MongoDB Atlas)
+## 3. CHI TIẾT MODULE `backend/` (Node.js + Express.js + Aiven Cloud MySQL)
 
-> Máy chủ backend xử lý các logic nghiệp vụ ngoài chuỗi (off-chain), xác thực người dùng, bảo mật API, tạo mã QR mã hóa và đồng bộ dữ liệu giao dịch từ blockchain vào cơ sở dữ liệu đám mây **MongoDB Atlas**.
+> Máy chủ backend xử lý các logic nghiệp vụ ngoài chuỗi (off-chain), xác thực người dùng, bảo mật API, tạo mã QR mã hóa và đồng bộ dữ liệu giao dịch từ blockchain vào cơ sở dữ liệu quan hệ **Aiven Cloud MySQL** thông qua **Sequelize ORM**.
 
 ```text
 backend/
 ├── src/
 │   ├── config/                             # Cấu hình hệ thống & kết nối bên ngoài
-│   │   ├── database.js                     # Kết nối cơ sở dữ liệu MongoDB Atlas qua Mongoose (kèm retry logic & pool)
+│   │   ├── db.js                           # Kết nối cơ sở dữ liệu Aiven Cloud MySQL qua Sequelize & mysql2 (bật SSL)
 │   │   ├── blockchain.js                   # Khởi tạo ethers.js JsonRpcProvider (Sepolia), nạp contract ABI & địa chỉ
 │   │   ├── env.js                          # Kiểm tra và nạp các biến môi trường từ .env, cảnh báo nếu thiếu biến
 │   │   └── constants.js                    # Định nghĩa các mã lỗi hệ thống, mã HTTP status, trạng thái đơn hàng
 │   │
-│   ├── models/                             # Mongoose Schemas (Lưu trữ trên MongoDB Atlas)
+│   ├── models/                             # Sequelize Models (Lưu trữ trên Aiven Cloud MySQL)
+│   │   ├── index.js                        # Thiết lập quan hệ (Associations: hasMany, belongsTo) giữa các bảng
 │   │   ├── User.js                         # Tài khoản người dùng (email, hash mật khẩu, vai trò, địa chỉ ví, nonce)
-│   │   ├── Event.js                        # Thông tin sự kiện (tên, mô tả, organizerId, posterUrl, địa điểm, thời gian, trạng thái duyệt)
-│   │   ├── TicketType.js                   # Loại vé (eventId, tên hạng vé, originalPrice, maxSupply, currentSupply, thời gian mở bán)
-│   │   ├── Ticket.js                       # Bản ghi vé NFT (tokenId on-chain, ticketTypeId, eventId, ownerWallet, txHash, isUsed)
-│   │   ├── Order.js                        # Đơn hàng mua vé (buyerWallet, ticketTypeId, số lượng vé, tổng tiền, txHash, trạng thái)
-│   │   ├── ResaleListing.js                # Tin bán lại trên chợ (tokenId, sellerWallet, resalePrice <= 120%, isActive, txHash)
-│   │   ├── CheckInLog.js                   # Nhật ký soát vé (tokenId, eventId, scannedByStaffId, scannedAt, kết quả thành công/thất bại)
+│   │   ├── Event.js                        # Thông tin sự kiện (tên, mô tả, organizer_id, banner_url, địa điểm, thời gian, trạng thái duyệt)
+│   │   ├── TicketType.js                   # Hạng vé (event_id, tên hạng vé, original_price, max_supply, current_supply, thời gian mở bán)
+│   │   ├── Ticket.js                       # Bản ghi vé NFT (token_id on-chain, ticket_type_id, event_id, owner_wallet, tx_hash, is_used)
+│   │   ├── Order.js                        # Đơn hàng mua vé (buyer_wallet, ticket_type_id, số lượng vé, tổng tiền, tx_hash, trạng thái)
+│   │   ├── ResaleListing.js                # Tin bán lại trên chợ (token_id, seller_wallet, resale_price <= 120%, status, tx_hash)
+│   │   ├── CheckInLog.js                   # Nhật ký soát vé (token_id, event_id, scanned_by, scanned_at, kết quả)
 │   │   └── AuditLog.js                     # Ghi nhật ký thao tác nhạy cảm của Admin/Organizer (duyệt sự kiện, khóa user)
 │   │
 │   ├── routes/                             # Khai báo các đường dẫn RESTful API
