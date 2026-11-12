@@ -1,39 +1,9 @@
 import { createTheme } from '@mui/material/styles';
+import { getPalette } from './palette';
 
 export const createAppTheme = (mode = 'light') => {
-  const isLight = mode === 'light';
-
   return createTheme({
-    palette: {
-      mode,
-      primary: {
-        main: isLight ? '#2563EB' : '#3B82F6',
-        dark: '#1E40AF',
-        contrastText: '#FFFFFF',
-      },
-      secondary: {
-        main: '#64748B',
-      },
-      background: {
-        default: isLight ? '#F8FAFC' : '#0B0F19',
-        paper: isLight ? '#FFFFFF' : '#1E293B',
-      },
-      text: {
-        primary: isLight ? '#0F172A' : '#F8FAFC',
-        secondary: isLight ? '#64748B' : '#94A3B8',
-        disabled: isLight ? '#94A3B8' : '#64748B',
-      },
-      divider: isLight ? '#E2E8F0' : '#334155',
-      status: {
-        success: isLight ? '#10B981' : '#34D399',
-        warning: isLight ? '#F97316' : '#FB923C',
-        error: isLight ? '#EF4444' : '#F87171',
-        pending: isLight ? '#F59E0B' : '#FBBF24',
-        onchain: isLight ? '#6366F1' : '#818CF8',
-        checkedIn: isLight ? '#8B5CF6' : '#A78BFA',
-        cancelled: isLight ? '#64748B' : '#94A3B8',
-      },
-    },
+    palette: getPalette(mode),
     typography: {
       fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       h1: {
