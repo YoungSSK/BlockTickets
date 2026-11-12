@@ -1,13 +1,9 @@
-import { AuditLog } from "../models/AuditLog,js";
+import { AuditLog } from "../models/index.js";
 
-export const recordAuditLog = async ({
-  user,
-  action,
-  targetId,
-  ipAddress,
-  details = {},
+export const recordAuditLog = async (
+  { user, action, targetId, ipAddress, details = {} },
   transaction = null,
-}) => {
+) => {
   return AuditLog.create(
     {
       userId: user.id,

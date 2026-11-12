@@ -173,6 +173,9 @@ export const updateEvent = async (eventId, organizerId, payload) => {
 
   const nextStart = payload.startTime ?? event.startTime;
   const nextEnd = payload.endTime ?? event.endTime;
+  if (payload.startTime && new Date(nextStart) <= new Date()) {
+    throw new AppError("Thời gian bắt đầu sự kiện phải ở tương lai.", 400);
+  }
   if (new Date(nextEnd) <= new Date(nextStart)) {
     throw new AppError("Thời gian kết thúc phải sau thời gian bắt đầu.", 400);
   }
