@@ -1031,7 +1031,7 @@ const OrganizerDashboardPage = () => {
                             <Button
                                 variant="contained"
                                 color="primary"
-                                onClick={handleConfirmBuyWithdraw ? handleConfirmWithdraw : handleConfirmWithdraw}
+                                onClick={handleConfirmWithdraw}
                                 sx={{ borderRadius: '8px', fontWeight: 600, px: 3 }}
                             >
                                 Xác Nhận Rút
