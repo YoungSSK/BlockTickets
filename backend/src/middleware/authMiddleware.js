@@ -1,6 +1,10 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+if (!JWT_ACCESS_SECRET) {
+  throw new Error("Thiếu biến môi trường JWT_ACCESS_SECRET trong file .env");
+}
 //Middleware bảo vệ router
 export const protect = async (req, res, next) => {
   let token;
@@ -10,7 +14,7 @@ export const protect = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_ACCESS_SECRET);
       const user = await User.findByPk(decoded.id, {
         attributes: { exclude: ["passwordHash"] },
       });
@@ -53,5 +57,15 @@ export const authorize = (...roles) => {
         message: `Bạn không có quyền thực hiện thao tác này. Quyền yêu cầu: [${roles.join(", ")}].`,
       });
     }
+    return next();
   };
+};
+//
+export const optionalProtect = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    req.user = null; // Không có người dùng, nhưng không trả về lỗi
+    return next();
+  }
+  return protect(req, res, next); // Nếu có token, sử dụng middleware protect để xác thực
 };
