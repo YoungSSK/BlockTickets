@@ -41,6 +41,7 @@ import {
     PeopleAlt,
     Star,
     FilterList,
+    FiberManualRecord,
 } from '@mui/icons-material';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
