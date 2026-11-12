@@ -4,6 +4,7 @@ import cors from "cors";
 import sequelize, { connectDB } from "./config/db.js";
 import "./models/index.js";
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
+import authRoutes from "./routes/authRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,7 +15,7 @@ app.use(
   cors({
     origin: CLIENT_URL,
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -26,7 +27,7 @@ connectDB().then(async () => {
     await sequelize.sync({ alter: true });
     console.log("✅ Toàn bộ bảng trên Aiven Cloud MySQL đã được đồng bộ!");
   } catch (err) {
-    console.error("❌ Lỗi đồng bộ database:", err.message);
+    console.error(" Lỗi đồng bộ database:", err.message);
   }
 });
 
@@ -34,7 +35,8 @@ connectDB().then(async () => {
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Máy chủ BlockTickets API (Aiven MySQL) đang hoạt động bình thường",
+    message:
+      "Máy chủ BlockTickets API (Aiven MySQL) đang hoạt động bình thường",
     timestamp: new Date().toISOString(),
   });
 });
@@ -46,10 +48,11 @@ app.get("/", (req, res) => {
   });
 });
 
-// Middleware bắt lỗi toàn cục
+// Routes nghiệp vụ 
+app.use("/api/auth", authRoutes);
+// Middleware 
 app.use(notFound);
 app.use(errorHandler);
-
 app.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
+  console.log(`Server đang chạy tại: http://localhost:${PORT}`);
 });
