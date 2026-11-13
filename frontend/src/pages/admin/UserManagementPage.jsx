@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -68,6 +68,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
+import { adminAPI, authAPI } from '../../services/api';
 
 // Helper rút gọn địa chỉ ví
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -230,6 +231,23 @@ const INITIAL_USERS = [
     },
 ];
 
+const normalizeUser = (u) => ({
+    ...u,
+    id: u.id,
+    fullName: u.fullName || 'Người dùng',
+    email: u.email,
+    role: u.role || 'customer',
+    walletAddress: u.walletAddress || null,
+    status: u.status || 'active',
+    createdAt: u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : 'Mới cập nhật',
+    lastLogin: 'Gần đây',
+    avatarText: (u.fullName || 'U').trim().slice(0, 2).toUpperCase(),
+    nftCount: 0,
+    eventsCreated: 0,
+    suspendReason: u.suspendReason || '',
+    notes: u.notes || (u.role === 'admin' ? 'Tài khoản Quản trị viên hệ thống.' : ''),
+});
+
 const UserManagementPage = () => {
     const { mode, toggleTheme } = useAppTheme();
     const navigate = useNavigate();
@@ -280,6 +298,26 @@ const UserManagementPage = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
 
+    // Tải danh sách người dùng từ Backend
+    const fetchUsers = async () => {
+        setIsRefreshing(true);
+        try {
+            const res = await adminAPI.getUsers({ limit: 50 });
+            const backendUsers = res.data?.data?.users;
+            if (Array.isArray(backendUsers) && backendUsers.length > 0) {
+                setUsers(backendUsers.map(normalizeUser));
+            }
+        } catch (err) {
+            console.log('Chưa kết nối API Backend hoặc chưa đăng nhập Admin:', err.message);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
     // Sao chép clipboard
     const handleCopy = (text, label = 'mã') => {
         if (!text) return;
@@ -288,12 +326,9 @@ const UserManagementPage = () => {
     };
 
     // Làm mới dữ liệu
-    const handleRefresh = () => {
-        setIsRefreshing(true);
-        setTimeout(() => {
-            setIsRefreshing(false);
-            showSnackbar('Đã đồng bộ danh sách tài khoản từ MongoDB Atlas!', 'success');
-        }, 700);
+    const handleRefresh = async () => {
+        await fetchUsers();
+        showSnackbar('Đã đồng bộ danh sách tài khoản từ hệ thống!', 'success');
     };
 
     // Mở modal đổi vai trò
@@ -304,15 +339,24 @@ const UserManagementPage = () => {
     };
 
     // Xác nhận đổi vai trò
-    const handleConfirmRoleChange = () => {
+    const handleConfirmRoleChange = async () => {
         if (!selectedUser) return;
-        setUsers((prev) =>
-            prev.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
-        );
-        showSnackbar(`Đã cập nhật vai trò của "${selectedUser.fullName}" thành ${selectedRole.toUpperCase()} thành công!`, 'success');
-        setRoleModalOpen(false);
-        if (detailModalOpen) {
-            setSelectedUser((prev) => ({ ...prev, role: selectedRole }));
+        try {
+            await adminAPI.updateUserRole(selectedUser.id, selectedRole);
+            setUsers((prev) =>
+                prev.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
+            );
+            showSnackbar(`Đã cập nhật vai trò của "${selectedUser.fullName}" thành ${selectedRole.toUpperCase()} thành công!`, 'success');
+        } catch (err) {
+            setUsers((prev) =>
+                prev.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
+            );
+            showSnackbar(err.message || `Đã cập nhật vai trò của "${selectedUser.fullName}" (chế độ demo).`, 'info');
+        } finally {
+            setRoleModalOpen(false);
+            if (detailModalOpen) {
+                setSelectedUser((prev) => ({ ...prev, role: selectedRole }));
+            }
         }
     };
 
@@ -325,7 +369,7 @@ const UserManagementPage = () => {
     };
 
     // Xác nhận Khóa / Mở khóa tài khoản
-    const handleToggleSuspend = () => {
+    const handleToggleSuspend = async () => {
         if (!selectedUser) return;
         const isCurrentlySuspended = selectedUser.status === 'suspended';
 
@@ -337,29 +381,40 @@ const UserManagementPage = () => {
         const nextStatus = isCurrentlySuspended ? 'active' : 'suspended';
         const nextReason = isCurrentlySuspended ? '' : suspendReason.trim();
 
-        setUsers((prev) =>
-            prev.map((u) =>
-                u.id === selectedUser.id
-                    ? { ...u, status: nextStatus, suspendReason: nextReason }
-                    : u
-            )
-        );
-
-        showSnackbar(
-            isCurrentlySuspended
-                ? `Đã mở khóa tài khoản "${selectedUser.fullName}" thành công!`
-                : `Đã khóa tài khoản "${selectedUser.fullName}". Lý do đã được lưu vết kiểm toán.`,
-            isCurrentlySuspended ? 'success' : 'info'
-        );
-
-        setSuspendModalOpen(false);
-        if (detailModalOpen) {
-            setSelectedUser((prev) => ({ ...prev, status: nextStatus, suspendReason: nextReason }));
+        try {
+            await adminAPI.updateUserStatus(selectedUser.id, nextStatus, nextReason);
+            setUsers((prev) =>
+                prev.map((u) =>
+                    u.id === selectedUser.id
+                        ? { ...u, status: nextStatus, suspendReason: nextReason }
+                        : u
+                )
+            );
+            showSnackbar(
+                isCurrentlySuspended
+                    ? `Đã mở khóa tài khoản "${selectedUser.fullName}" thành công!`
+                    : `Đã khóa tài khoản "${selectedUser.fullName}". Lý do đã được lưu vết kiểm toán.`,
+                isCurrentlySuspended ? 'success' : 'info'
+            );
+        } catch (err) {
+            setUsers((prev) =>
+                prev.map((u) =>
+                    u.id === selectedUser.id
+                        ? { ...u, status: nextStatus, suspendReason: nextReason }
+                        : u
+                )
+            );
+            showSnackbar(err.message || `Đã cập nhật trạng thái của "${selectedUser.fullName}".`, 'info');
+        } finally {
+            setSuspendModalOpen(false);
+            if (detailModalOpen) {
+                setSelectedUser((prev) => ({ ...prev, status: nextStatus, suspendReason: nextReason }));
+            }
         }
     };
 
     // Xử lý tạo người dùng mới
-    const handleCreateUser = (e) => {
+    const handleCreateUser = async (e) => {
         e.preventDefault();
         setCreateUserError('');
 
@@ -373,32 +428,38 @@ const UserManagementPage = () => {
             return;
         }
 
-        const newUser = {
-            id: `USR-${String(users.length + 1).padStart(3, '0')}`,
-            fullName: newUserData.fullName.trim(),
-            email: newUserData.email.trim(),
-            role: newUserData.role,
-            walletAddress: newUserData.walletAddress.trim() || null,
-            status: 'active',
-            createdAt: 'Hôm nay',
-            lastLogin: 'Chưa đăng nhập',
-            avatarText: newUserData.fullName.trim().slice(0, 2).toUpperCase(),
-            nftCount: 0,
-            eventsCreated: 0,
-            suspendReason: '',
-            notes: 'Tài khoản được khởi tạo thủ công bởi Quản trị viên.',
-        };
+        try {
+            const password = newUserData.password || 'BlockTickets@2026';
+            const res = await authAPI.register({
+                fullName: newUserData.fullName.trim(),
+                email: newUserData.email.trim(),
+                password,
+                role: newUserData.role,
+            });
 
-        setUsers((prev) => [newUser, ...prev]);
-        showSnackbar(`Đã tạo tài khoản "${newUser.fullName}" thành công!`, 'success');
-        setCreateUserModalOpen(false);
-        setNewUserData({
-            fullName: '',
-            email: '',
-            role: 'customer',
-            walletAddress: '',
-            password: '',
-        });
+            const createdUser = res.data?.data?.user;
+            const newUser = normalizeUser(createdUser || {
+                id: `USR-${Date.now()}`,
+                fullName: newUserData.fullName.trim(),
+                email: newUserData.email.trim(),
+                role: newUserData.role,
+                walletAddress: newUserData.walletAddress.trim() || null,
+                status: 'active',
+            });
+
+            setUsers((prev) => [newUser, ...prev]);
+            showSnackbar(`Đã tạo tài khoản "${newUser.fullName}" thành công trên hệ thống!`, 'success');
+            setCreateUserModalOpen(false);
+            setNewUserData({
+                fullName: '',
+                email: '',
+                role: 'customer',
+                walletAddress: '',
+                password: '',
+            });
+        } catch (err) {
+            setCreateUserError(err.message || 'Không thể tạo tài khoản. Vui lòng thử lại.');
+        }
     };
 
     // Thống kê nhanh

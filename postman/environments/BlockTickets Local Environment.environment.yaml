@@ -1,0 +1,52 @@
+name: BlockTickets Local Environment
+values:
+  - key: baseUrl
+    value: 'http://localhost:5000'
+  - key: customerToken
+    secret: true
+    source:
+      provider: postman
+      postman:
+        type: cloud
+        secretId: 1b9dd382-15aa-47ab-b023-e99db29c382c
+        vaultId: d86bc847-e99a-4995-ac35-caf1becc95ed
+  - key: customerRefreshToken
+    secret: true
+    source:
+      provider: postman
+      postman:
+        type: cloud
+        secretId: c5b6f2f2-ec3a-476c-807f-23518fdaa5bf
+        vaultId: d86bc847-e99a-4995-ac35-caf1becc95ed
+  - key: organizerToken
+    secret: true
+    source:
+      provider: postman
+      postman:
+        type: cloud
+        secretId: 7ed615b9-8757-4a79-9002-ee0d9f1dbc13
+        vaultId: d86bc847-e99a-4995-ac35-caf1becc95ed
+  - key: organizerRefreshToken
+    secret: true
+    source:
+      provider: postman
+      postman:
+        type: cloud
+        secretId: 306e8d87-7919-4dde-9489-5ddf6584a8ee
+        vaultId: d86bc847-e99a-4995-ac35-caf1becc95ed
+  - key: adminToken
+    value: ''
+  - key: eventId
+    value: '1'
+  - key: ticketTypeId
+    value: '1'
+  - key: testWallet
+    value: '0x789b9102934812301928394819203849102334ef'
+  - key: orgEmail
+    value: ''
+  - key: customerEmail
+    value: ''
+  - key: walletNonce
+    value: ''
+  - key: adminEmail
+    value: ''

@@ -1,0 +1,32 @@
+$kind: http-request
+url: "{{baseUrl}}/api/events/{{eventId}}/ticket-types"
+method: POST
+headers:
+  Authorization: Bearer {{organizerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "name": "Standard Pass",
+      "description": "Ve tieu chuan tham du 2 ngay hoi thao, bao gom teabreak",
+      "originalPrice": 0.08,
+      "currency": "ETH",
+      "maxSupply": 300,
+      "saleStartTime": "2026-11-15T00:00:00.000Z",
+      "saleEndTime": "2026-11-27T23:59:59.000Z"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("Standard ticket created with maxSupply and price", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(true);
+          pm.expect(Number(json.data.ticketType.originalPrice)).to.eql(0.08);
+          pm.expect(json.data.ticketType.maxSupply).to.eql(300);
+      });
+    language: text/javascript
+order: 2000

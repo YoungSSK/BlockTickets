@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/api/events/{{eventId}}/submit-review"
+method: POST
+headers:
+  Authorization: Bearer {{organizerToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Event status changed to pending", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(true);
+          pm.expect(json.data.event.status).to.eql("pending");
+      });
+    language: text/javascript
+order: 6000

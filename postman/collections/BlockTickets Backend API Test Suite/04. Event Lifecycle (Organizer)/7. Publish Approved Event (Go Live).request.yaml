@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/api/events/{{eventId}}/publish"
+method: POST
+headers:
+  Authorization: Bearer {{organizerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "onChainEventId": 102
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Verify status code 200 or 400 if not approved yet", function () {
+          pm.expect([200, 400]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 7000

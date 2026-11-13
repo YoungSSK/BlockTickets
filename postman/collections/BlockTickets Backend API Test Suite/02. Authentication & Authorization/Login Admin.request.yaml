@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/login"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"email\": \"{{adminEmail}}\",\r
+
+    \  \"password\": \"123456\"\r
+
+    }"
+order: 8000

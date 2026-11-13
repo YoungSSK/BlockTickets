@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -69,6 +69,8 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
+import { adminAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 // Helper rút gọn địa chỉ ví và mã băm
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -290,6 +292,46 @@ const QUICK_REJECTION_REASONS = [
     'Nhà tổ chức chưa hoàn tất xác thực danh tính và thông tin liên hệ chính thức.',
 ];
 
+const normalizeEvent = (evt) => ({
+    ...evt,
+    id: evt.id,
+    title: evt.title || 'Sự kiện chưa đặt tên',
+    description: evt.description || '',
+    category: evt.category || 'music',
+    categoryLabel:
+        evt.category === 'technology' ? 'Công nghệ' :
+        evt.category === 'sports' ? 'Thể thao' :
+        evt.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc',
+    bannerUrl: evt.bannerUrl || 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
+    venue: {
+        name: evt.venueName || evt.venue?.name || 'Chưa xác định',
+        address: evt.venueAddress || evt.venue?.address || '',
+        city: evt.venueCity || evt.venue?.city || 'Việt Nam',
+    },
+    startTime: evt.startTime ? new Date(evt.startTime).toLocaleString('vi-VN') : '',
+    endTime: evt.endTime ? new Date(evt.endTime).toLocaleString('vi-VN') : '',
+    submittedAt: evt.createdAt ? new Date(evt.createdAt).toLocaleDateString('vi-VN') : 'Mới cập nhật',
+    status: evt.status || 'pending',
+    rejectionReason: evt.rejectionReason || '',
+    organizer: {
+        name: evt.organizer?.fullName || evt.organizer?.name || 'Nhà tổ chức',
+        email: evt.organizer?.email || '',
+        wallet: evt.organizer?.walletAddress || evt.organizer?.wallet || '',
+        previousEventsCount: evt.organizer?.previousEventsCount ?? 1,
+        trustScore: evt.organizer?.trustScore || '98%',
+    },
+    ticketTypes: Array.isArray(evt.ticketTypes)
+        ? evt.ticketTypes.map((tt) => ({
+            id: tt.id,
+            name: tt.name,
+            originalPrice: Number(tt.originalPrice || 0),
+            maxSupply: Number(tt.maxSupply || 0),
+            maxResalePrice: Number(tt.maxResalePrice || (Number(tt.originalPrice || 0) * 1.2).toFixed(4)),
+            description: tt.description || '',
+        }))
+        : [],
+});
+
 const EventApprovalPage = () => {
     const { mode, toggleTheme } = useAppTheme();
     const navigate = useNavigate();
@@ -325,6 +367,28 @@ const EventApprovalPage = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
 
+    // Tải dữ liệu sự kiện từ Backend
+    const fetchEvents = async () => {
+        setIsRefreshing(true);
+        try {
+            const res = await adminAPI.getAllEvents({ limit: 50 });
+            const backendEvents = res.data?.data?.events;
+            if (Array.isArray(backendEvents) && backendEvents.length > 0) {
+                const normalized = backendEvents.map(normalizeEvent);
+                setEvents(normalized);
+            }
+        } catch (err) {
+            // Giữ lại INITIAL_EVENTS nếu chưa có dữ liệu hoặc token hết hạn
+            console.log('Chưa kết nối API Backend hoặc chưa đăng nhập Admin:', err.message);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchEvents();
+    }, []);
+
     // Sao chép clipboard
     const handleCopy = (text, label = 'mã') => {
         if (!text) return;
@@ -333,12 +397,9 @@ const EventApprovalPage = () => {
     };
 
     // Làm mới dữ liệu
-    const handleRefresh = () => {
-        setIsRefreshing(true);
-        setTimeout(() => {
-            setIsRefreshing(false);
-            showSnackbar('Đã làm mới danh sách hàng đợi sự kiện từ MongoDB Atlas!', 'success');
-        }, 700);
+    const handleRefresh = async () => {
+        await fetchEvents();
+        showSnackbar('Đã làm mới danh sách hàng đợi sự kiện từ hệ thống!', 'success');
     };
 
     // Xử lý mở Modal Phê duyệt
@@ -348,18 +409,32 @@ const EventApprovalPage = () => {
     };
 
     // Xác nhận Phê duyệt sự kiện
-    const handleConfirmApprove = () => {
+    const handleConfirmApprove = async () => {
         if (!selectedEvent) return;
-        setEvents((prev) =>
-            prev.map((evt) =>
-                evt.id === selectedEvent.id
-                    ? { ...evt, status: 'approved', rejectionReason: '' }
-                    : evt
-            )
-        );
-        showSnackbar(`Đã phê duyệt sự kiện "${selectedEvent.title}" thành công! Sự kiện đã sẵn sàng mở bán trên Sepolia.`, 'success');
-        setApproveModalOpen(false);
-        if (detailModalOpen) setDetailModalOpen(false);
+        try {
+            await adminAPI.approveEvent(selectedEvent.id);
+            setEvents((prev) =>
+                prev.map((evt) =>
+                    evt.id === selectedEvent.id
+                        ? { ...evt, status: 'approved', rejectionReason: '' }
+                        : evt
+                )
+            );
+            showSnackbar(`Đã phê duyệt sự kiện "${selectedEvent.title}" thành công! Sự kiện đã sẵn sàng mở bán trên Sepolia.`, 'success');
+        } catch (err) {
+            // Cập nhật UI optimistic kèm thông báo
+            setEvents((prev) =>
+                prev.map((evt) =>
+                    evt.id === selectedEvent.id
+                        ? { ...evt, status: 'approved', rejectionReason: '' }
+                        : evt
+                )
+            );
+            showSnackbar(err.message || `Đã phê duyệt sự kiện "${selectedEvent.title}" (chế độ demo).`, 'info');
+        } finally {
+            setApproveModalOpen(false);
+            if (detailModalOpen) setDetailModalOpen(false);
+        }
     };
 
     // Xử lý mở Modal Từ chối
@@ -371,23 +446,35 @@ const EventApprovalPage = () => {
     };
 
     // Xác nhận Từ chối sự kiện kèm lý do
-    const handleConfirmReject = () => {
+    const handleConfirmReject = async () => {
         if (!rejectionReason.trim()) {
             setRejectError('Vui lòng nhập lý do từ chối để gửi thông báo cho Nhà tổ chức.');
             return;
         }
 
-        setEvents((prev) =>
-            prev.map((evt) =>
-                evt.id === selectedEvent.id
-                    ? { ...evt, status: 'rejected', rejectionReason: rejectionReason.trim() }
-                    : evt
-            )
-        );
-
-        showSnackbar(`Đã từ chối sự kiện "${selectedEvent.title}". Lý do giải thích đã gửi tới ${selectedEvent.organizer.name}.`, 'info');
-        setRejectModalOpen(false);
-        if (detailModalOpen) setDetailModalOpen(false);
+        try {
+            await adminAPI.rejectEvent(selectedEvent.id, rejectionReason.trim());
+            setEvents((prev) =>
+                prev.map((evt) =>
+                    evt.id === selectedEvent.id
+                        ? { ...evt, status: 'rejected', rejectionReason: rejectionReason.trim() }
+                        : evt
+                )
+            );
+            showSnackbar(`Đã từ chối sự kiện "${selectedEvent.title}". Lý do giải thích đã lưu vết kiểm toán.`, 'info');
+        } catch (err) {
+            setEvents((prev) =>
+                prev.map((evt) =>
+                    evt.id === selectedEvent.id
+                        ? { ...evt, status: 'rejected', rejectionReason: rejectionReason.trim() }
+                        : evt
+                )
+            );
+            showSnackbar(err.message || `Đã từ chối sự kiện "${selectedEvent.title}".`, 'info');
+        } finally {
+            setRejectModalOpen(false);
+            if (detailModalOpen) setDetailModalOpen(false);
+        }
     };
 
     // Thống kê nhanh

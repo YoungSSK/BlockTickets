@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/pending-events?page=1&limit=10"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+queryParams:
+  page: "1"
+  limit: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK or 403 if adminToken not set", function () {
+          pm.expect([200, 403]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 1000

@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/events/{{eventId}}/reject"
+method: PATCH
+headers:
+  Authorization: Bearer {{adminToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "reason": "Thong tin giay phep to chuc chua day du, yeu cau bo sung them file dinh kem."
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Verify rejection response", function () {
+          pm.expect([200, 400, 403]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 3000

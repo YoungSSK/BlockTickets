@@ -13,9 +13,12 @@ export const notFound = (req, res, next) => {
  * Middleware xử lý lỗi toàn cục (Global Error Handler)
  */
 export const errorHandler = (err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  const statusCode =
+    err.statusCode || (res.statusCode === 200 ? 500 : res.statusCode);
 
-  console.error(`💥 Lỗi máy chủ: ${err.message}`);
+  if (statusCode >= 500) {
+    console.error(`💥 Lỗi máy chủ: ${err.message}`);
+  }
 
   res.status(statusCode).json({
     success: false,
