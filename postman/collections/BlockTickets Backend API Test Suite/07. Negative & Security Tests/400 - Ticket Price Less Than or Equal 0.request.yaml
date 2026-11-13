@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{baseUrl}}/api/events/{{eventId}}/ticket-types"
+method: POST
+headers:
+  Authorization: Bearer {{organizerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "name": "Invalid Free Pass",
+      "description": "Gia ve phai > 0 ETH theo quy dinh",
+      "originalPrice": 0,
+      "currency": "ETH",
+      "maxSupply": 100,
+      "saleStartTime": "2026-11-15T00:00:00.000Z",
+      "saleEndTime": "2026-11-27T23:59:59.000Z"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+      pm.test("Error caught by zod validator", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(false);
+      });
+    language: text/javascript
+order: 4000

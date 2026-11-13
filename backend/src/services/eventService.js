@@ -35,7 +35,7 @@ export const listPublishedEvents = async ({
   toDate,
   sort,
 }) => {
-  const where = { status: "published" };
+  const where = { status: { [Op.in]: ["published", "approved"] } };
 
   if (search) {
     where[Op.or] = [
@@ -139,7 +139,7 @@ export const getEventDetail = async (eventId, currentUser = null) => {
     currentUser &&
     (currentUser.role === "admin" || currentUser.id === event.organizerId);
 
-  if (event.status !== "published" && !canViewNonPublic) {
+  if (!["published", "approved"].includes(event.status) && !canViewNonPublic) {
     throw new AppError("Sự kiện không tồn tại hoặc chưa được công khai.", 404);
   }
 

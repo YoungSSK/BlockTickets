@@ -1,0 +1,32 @@
+$kind: http-request
+url: "{{baseUrl}}/api/events"
+method: POST
+headers:
+  Authorization: Bearer {{customerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "title": "Hack Event By Customer",
+      "description": "Mo ta hop le tren 20 ky tu de vuot qua validation co ban",
+      "category": "technology",
+      "bannerUrl": "https://images.unsplash.com/photo-1540575467063-178a50c2df87",
+      "venueName": "Hack Venue",
+      "venueAddress": "123 Hack Street",
+      "venueCity": "Ha Noi",
+      "startTime": "2026-11-28T08:30:00.000Z",
+      "endTime": "2026-11-28T18:00:00.000Z"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 403 Forbidden", function () {
+          pm.response.to.have.status(403);
+      });
+      pm.test("Authorization failure reported", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(false);
+      });
+    language: text/javascript
+order: 3000

@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{orgEmail}}",
+      "password": "Organizer@123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Returns tokens and organizer info", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(true);
+          pm.expect(json.data).to.have.property("accessToken");
+          pm.environment.set("organizerToken", json.data.accessToken);
+          pm.environment.set("organizerRefreshToken", json.data.refreshToken);
+      });
+    language: text/javascript
+order: 3000

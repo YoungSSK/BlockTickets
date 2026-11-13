@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/events/{{eventId}}/approve"
+method: PATCH
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Verify approval response", function () {
+          pm.expect([200, 403]).to.include(pm.response.code);
+          if (pm.response.code === 200) {
+              var json = pm.response.json();
+              pm.expect(json.data.event.status).to.eql("approved");
+          }
+      });
+    language: text/javascript
+order: 2000

@@ -16,11 +16,14 @@ export const AuthContextProvider = ({ children }) => {
         return localStorage.getItem('blocktickets_token') || null;
     });
 
-    const login = useCallback((userData, accessToken) => {
+    const login = useCallback((userData, accessToken, refreshToken) => {
         setUser(userData);
         setToken(accessToken);
         localStorage.setItem('blocktickets_user', JSON.stringify(userData));
         localStorage.setItem('blocktickets_token', accessToken);
+        if (refreshToken) {
+            localStorage.setItem('blocktickets_refresh_token', refreshToken);
+        }
     }, []);
 
     const logout = useCallback(() => {
@@ -28,6 +31,7 @@ export const AuthContextProvider = ({ children }) => {
         setToken(null);
         localStorage.removeItem('blocktickets_user');
         localStorage.removeItem('blocktickets_token');
+        localStorage.removeItem('blocktickets_refresh_token');
     }, []);
 
     const isAuthenticated = Boolean(user && token);

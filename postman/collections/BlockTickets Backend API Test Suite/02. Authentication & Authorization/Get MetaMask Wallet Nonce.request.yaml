@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/nonce?wallet={{testWallet}}"
+method: GET
+queryParams:
+  wallet: "{{testWallet}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Nonce string returned", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(true);
+          pm.expect(json.data).to.have.property("nonce");
+          pm.environment.set("walletNonce", json.data.nonce);
+      });
+    language: text/javascript
+order: 5000

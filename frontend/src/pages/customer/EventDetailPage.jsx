@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -49,6 +49,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
+import { eventAPI } from '../../services/api';
 
 // Helper rút gọn địa chỉ ví
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -242,7 +243,7 @@ const EventDetailPage = () => {
     const { id } = useParams();
 
     // Tìm kiếm sự kiện theo ID, nếu không có lấy mặc định EVT-2026-002
-    const event = EVENTS_DATABASE[id] || EVENTS_DATABASE['EVT-2026-002'];
+    const [event, setEvent] = useState(() => EVENTS_DATABASE[id] || EVENTS_DATABASE['EVT-2026-002']);
 
     // State chọn vé
     const [selectedTierId, setSelectedTierId] = useState(event.ticketTypes[0]?.id || '');
@@ -263,6 +264,84 @@ const EventDetailPage = () => {
     const handleCloseSnackbar = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
+
+    // Tải chi tiết sự kiện thật từ Backend
+    useEffect(() => {
+        if (!id) return;
+        const fetchDetail = async () => {
+            try {
+                const res = await eventAPI.getEventDetail(id);
+                const backendEvent = res.data?.data?.event;
+                if (backendEvent) {
+                    const ticketTypes = Array.isArray(backendEvent.ticketTypes)
+                        ? backendEvent.ticketTypes.map((tt) => ({
+                            id: tt.id,
+                            name: tt.name,
+                            badge: tt.name.toUpperCase().includes('VIP') ? 'VIP' : 'Phổ thông',
+                            originalPrice: Number(tt.originalPrice || 0),
+                            maxResalePrice: Number(tt.maxResalePrice || (Number(tt.originalPrice || 0) * 1.2).toFixed(4)),
+                            currency: tt.currency || 'ETH',
+                            maxSupply: Number(tt.maxSupply || 100),
+                            currentSupply: Number(tt.currentSupply || 0),
+                            description: tt.description || 'Hạng vé chính thức của sự kiện.',
+                            perks: ['Vé NFT độc bản', 'QR Check-in động', 'Bảo hiểm trần giá 120%'],
+                        }))
+                        : [];
+
+                    const normalized = {
+                        ...backendEvent,
+                        id: backendEvent.id,
+                        title: backendEvent.title,
+                        subtitle: backendEvent.description?.slice(0, 150) + '...',
+                        category: backendEvent.category || 'music',
+                        categoryLabel:
+                            backendEvent.category === 'technology' ? 'Công nghệ & Web3' :
+                            backendEvent.category === 'sports' ? 'Thể thao' :
+                            backendEvent.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc',
+                        bannerUrl: backendEvent.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&auto=format&fit=crop&q=80',
+                        venue: {
+                            name: backendEvent.venueName || 'Địa điểm tổ chức',
+                            address: backendEvent.venueAddress || '',
+                            city: backendEvent.venueCity || 'Việt Nam',
+                            notes: 'Vui lòng xuất trình mã QR động tại cổng soát vé.',
+                        },
+                        startTime: backendEvent.startTime ? new Date(backendEvent.startTime).toLocaleString('vi-VN') : '',
+                        endTime: backendEvent.endTime ? new Date(backendEvent.endTime).toLocaleString('vi-VN') : '',
+                        countdownDays: 14,
+                        contractAddress: backendEvent.contractAddress || '0x71C948261901823901928394819203849102A319',
+                        marketplaceAddress: '0x48D11894aB01029384910293849102938491B281',
+                        network: 'Ethereum Sepolia Testnet (ChainId 11155111)',
+                        tokenStandard: 'ERC-721 (Non-Fungible Token)',
+                        organizer: {
+                            name: backendEvent.organizer?.fullName || 'Nhà tổ chức',
+                            email: backendEvent.organizer?.email || '',
+                            wallet: backendEvent.organizer?.walletAddress || '0x0000...0000',
+                            previousEventsCount: 1,
+                            trustScore: '99%',
+                            avatarText: (backendEvent.organizer?.fullName || 'BT').slice(0, 2).toUpperCase(),
+                            bio: 'Nhà tổ chức sự kiện chuyên nghiệp trên BlockTickets.',
+                        },
+                        highlights: [
+                            'Vé NFT độc bản ERC-721 bảo chứng trên Ethereum Sepolia',
+                            'Soát vé tại cổng tức thì qua mã QR HMAC động',
+                            'Chống phe vé chợ đen với quy tắc trần giá bán lại 120%',
+                        ],
+                        description: backendEvent.description,
+                        ticketTypes: ticketTypes.length > 0 ? ticketTypes : event.ticketTypes,
+                        faqs: [],
+                    };
+
+                    setEvent(normalized);
+                    if (ticketTypes.length > 0) {
+                        setSelectedTierId(ticketTypes[0].id);
+                    }
+                }
+            } catch (err) {
+                console.log('Chưa kết nối API chi tiết sự kiện:', err.message);
+            }
+        };
+        fetchDetail();
+    }, [id]);
 
     // Lấy hạng vé đang chọn
     const activeTier = useMemo(() => {

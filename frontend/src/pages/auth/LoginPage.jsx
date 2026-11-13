@@ -26,8 +26,10 @@ import {
     QrCode2,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { authAPI } from '../../services/api';
 
 // MetaMask fox inline SVG
 const MetaMaskIcon = () => (
@@ -81,10 +83,23 @@ const LoginPage = () => {
         if (!validate()) return;
         setLoginLoading(true);
         try {
-            await new Promise((r) => setTimeout(r, 1000));
-            setServerError('Backend chưa kết nối. Chức năng đang phát triển.');
+            const res = await authAPI.login({
+                email: email.trim(),
+                password,
+            });
+            const { user, accessToken, refreshToken } = res.data.data;
+            login(user, accessToken, refreshToken);
+
+            // Chuyển hướng theo vai trò người dùng
+            if (user.role === 'admin') {
+                navigate('/admin/dashboard');
+            } else if (user.role === 'organizer') {
+                navigate('/organizer/dashboard');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
-            setServerError(err?.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
+            setServerError(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu.');
         } finally {
             setLoginLoading(false);
         }
@@ -98,14 +113,43 @@ const LoginPage = () => {
         }
         setWalletLoading(true);
         try {
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            const wallet = accounts[0];
-            setServerError(`Đã kết nối ví: ${wallet.slice(0, 6)}...${wallet.slice(-4)}. Backend/SIWE chưa tích hợp.`);
-        } catch (err) {
-            if (err.code === 4001) {
-                setServerError('Người dùng đã từ chối kết nối ví.');
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
+            const walletAddress = await signer.getAddress();
+
+            // 1. Lấy nonce xác thực từ backend
+            const nonceRes = await authAPI.getNonce(walletAddress);
+            const nonce = nonceRes.data?.data?.nonce;
+            if (!nonce) {
+                throw new Error('Không thể nhận chuỗi xác thực (nonce) từ máy chủ.');
+            }
+
+            // 2. Ký thông điệp xác thực trên MetaMask
+            const signature = await signer.signMessage(nonce);
+
+            // 3. Gửi chữ ký lên backend để xác thực và cấp token
+            const verifyRes = await authAPI.verifyWallet({
+                walletAddress,
+                signature,
+                nonce,
+            });
+
+            const { user, accessToken, refreshToken } = verifyRes.data.data;
+            login(user, accessToken, refreshToken);
+
+            // Chuyển hướng theo vai trò người dùng
+            if (user.role === 'admin') {
+                navigate('/admin/dashboard');
+            } else if (user.role === 'organizer') {
+                navigate('/organizer/dashboard');
             } else {
-                setServerError('Không thể kết nối ví. Vui lòng thử lại.');
+                navigate('/');
+            }
+        } catch (err) {
+            if (err?.code === 'ACTION_REJECTED' || err?.code === 4001) {
+                setServerError('Bạn đã từ chối ký xác nhận trên ví MetaMask.');
+            } else {
+                setServerError(err.message || 'Đăng nhập bằng ví thất bại. Vui lòng thử lại.');
             }
         } finally {
             setWalletLoading(false);

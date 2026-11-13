@@ -1,0 +1,32 @@
+$kind: http-request
+url: "{{baseUrl}}/api/events/{{eventId}}/ticket-types"
+method: POST
+headers:
+  Authorization: Bearer {{organizerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "name": "VIP Networking Pass",
+      "description": "Ve VIP da tiec ket noi quy dau tu, phong cho VIP Lounge",
+      "originalPrice": 0.25,
+      "currency": "ETH",
+      "maxSupply": 50,
+      "saleStartTime": "2026-11-15T00:00:00.000Z",
+      "saleEndTime": "2026-11-27T23:59:59.000Z"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("VIP ticket tier created and saved", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(true);
+          pm.expect(Number(json.data.ticketType.originalPrice)).to.eql(0.25);
+          pm.environment.set("ticketTypeId", json.data.ticketType.id);
+      });
+    language: text/javascript
+order: 3000

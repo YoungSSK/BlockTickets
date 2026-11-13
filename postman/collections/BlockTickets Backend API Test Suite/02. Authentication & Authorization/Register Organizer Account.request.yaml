@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{orgEmail}}",
+      "password": "Organizer@123",
+      "fullName": "TechChain Organizer Vietnam",
+      "role": "organizer"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      var randomSuffix = Math.floor(Math.random() * 10000);
+      pm.environment.set("orgEmail", "organizer_" + randomSuffix + "@blocktickets.io");
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("User registered with role organizer", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(true);
+          pm.expect(json.data.user.role).to.eql("organizer");
+          pm.environment.set("organizerToken", json.data.accessToken);
+          pm.environment.set("organizerRefreshToken", json.data.refreshToken);
+      });
+    language: text/javascript
+order: 1000

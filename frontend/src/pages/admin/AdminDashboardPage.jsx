@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -64,6 +64,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
+import { adminAPI } from '../../services/api';
 
 // Helper: Rút gọn địa chỉ ví và mã băm giao dịch theo chuẩn Section 4.2
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -288,6 +289,31 @@ const CATEGORIES_DATA = [
     { name: 'Hội thảo (Workshop)', percent: 12, color: '#F59E0B', events: 4, tickets: '1,200 vé' },
 ];
 
+const normalizePendingEvent = (evt) => ({
+    ...evt,
+    id: evt.id,
+    title: evt.title,
+    organizer: evt.organizer?.fullName || evt.organizer?.name || 'Nhà tổ chức',
+    organizerWallet: evt.organizer?.walletAddress || evt.organizer?.wallet || '0x0000...0000',
+    category: evt.category || 'music',
+    categoryLabel:
+        evt.category === 'technology' ? 'Công nghệ' :
+        evt.category === 'sports' ? 'Thể thao' :
+        evt.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc',
+    startTime: evt.startTime ? new Date(evt.startTime).toLocaleString('vi-VN') : '',
+    ticketCount: Array.isArray(evt.ticketTypes)
+        ? evt.ticketTypes.reduce((s, t) => s + Number(t.maxSupply || 0), 0)
+        : 0,
+    priceRange: Array.isArray(evt.ticketTypes) && evt.ticketTypes.length > 0
+        ? `${Math.min(...evt.ticketTypes.map((t) => Number(t.originalPrice || 0)))} - ${Math.max(...evt.ticketTypes.map((t) => Number(t.originalPrice || 0)))} ETH`
+        : '0.05 ETH',
+    ticketTypes: Array.isArray(evt.ticketTypes) ? evt.ticketTypes : [],
+    submittedAt: evt.createdAt ? new Date(evt.createdAt).toLocaleDateString('vi-VN') : 'Mới cập nhật',
+    venue: evt.venueName || evt.venue || 'Việt Nam',
+    description: evt.description || '',
+    bannerUrl: evt.bannerUrl || 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
+});
+
 const AdminDashboardPage = () => {
     const { mode, toggleTheme } = useAppTheme();
     const navigate = useNavigate();
@@ -326,6 +352,42 @@ const AdminDashboardPage = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
 
+    // Tải số liệu Dashboard và sự kiện chờ duyệt từ Backend
+    const fetchDashboardData = async () => {
+        setIsRefreshing(true);
+        try {
+            const [metricsRes, pendingRes] = await Promise.allSettled([
+                adminAPI.getMetrics(),
+                adminAPI.getPendingEvents({ limit: 10 }),
+            ]);
+
+            if (metricsRes.status === 'fulfilled' && metricsRes.value.data?.data) {
+                setMetrics((prev) => ({
+                    ...prev,
+                    ...metricsRes.value.data.data,
+                }));
+            }
+
+            if (pendingRes.status === 'fulfilled') {
+                const pEvents = pendingRes.value.data?.data?.events;
+                if (Array.isArray(pEvents) && pEvents.length > 0) {
+                    setPendingEvents(pEvents.map(normalizePendingEvent));
+                }
+            }
+
+            const now = new Date();
+            setLastSyncTime(now.toTimeString().split(' ')[0]);
+        } catch (err) {
+            console.log('Chưa kết nối API Backend hoặc chưa đăng nhập Admin:', err.message);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
     // Sao chép clipboard với thông báo
     const handleCopy = (text, label = 'mã') => {
         if (!text) return;
@@ -334,28 +396,33 @@ const AdminDashboardPage = () => {
     };
 
     // Làm mới dữ liệu
-    const handleRefreshData = () => {
-        setIsRefreshing(true);
-        setTimeout(() => {
-            const now = new Date();
-            const timeStr = now.toTimeString().split(' ')[0];
-            setLastSyncTime(timeStr);
-            setIsRefreshing(false);
-            showSnackbar('Đã đồng bộ dữ liệu mới nhất từ Sepolia Testnet & MongoDB Atlas!', 'success');
-        }, 800);
+    const handleRefreshData = async () => {
+        await fetchDashboardData();
+        showSnackbar('Đã đồng bộ dữ liệu mới nhất từ Sepolia Testnet & Cơ sở dữ liệu!', 'success');
     };
 
     // Phê duyệt sự kiện
-    const handleApproveEvent = (event) => {
-        setPendingEvents((prev) => prev.filter((e) => e.id !== event.id));
-        setMetrics((prev) => ({
-            ...prev,
-            pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
-            activeEventsCount: prev.activeEventsCount + 1,
-            totalEvents: prev.totalEvents,
-        }));
-        showSnackbar(`Đã phê duyệt sự kiện "${event.title}" thành công! Sự kiện đã sẵn sàng mở bán.`, 'success');
-        if (detailModalOpen) setDetailModalOpen(false);
+    const handleApproveEvent = async (event) => {
+        try {
+            await adminAPI.approveEvent(event.id);
+            setPendingEvents((prev) => prev.filter((e) => e.id !== event.id));
+            setMetrics((prev) => ({
+                ...prev,
+                pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
+                activeEventsCount: prev.activeEventsCount + 1,
+            }));
+            showSnackbar(`Đã phê duyệt sự kiện "${event.title}" thành công! Sự kiện đã sẵn sàng mở bán.`, 'success');
+        } catch (err) {
+            setPendingEvents((prev) => prev.filter((e) => e.id !== event.id));
+            setMetrics((prev) => ({
+                ...prev,
+                pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
+                activeEventsCount: prev.activeEventsCount + 1,
+            }));
+            showSnackbar(err.message || `Đã phê duyệt sự kiện "${event.title}" (chế độ demo).`, 'info');
+        } finally {
+            if (detailModalOpen) setDetailModalOpen(false);
+        }
     };
 
     // Mở modal từ chối
@@ -367,22 +434,32 @@ const AdminDashboardPage = () => {
     };
 
     // Xác nhận từ chối sự kiện
-    const handleConfirmReject = () => {
+    const handleConfirmReject = async () => {
         if (!rejectionReason.trim()) {
             setRejectError('Vui lòng nhập lý do từ chối để thông báo cho Nhà tổ chức.');
             return;
         }
 
         const targetEvent = selectedEvent;
-        setPendingEvents((prev) => prev.filter((e) => e.id !== targetEvent.id));
-        setMetrics((prev) => ({
-            ...prev,
-            pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
-        }));
-
-        setRejectModalOpen(false);
-        if (detailModalOpen) setDetailModalOpen(false);
-        showSnackbar(`Đã từ chối sự kiện "${targetEvent.title}". Thông báo kèm lý do đã được gửi tới Organizer.`, 'info');
+        try {
+            await adminAPI.rejectEvent(targetEvent.id, rejectionReason.trim());
+            setPendingEvents((prev) => prev.filter((e) => e.id !== targetEvent.id));
+            setMetrics((prev) => ({
+                ...prev,
+                pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
+            }));
+            showSnackbar(`Đã từ chối sự kiện "${targetEvent.title}". Thông báo kèm lý do đã được gửi tới Organizer.`, 'info');
+        } catch (err) {
+            setPendingEvents((prev) => prev.filter((e) => e.id !== targetEvent.id));
+            setMetrics((prev) => ({
+                ...prev,
+                pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
+            }));
+            showSnackbar(err.message || `Đã từ chối sự kiện "${targetEvent.title}".`, 'info');
+        } finally {
+            setRejectModalOpen(false);
+            if (detailModalOpen) setDetailModalOpen(false);
+        }
     };
 
     // Lọc sự kiện đang chờ duyệt

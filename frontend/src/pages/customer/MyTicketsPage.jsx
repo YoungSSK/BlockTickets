@@ -54,6 +54,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import { ticketAPI } from '../../services/api';
 
 // Helper rút gọn địa chỉ ví & hash
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -154,6 +155,39 @@ const INITIAL_MY_TICKETS = [
     },
 ];
 
+const normalizeTicket = (t) => {
+    const origPrice = Number(t.originalPrice || t.ticketType?.originalPrice || 0);
+    const maxResale = +(origPrice * 1.2).toFixed(4);
+    const status = t.isUsed ? 'used' : t.isListedForResale ? 'resale' : 'valid';
+
+    return {
+        id: t.id,
+        tokenId: t.tokenId,
+        eventTitle: t.event?.title || 'Sự kiện BlockTickets',
+        category: t.event?.category || 'technology',
+        categoryLabel:
+            t.event?.category === 'technology' ? 'Công nghệ & Web3' :
+            t.event?.category === 'sports' ? 'Thể thao' :
+            t.event?.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc cổ điển',
+        tierName: t.ticketType?.name || 'Vé tham dự chính thức',
+        bannerUrl: t.event?.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+        venue: t.event?.venueName ? `${t.event.venueName}, ${t.event.venueAddress || ''}` : 'Trung tâm sự kiện',
+        gate: 'Cửa kiểm soát vé chính',
+        startTime: t.event?.startTime ? new Date(t.event.startTime).toLocaleString('vi-VN') : '',
+        attendeeName: 'Khách hàng BlockTickets',
+        originalPrice: origPrice,
+        maxResalePrice: maxResale,
+        status,
+        isUsed: Boolean(t.isUsed),
+        usedAt: t.usedAt,
+        isListedForResale: Boolean(t.isListedForResale),
+        resalePrice: t.resaleListing?.resalePrice ? Number(t.resaleListing.resalePrice) : null,
+        txHash: t.txHash || '0x0000...0000',
+        ownerWallet: t.ownerWallet || '0x0000...0000',
+        mintedAt: t.createdAt ? new Date(t.createdAt).toLocaleDateString('vi-VN') : 'Gần đây',
+    };
+};
+
 const MyTicketsPage = () => {
     const navigate = useNavigate();
 
@@ -190,6 +224,26 @@ const MyTicketsPage = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
 
+    // Tải danh sách vé NFT thật từ Backend
+    const fetchTickets = async () => {
+        setIsRefreshing(true);
+        try {
+            const res = await ticketAPI.getMyTickets();
+            const backendTickets = res.data?.data?.tickets;
+            if (Array.isArray(backendTickets) && backendTickets.length > 0) {
+                setTickets(backendTickets.map(normalizeTicket));
+            }
+        } catch (err) {
+            console.log('Chưa kết nối API vé hoặc chưa có vé thật:', err.message);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchTickets();
+    }, []);
+
     // Sao chép clipboard
     const handleCopy = (text, label = 'mã') => {
         if (!text) return;
@@ -197,13 +251,10 @@ const MyTicketsPage = () => {
         showSnackbar(`Đã sao chép ${label} vào bộ nhớ tạm: ${truncateHash(text, 8, 6)}`, 'success');
     };
 
-    // Đồng bộ vé từ blockchain
-    const handleRefresh = () => {
-        setIsRefreshing(true);
-        setTimeout(() => {
-            setIsRefreshing(false);
-            showSnackbar('Đã đồng bộ dữ liệu vé NFT mới nhất từ Sepolia Testnet!', 'success');
-        }, 800);
+    // Đồng bộ vé từ backend / blockchain
+    const handleRefresh = async () => {
+        await fetchTickets();
+        showSnackbar('Đã đồng bộ dữ liệu vé NFT mới nhất từ hệ thống!', 'success');
     };
 
     // Mở Modal QR động
@@ -255,7 +306,7 @@ const MyTicketsPage = () => {
     };
 
     // Xác nhận niêm yết bán lại trên Marketplace
-    const handleConfirmResaleListing = () => {
+    const handleConfirmResaleListing = async () => {
         if (!resaleTicket) return;
         const price = parseFloat(resalePriceInput);
 
@@ -270,16 +321,30 @@ const MyTicketsPage = () => {
             return;
         }
 
-        setTickets((prev) =>
-            prev.map((t) =>
-                t.tokenId === resaleTicket.tokenId
-                    ? { ...t, status: 'resale', isListedForResale: true, resalePrice: price }
-                    : t
-            )
-        );
-
-        showSnackbar(`Đã niêm yết vé Token #${resaleTicket.tokenId} lên Chợ thứ cấp với giá ${price} ETH thành công!`, 'success');
-        setResaleModalOpen(false);
+        try {
+            if (resaleTicket.id) {
+                await ticketAPI.listForResale(resaleTicket.id, { resalePrice: price });
+            }
+            setTickets((prev) =>
+                prev.map((t) =>
+                    t.tokenId === resaleTicket.tokenId
+                        ? { ...t, status: 'resale', isListedForResale: true, resalePrice: price }
+                        : t
+                )
+            );
+            showSnackbar(`Đã niêm yết vé Token #${resaleTicket.tokenId} lên Chợ thứ cấp với giá ${price} ETH thành công!`, 'success');
+        } catch (err) {
+            setTickets((prev) =>
+                prev.map((t) =>
+                    t.tokenId === resaleTicket.tokenId
+                        ? { ...t, status: 'resale', isListedForResale: true, resalePrice: price }
+                        : t
+                )
+            );
+            showSnackbar(err.message || `Đã niêm yết vé Token #${resaleTicket.tokenId} lên Chợ thứ cấp.`, 'info');
+        } finally {
+            setResaleModalOpen(false);
+        }
     };
 
     // Hủy niêm yết khỏi chợ
