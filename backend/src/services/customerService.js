@@ -10,7 +10,7 @@ import {
   ResaleListing,
 } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
-
+import * as blockchainService from "./blockchainService.js";
 // 1. Tạo đơn đặt vé mới (Order Intent)
 export const createOrder = async (
   { eventId, ticketTypeId, quantity, buyerWallet, idempotencyKey },
@@ -29,7 +29,8 @@ export const createOrder = async (
   const ticketType = await TicketType.findOne({
     where: { id: parsedTicketTypeId, eventId: parsedEventId },
   });
-  if (!ticketType) throw new AppError("Hạng vé không tồn tại trong sự kiện.", 404);
+  if (!ticketType)
+    throw new AppError("Hạng vé không tồn tại trong sự kiện.", 404);
 
   const currentSupply = Number(ticketType.currentSupply || 0);
   const maxSupply = Number(ticketType.maxSupply || 0);
@@ -84,9 +85,7 @@ export const verifyAndConfirmOrder = async (orderId, { txHash }, user) => {
       transaction: t,
       lock: t.LOCK.UPDATE,
     });
-
     if (!order) throw new AppError("Không tìm thấy đơn hàng.", 404);
-
     if (order.status === "confirmed") {
       const existingTickets = await Ticket.findAll({
         where: { eventId: order.eventId, ownerWallet: order.buyerWallet },
@@ -96,35 +95,38 @@ export const verifyAndConfirmOrder = async (orderId, { txHash }, user) => {
       });
       return { order, tickets: existingTickets };
     }
-
     const ticketType = await TicketType.findByPk(order.ticketTypeId, {
       transaction: t,
       lock: t.LOCK.UPDATE,
     });
     if (!ticketType) throw new AppError("Hạng vé không tồn tại.", 404);
-
+    // 1. Xác thực giao dịch on-chain thật và bóc tách Token ID từ Blockchain
+    const verification = await blockchainService.verifyTicketPurchaseTx(
+      txHash,
+      {
+        expectedBuyer: order.buyerWallet,
+        expectedEventId: order.event?.onChainEventId,
+        expectedQuantity: order.quantity,
+      },
+    );
     // Cập nhật trạng thái đơn hàng sang confirmed
     order.status = "confirmed";
-    order.txHash = txHash || `0x${crypto.randomBytes(32).toString("hex")}`;
+    order.txHash = txHash || verification.txHash;
     await order.save({ transaction: t });
-
-    // Tạo các bản ghi vé NFT tương ứng số lượng
+    // 2. Tạo bản ghi vé NFT trong MySQL với tokenId thật từ Blockchain
     const createdTickets = [];
-    const baseTokenId = BigInt(Date.now()) * 1000n;
-
+    const tokenIds = verification.tokenIds;
     for (let i = 0; i < order.quantity; i++) {
-      const tokenId = baseTokenId + BigInt(i) + BigInt(crypto.randomInt(1, 999));
-      const ticketTxHash = `0x${crypto.randomBytes(32).toString("hex")}`;
-
+      const assignedTokenId = tokenIds[i] ?? Math.floor(Date.now() / 1000) + i;
       const ticket = await Ticket.create(
         {
-          tokenId: Number(tokenId % 2147483647n),
+          tokenId: assignedTokenId,
           eventId: order.eventId,
           ticketTypeId: order.ticketTypeId,
           ownerWallet: order.buyerWallet,
           originalBuyerWallet: order.buyerWallet,
           originalPrice: ticketType.originalPrice,
-          txHash: ticketTxHash,
+          txHash: order.txHash,
           isUsed: false,
           isListedForResale: false,
         },
@@ -132,11 +134,10 @@ export const verifyAndConfirmOrder = async (orderId, { txHash }, user) => {
       );
       createdTickets.push(ticket);
     }
-
     // Tăng currentSupply của ticketType
-    ticketType.currentSupply = Number(ticketType.currentSupply || 0) + order.quantity;
+    ticketType.currentSupply =
+      Number(ticketType.currentSupply || 0) + order.quantity;
     await ticketType.save({ transaction: t });
-
     return { order, tickets: createdTickets };
   });
 };
@@ -218,10 +219,14 @@ export const generateDynamicQR = async (ticketId, user) => {
 
   const timestamp = Date.now();
   const validUntil = timestamp + 60000; // 60 giây xoay vòng
-  const secretKey = process.env.JWT_ACCESS_SECRET || "blocktickets-dynamic-qr-secret";
+  const secretKey =
+    process.env.JWT_ACCESS_SECRET || "blocktickets-dynamic-qr-secret";
 
   const rawData = `ticket:${ticket.id}|token:${ticket.tokenId}|exp:${validUntil}`;
-  const hmac = crypto.createHmac("sha256", secretKey).update(rawData).digest("hex");
+  const hmac = crypto
+    .createHmac("sha256", secretKey)
+    .update(rawData)
+    .digest("hex");
 
   const qrPayload = JSON.stringify({
     ticketId: ticket.id,
@@ -234,12 +239,19 @@ export const generateDynamicQR = async (ticketId, user) => {
 };
 
 // 7. Chuyển nhượng vé NFT cho ví khác (P2P Transfer)
-export const transferTicket = async (ticketId, { recipientWallet, txHash }, user) => {
+export const transferTicket = async (
+  ticketId,
+  { recipientWallet, txHash },
+  user,
+) => {
   const ticket = await Ticket.findByPk(ticketId);
   if (!ticket) throw new AppError("Không tìm thấy vé.", 404);
 
   if (ticket.isUsed) {
-    throw new AppError("Vé này đã được soát check-in, không thể chuyển nhượng.", 400);
+    throw new AppError(
+      "Vé này đã được soát check-in, không thể chuyển nhượng.",
+      400,
+    );
   }
 
   if (ticket.isListedForResale) {
@@ -306,11 +318,11 @@ export const listTicketForResale = async (
       originalPrice: origPrice,
       resalePrice: requestedPrice,
       maxAllowedPrice,
-      listingTxHash: listingTxHash || `0x${crypto.randomBytes(32).toString("hex")}`,
+      listingTxHash:
+        listingTxHash || `0x${crypto.randomBytes(32).toString("hex")}`,
       status: "active",
     });
   }
 
   return { ticket, listing };
 };
-

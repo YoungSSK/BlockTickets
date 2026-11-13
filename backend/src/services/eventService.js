@@ -1,7 +1,7 @@
 import { Op } from "sequelize";
 import { Event, TicketType, User } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
-
+import * as blockchainService from "./blockchainService.js";
 const EDITABLE_STATUSES = ["draft", "rejected"];
 
 const SORT_MAP = {
@@ -252,19 +252,20 @@ export const publishApprovedEvent = async (
 ) => {
   const event = await getEventOrFail(eventId);
   assertEventOwner(event, organizerId);
-
   if (event.status !== "approved") {
     throw new AppError(
       `Chỉ có thể công khai sự kiện đã được Admin duyệt (trạng thái hiện tại: "${event.status}").`,
       409,
     );
   }
-
-  if (onChainEventId !== undefined) {
-    event.onChainEventId = onChainEventId;
+  const targetOnChainId =
+    onChainEventId !== undefined ? onChainEventId : event.onChainEventId;
+  // Xác thực sự kiện on-chain thật nếu có onChainEventId
+  if (targetOnChainId) {
+    await blockchainService.verifyOnChainEvent(targetOnChainId);
+    event.onChainEventId = targetOnChainId;
   }
   event.status = "published";
   await event.save();
-
   return event;
 };

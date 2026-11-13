@@ -147,3 +147,7 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+blockchain/artifacts/
+blockchain/cache/
+blockchain/typechain-types/
