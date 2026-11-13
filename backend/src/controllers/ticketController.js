@@ -82,4 +82,58 @@ export const listTicketForResale = async (req, res, next) => {
     return next(error);
   }
 };
-
+// GET /api/tickets/marketplace - Lấy danh sách vé đang rao bán trên chợ thứ cấp (BE-08)
+export const getMarketplaceListings = async (req, res, next) => {
+  try {
+    const data = await customerService.getMarketplaceListings(req.query);
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+// DELETE /api/tickets/:id/resale - Hủy niêm yết vé bán lại (BE-08)
+export const cancelResaleListing = async (req, res, next) => {
+  try {
+    const listing = await customerService.cancelResaleListing(
+      req.params.id,
+      req.user,
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Đã hủy niêm yết vé trên Marketplace thành công.",
+      data: { listing },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+// POST /api/tickets/:id/buy-resale - Mua lại vé trên Marketplace (BE-08)
+export const buyResaleTicket = async (req, res, next) => {
+  try {
+    const data = await customerService.buyResaleTicket(
+      req.params.id,
+      req.body,
+      req.user,
+    );
+    return res.status(200).json({
+      success: true,
+      message:
+        "Mua lại vé thành công! Quyền sở hữu vé đã được chuyển giao cho bạn.",
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+// POST /api/tickets/check-in - Soát vé bằng mã QR tại cổng (BE-09)
+export const checkInTicket = async (req, res, next) => {
+  try {
+    const result = await customerService.checkInTicket(req.body, req.user);
+    return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+};
