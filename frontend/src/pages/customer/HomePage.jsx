@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -46,6 +46,7 @@ import {
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import { eventAPI } from '../../services/api';
 
 // Dữ liệu các sự kiện trên hệ thống BlockTickets
 const FEATURED_EVENTS = [
@@ -175,10 +176,42 @@ const VALUE_PROPOSITIONS = [
     },
 ];
 
+const normalizeHomeEvent = (evt) => {
+    const ticketTypes = Array.isArray(evt.ticketTypes) ? evt.ticketTypes : [];
+    const prices = ticketTypes.map((t) => Number(t.originalPrice || 0)).filter((p) => p > 0);
+    const minPrice = prices.length > 0 ? Math.min(...prices) : 0.05;
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : 0.25;
+    const maxSupply = ticketTypes.reduce((s, t) => s + Number(t.maxSupply || 0), 0) || 1000;
+    const minted = ticketTypes.reduce((s, t) => s + Number(t.currentSupply || t.mintedAmount || 0), 0);
+    const remainingTickets = Math.max(0, maxSupply - minted);
+
+    return {
+        ...evt,
+        id: evt.id,
+        title: evt.title,
+        category: evt.category || 'music',
+        categoryLabel:
+            evt.category === 'technology' ? 'Công nghệ & Web3' :
+            evt.category === 'sports' ? 'Thể thao' :
+            evt.category === 'workshop' ? 'Hội thảo & Khởi nghiệp' : 'Âm nhạc',
+        bannerUrl: evt.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+        venue: evt.venueName || evt.venue || 'Việt Nam',
+        city: evt.venueCity || evt.city || 'Hà Nội',
+        startTime: evt.startTime ? new Date(evt.startTime).toLocaleDateString('vi-VN') : '',
+        minPrice,
+        maxPrice,
+        remainingTickets,
+        maxSupply,
+        organizer: evt.organizer?.fullName || evt.organizer?.name || 'BlockTickets Partner',
+        featured: Boolean(evt.featured ?? true),
+    };
+};
+
 const HomePage = () => {
     const navigate = useNavigate();
 
-    // State bộ lọc và tìm kiếm
+    // State danh sách sự kiện & bộ lọc
+    const [events, setEvents] = useState(FEATURED_EVENTS);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCity, setSelectedCity] = useState('all');
     const [selectedCategoryTab, setSelectedCategoryTab] = useState('all');
@@ -198,6 +231,22 @@ const HomePage = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
 
+    // Tải danh sách sự kiện đã duyệt/công khai từ Backend
+    useEffect(() => {
+        const fetchEvents = async () => {
+            try {
+                const res = await eventAPI.getEvents({ limit: 20 });
+                const backendEvents = res.data?.data?.events;
+                if (Array.isArray(backendEvents) && backendEvents.length > 0) {
+                    setEvents(backendEvents.map(normalizeHomeEvent));
+                }
+            } catch (err) {
+                console.log('Chưa kết nối API sự kiện:', err.message);
+            }
+        };
+        fetchEvents();
+    }, []);
+
     // Cuộn tới danh sách sự kiện
     const handleScrollToEvents = () => {
         const section = document.getElementById('events-section');
@@ -208,7 +257,7 @@ const HomePage = () => {
 
     // Lọc danh sách sự kiện theo từ khóa, thành phố và danh mục
     const filteredEvents = useMemo(() => {
-        return FEATURED_EVENTS.filter((evt) => {
+        return events.filter((evt) => {
             // Danh mục
             if (selectedCategoryTab !== 'all' && evt.category !== selectedCategoryTab) return false;
             // Thành phố
@@ -216,14 +265,14 @@ const HomePage = () => {
             // Từ khóa tìm kiếm
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
-                const matchTitle = evt.title.toLowerCase().includes(q);
-                const matchVenue = evt.venue.toLowerCase().includes(q);
-                const matchOrg = evt.organizer.toLowerCase().includes(q);
+                const matchTitle = (evt.title || '').toLowerCase().includes(q);
+                const matchVenue = (evt.venue || '').toLowerCase().includes(q);
+                const matchOrg = (evt.organizer || '').toLowerCase().includes(q);
                 if (!matchTitle && !matchVenue && !matchOrg) return false;
             }
             return true;
         });
-    }, [selectedCategoryTab, selectedCity, searchQuery]);
+    }, [events, selectedCategoryTab, selectedCity, searchQuery]);
 
     return (
         <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>

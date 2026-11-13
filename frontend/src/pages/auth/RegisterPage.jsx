@@ -30,6 +30,7 @@ import {
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { authAPI } from '../../services/api';
 
 const FEATURES = [
     { Icon: Verified, text: 'Vé NFT duy nhất, xác thực trên Blockchain' },
@@ -69,7 +70,7 @@ const RegisterPage = () => {
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
             newErrors.email = 'Địa chỉ email không hợp lệ.';
         if (!form.password) newErrors.password = 'Vui lòng nhập mật khẩu.';
-        else if (form.password.length < 8) newErrors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
+        else if (form.password.length < 6) newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự.';
         if (!form.confirmPassword) newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu.';
         else if (form.password !== form.confirmPassword)
             newErrors.confirmPassword = 'Mật khẩu xác nhận không khớp.';
@@ -83,10 +84,23 @@ const RegisterPage = () => {
         if (!validate()) return;
         setLoading(true);
         try {
-            await new Promise((r) => setTimeout(r, 1200));
-            setServerError('Backend chưa kết nối. Chức năng đang phát triển.');
+            const res = await authAPI.register({
+                fullName: form.fullName.trim(),
+                email: form.email.trim(),
+                password: form.password,
+                role: role,
+            });
+            const { user, accessToken, refreshToken } = res.data.data;
+            login(user, accessToken, refreshToken);
+
+            // Chuyển hướng theo vai trò đã đăng ký
+            if (role === 'organizer') {
+                navigate('/organizer/dashboard');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
-            setServerError(err?.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+            setServerError(err.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.');
         } finally {
             setLoading(false);
         }
@@ -380,7 +394,7 @@ const RegisterPage = () => {
                             </Typography>
                         ) : (
                             <Typography variant="caption" color="text.disabled" display="block" mb={1.5}>
-                                Ít nhất 8 ký tự, gồm chữ hoa và số
+                                Ít nhất 6 ký tự
                             </Typography>
                         )}
 

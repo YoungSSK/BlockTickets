@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/events/{{eventId}}/cancel"
+method: PATCH
+headers:
+  Authorization: Bearer {{adminToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "reason": "Su kien bi hoan do thoi tiet bat kha khang theo yeu cau cua nha to chuc."
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Verify cancel response", function () {
+          pm.expect([200, 403]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 4000

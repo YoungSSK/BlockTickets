@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "not-an-email",
+      "password": "123456",
+      "fullName": "Hacker User"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+      pm.test("Validation error message returned", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(false);
+      });
+    language: text/javascript
+order: 1000

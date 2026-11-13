@@ -10,6 +10,8 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import eventRoutes from "./routes/eventRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
+import ticketRoutes from "./routes/ticketRoutes.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
@@ -29,11 +31,11 @@ app.use("/api", apiLimiter);
 // Kết nối cơ sở dữ liệu & đồng bộ bảng
 connectDB().then(async () => {
   try {
-    // alter: true giúp tự động cập nhật bảng khi bạn thêm model mới
-    await sequelize.sync({ alter: true });
+    // sequelize.sync() tự động tạo bảng nếu chưa có, không tạo trùng lặp index key
+    await sequelize.sync();
     console.log("✅ Toàn bộ bảng trên Aiven Cloud MySQL đã được đồng bộ!");
   } catch (err) {
-    console.error(" Lỗi đồng bộ database:", err.message);
+    console.error("❌ Lỗi đồng bộ database:", err.message);
   }
 });
 
@@ -59,6 +61,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/tickets", ticketRoutes);
 // Middleware
 app.use(notFound);
 app.use(errorHandler);

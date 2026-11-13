@@ -1,0 +1,2 @@
+$kind: collection
+description: Bộ kịch bản kiểm thử API Backend toàn diện cho nền tảng BlockTickets (Node.js/Express, Aiven MySQL & Ethereum Sepolia). Bao gồm kiểm thử luồng Authentication, Quản lý sự kiện Organizer, Phê duyệt Admin, và các kịch bản ngoại lệ bảo mật.

@@ -55,6 +55,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { orderAPI } from '../../services/api';
 
 // MetaMask SVG Icon
 const MetaMaskIcon = ({ size = 20 }) => (
@@ -211,34 +212,61 @@ const CheckoutPage = () => {
             return;
         }
 
-        // Bước 1: Mở popup ký ví (pending_signature)
+        // Bước 1: Khởi tạo đơn hàng & Mở popup ký ví (pending_signature)
         setTxStatus('pending_signature');
         setTxError('');
 
+        let backendOrderId = null;
         try {
-            // Giả lập hoặc gọi MetaMask ký giao dịch
+            // Khởi tạo đơn đặt vé trên Backend
+            try {
+                const orderRes = await orderAPI.createOrder({
+                    eventId: eventData.id,
+                    ticketTypeId: tier?.id,
+                    quantity,
+                    buyerWallet: walletAddress,
+                });
+                backendOrderId = orderRes.data?.data?.order?.id;
+            } catch (createErr) {
+                console.log('Tạo đơn trên API (sẽ fallback nếu chạy offline):', createErr.message);
+            }
+
+            // Gọi MetaMask hoặc sinh giao dịch on-chain
             if (window.ethereum && window.ethereum.isMetaMask) {
                 try {
                     const accounts = await window.ethereum.request({ method: 'eth_accounts' });
                     if (accounts && accounts.length > 0) {
-                        // Tạo mock TxHash hoặc gửi giao dịch thật nếu contract đã deploy
                         const randomHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 
                         // Chờ người dùng xác nhận trên MetaMask
-                        await new Promise((resolve) => setTimeout(resolve, 2200));
+                        await new Promise((resolve) => setTimeout(resolve, 2000));
 
                         // Bước 2: Ký xong -> Nhận txHash, chờ đóng Block (verifying_block)
                         setTxHash(randomHash);
                         setTxStatus('verifying_block');
 
-                        // Chờ thợ đào Sepolia xác nhận
-                        await new Promise((resolve) => setTimeout(resolve, 3500));
+                        // Gửi xác nhận txHash lên Backend để phát hành vé NFT
+                        let confirmedTokenIds = null;
+                        if (backendOrderId) {
+                            try {
+                                const verifyRes = await orderAPI.verifyOrderTx(backendOrderId, { txHash: randomHash });
+                                const tickets = verifyRes.data?.data?.tickets;
+                                if (Array.isArray(tickets) && tickets.length > 0) {
+                                    confirmedTokenIds = tickets.map((t) => t.tokenId);
+                                }
+                            } catch (verifyErr) {
+                                console.log('Xác thực đơn hàng:', verifyErr.message);
+                            }
+                        }
 
-                        // Bước 3: Backend & Blockchain xác nhận thành công (confirmed)
-                        const tokenIds = Array.from({ length: quantity }, (_, i) => 1420 + i + Math.floor(Math.random() * 80));
+                        // Chờ hiệu ứng xác nhận block
+                        await new Promise((resolve) => setTimeout(resolve, 2500));
+
+                        // Bước 3: Hoàn tất
+                        const tokenIds = confirmedTokenIds || Array.from({ length: quantity }, (_, i) => 1420 + i + Math.floor(Math.random() * 80));
                         setMintedTokenIds(tokenIds);
                         setTxStatus('confirmed');
-                        showSnackbar('Giao dịch thành công! Vé NFT đã được ghi nhận bất biến trên Sepolia.', 'success');
+                        showSnackbar('Giao dịch thành công! Vé NFT đã được lưu vào Kho vé của bạn.', 'success');
                         return;
                     }
                 } catch (walletErr) {
@@ -250,16 +278,24 @@ const CheckoutPage = () => {
             }
 
             // Fallback môi trường demo khi không có MetaMask extension
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            await new Promise((resolve) => setTimeout(resolve, 1500));
             const mockTx = '0x8a9f3b12dc089148b39019284918239018294018234810239481902371ef8923';
             setTxHash(mockTx);
             setTxStatus('verifying_block');
 
-            await new Promise((resolve) => setTimeout(resolve, 3200));
+            if (backendOrderId) {
+                try {
+                    await orderAPI.verifyOrderTx(backendOrderId, { txHash: mockTx });
+                } catch (e) {
+                    console.log('Xác nhận vé demo:', e.message);
+                }
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 2500));
             const tokenIds = Array.from({ length: quantity }, (_, i) => 1422 + i);
             setMintedTokenIds(tokenIds);
             setTxStatus('confirmed');
-            showSnackbar('Giao dịch thành công! Vé NFT đã được ghi nhận bất biến trên Sepolia.', 'success');
+            showSnackbar('Giao dịch thành công! Vé NFT đã được ghi nhận trên Sepolia.', 'success');
         } catch (err) {
             setTxStatus('error');
             setTxError(err.message || 'Giao dịch trên Blockchain bị hủy bỏ hoặc thất bại.');

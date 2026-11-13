@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{baseUrl}}/api/events"
+method: POST
+headers:
+  Authorization: Bearer {{organizerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "title": "Vietnam Blockchain Summit 2026",
+      "description": "Hoi nghi thuong dinh cong nghe chuoi khoi quy mo quoc te lon nhat Viet Nam nam 2026.",
+      "category": "technology",
+      "bannerUrl": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800",
+      "venueName": "Trung tam Hoi nghi Quoc gia Ha Noi",
+      "venueAddress": "Dai lo Thang Long, Me Tri, Nam Tu Liem",
+      "venueCity": "Ha Noi",
+      "startTime": "2026-11-28T08:30:00.000Z",
+      "endTime": "2026-11-28T18:00:00.000Z"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("Event created with draft status and ID saved", function () {
+          var json = pm.response.json();
+          pm.expect(json.success).to.eql(true);
+          pm.expect(json.data.event.status).to.eql("draft");
+          pm.environment.set("eventId", json.data.event.id);
+      });
+    language: text/javascript
+order: 1000
