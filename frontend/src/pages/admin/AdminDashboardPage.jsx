@@ -60,11 +60,11 @@ import {
     AdminPanelSettings,
     FiberManualRecord,
     InfoOutlined,
-    Home,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { adminAPI } from '../../services/api';
+import DashboardLayout from '../../layouts/DashboardLayout';
 
 // Helper: Rút gọn địa chỉ ví và mã băm giao dịch theo chuẩn Section 4.2
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -412,144 +412,56 @@ const AdminDashboardPage = () => {
         }
     };
 
-    return (
-        <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 8 }}>
-            {/* ═══════════════════════════════════════════════════════════════════
-                1. TOP HEADER / APP BAR
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Box
-                sx={{
-                    bgcolor: 'background.paper',
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                    py: 2,
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 1100,
-                    backdropFilter: 'blur(8px)',
-                }}
-            >
-                <Container maxWidth="xl">
-                    <Stack
-                        direction={{ xs: 'column', md: 'row' }}
-                        alignItems={{ xs: 'flex-start', md: 'center' }}
-                        justifyContent="space-between"
-                        spacing={2}
+    const topActions = (
+        <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
+            <FormControl size="small" sx={{ minWidth: 130 }}>
+                <Select
+                    value={timeRange}
+                    onChange={(e) => setTimeRange(e.target.value)}
+                    sx={{ height: 38, bgcolor: 'background.paper', borderRadius: '8px' }}
+                >
+                    <MenuItem value="today">Hôm nay</MenuItem>
+                    <MenuItem value="7days">7 ngày qua</MenuItem>
+                    <MenuItem value="30days">30 ngày qua</MenuItem>
+                    <MenuItem value="all">Toàn thời gian</MenuItem>
+                </Select>
+            </FormControl>
+
+            <Tooltip title="Làm mới dữ liệu từ Sepolia & Database">
+                <span>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleRefreshData}
+                        disabled={isRefreshing}
+                        startIcon={
+                            <Refresh
+                                sx={{
+                                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                                    '@keyframes spin': {
+                                        '0%': { transform: 'rotate(0deg)' },
+                                        '100%': { transform: 'rotate(360deg)' },
+                                    },
+                                }}
+                            />
+                        }
+                        sx={{ height: 38, borderRadius: '8px' }}
                     >
-                        {/* Title & Network Status Pill */}
-                        <Box>
-                            <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
-                                <Box
-                                    sx={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: '8px',
-                                        bgcolor: 'primary.main',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#fff',
-                                    }}
-                                >
-                                    <AdminPanelSettings fontSize="small" />
-                                </Box>
-                                <Typography variant="h2" color="text.primary">
-                                    Bảng Điều Khiển Quản Trị
-                                </Typography>
-                                <Chip
-                                    label="ADMIN PORTAL"
-                                    size="small"
-                                    color="primary"
-                                    sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }}
-                                />
-                            </Stack>
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                                <FiberManualRecord sx={{ color: 'status.success', fontSize: 12 }} />
-                                <Typography variant="caption" color="text.secondary">
-                                    Sepolia Testnet #11155111 (Block #7,421,902)
-                                </Typography>
-                                <Typography variant="caption" color="text.disabled">
-                                    •
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Đồng bộ gần nhất: {lastSyncTime}
-                                </Typography>
-                            </Stack>
-                        </Box>
+                        Đồng bộ
+                    </Button>
+                </span>
+            </Tooltip>
+        </Stack>
+    );
 
-                        {/* Top Actions: Home, Time range, Refresh, Theme Toggle */}
-                        <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
-                            <Button
-                                variant="outlined"
-                                size="medium"
-                                startIcon={<Home />}
-                                onClick={() => navigate('/')}
-                                sx={{ height: 40 }}
-                            >
-                                Trang chủ
-                            </Button>
-
-                            <FormControl size="small" sx={{ minWidth: 140 }}>
-                                <Select
-                                    value={timeRange}
-                                    onChange={(e) => setTimeRange(e.target.value)}
-                                    sx={{ height: 40, bgcolor: 'background.paper' }}
-                                >
-                                    <MenuItem value="today">Hôm nay</MenuItem>
-                                    <MenuItem value="7days">7 ngày qua</MenuItem>
-                                    <MenuItem value="30days">30 ngày qua</MenuItem>
-                                    <MenuItem value="all">Toàn thời gian</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <Tooltip title="Làm mới dữ liệu từ Sepolia & Atlas">
-                                <span>
-                                    <Button
-                                        variant="outlined"
-                                        size="medium"
-                                        onClick={handleRefreshData}
-                                        disabled={isRefreshing}
-                                        startIcon={
-                                            <Refresh
-                                                sx={{
-                                                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-                                                    '@keyframes spin': {
-                                                        '0%': { transform: 'rotate(0deg)' },
-                                                        '100%': { transform: 'rotate(360deg)' },
-                                                    },
-                                                }}
-                                            />
-                                        }
-                                        sx={{ height: 40 }}
-                                    >
-                                        Đồng bộ
-                                    </Button>
-                                </span>
-                            </Tooltip>
-
-                            <Tooltip title={mode === 'light' ? 'Chuyển Dark Mode' : 'Chuyển Light Mode'}>
-                                <IconButton
-                                    aria-label="Chuyển đổi giao diện sáng tối"
-                                    onClick={toggleTheme}
-                                    sx={{
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: '8px',
-                                        width: 40,
-                                        height: 40,
-                                        color: 'text.secondary',
-                                        '&:hover': { bgcolor: 'action.hover' },
-                                    }}
-                                >
-                                    {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
-                                </IconButton>
-                            </Tooltip>
-                        </Stack>
-                    </Stack>
-                </Container>
-            </Box>
-
-            <Container maxWidth="xl" sx={{ mt: 4 }}>
+    return (
+        <DashboardLayout
+            role="admin"
+            title="Bảng Điều Khiển Quản Trị"
+            subtitle={`Sepolia Testnet #11155111 • Đồng bộ gần nhất: ${lastSyncTime}`}
+            topActions={topActions}
+        >
+            <Box sx={{ width: '100%' }}>
                 {/* ═══════════════════════════════════════════════════════════════════
                     2. BANNER GIÁM SÁT TUÂN THỦ TRẦN GIÁ (COMPLIANCE NOTICE)
                 ═══════════════════════════════════════════════════════════════════ */}
@@ -1731,7 +1643,7 @@ const AdminDashboardPage = () => {
                         </TableContainer>
                     </Card>
                 )}
-            </Container>
+            </Box>
 
             {/* ═══════════════════════════════════════════════════════════════════
                 5. MODAL CHI TIẾT SỰ KIỆN (EVENT DETAIL DIALOG - SECTION 6.4)
@@ -1919,7 +1831,7 @@ const AdminDashboardPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </DashboardLayout>
     );
 };
 

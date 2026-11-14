@@ -148,14 +148,54 @@ export const getEventDetail = async (eventId, currentUser = null) => {
 
 // 4. Organizer: Tạo sự kiện (mặc định draft)
 export const createEvent = async (organizerId, payload) => {
-  if (payload.startTime <= new Date()) {
+  if (new Date(payload.startTime) <= new Date()) {
     throw new AppError("Thời gian bắt đầu sự kiện phải ở tương lai.", 400);
   }
 
-  return Event.create({
-    ...payload,
+  const { ticketTypes, ...eventData } = payload;
+
+  const event = await Event.create({
+    ...eventData,
     organizerId,
     status: "draft",
+  });
+
+  if (Array.isArray(ticketTypes) && ticketTypes.length > 0) {
+    // Ngăn chặn tạo trùng tên hạng vé trong cùng một sự kiện
+    const seenNames = new Set();
+    const eventEnd = event.endTime ? new Date(event.endTime) : new Date(event.startTime);
+
+    for (const tier of ticketTypes) {
+      const tierName = tier.name.trim();
+      const lowerName = tierName.toLowerCase();
+      if (seenNames.has(lowerName)) {
+        continue; // Bỏ qua nếu có hạng vé trùng tên gửi kèm
+      }
+      seenNames.add(lowerName);
+
+      let saleStartTime = tier.saleStartTime ? new Date(tier.saleStartTime) : new Date();
+      let saleEndTime = tier.saleEndTime ? new Date(tier.saleEndTime) : new Date(event.startTime);
+      if (saleEndTime > eventEnd) saleEndTime = new Date(eventEnd);
+      if (saleEndTime <= saleStartTime) {
+        saleStartTime = new Date(saleEndTime.getTime() - 24 * 60 * 60 * 1000);
+      }
+
+      await TicketType.create({
+        name: tierName,
+        description: tier.description || `${tierName} - Vé sự kiện NFT`,
+        originalPrice: Number(tier.originalPrice),
+        currency: tier.currency || "ETH",
+        maxSupply: Number(tier.maxSupply),
+        saleStartTime,
+        saleEndTime,
+        eventId: event.id,
+        currentSupply: 0,
+      });
+    }
+  }
+
+  return Event.findByPk(event.id, {
+    include: [{ model: TicketType, as: "ticketTypes" }],
   });
 };
 
@@ -191,9 +231,11 @@ export const updateEvent = async (eventId, organizerId, payload) => {
 };
 
 // 6. Organizer: Thêm hạng vé cho sự kiện
-export const addTicketTypeToEvent = async (eventId, organizerId, payload) => {
+export const addTicketTypeToEvent = async (eventId, organizerId, payload, userRole = null) => {
   const event = await getEventOrFail(eventId);
-  assertEventOwner(event, organizerId);
+  if (userRole !== "admin") {
+    assertEventOwner(event, organizerId);
+  }
 
   if (!EDITABLE_STATUSES.includes(event.status)) {
     throw new AppError(
@@ -202,26 +244,46 @@ export const addTicketTypeToEvent = async (eventId, organizerId, payload) => {
     );
   }
 
-  if (payload.saleEndTime > event.startTime) {
-    throw new AppError(
-      "Thời điểm kết thúc bán vé không được vượt quá thời gian bắt đầu sự kiện.",
-      400,
-    );
+  const trimmedName = payload.name.trim();
+  const existingTier = await TicketType.findOne({
+    where: {
+      eventId: event.id,
+      name: trimmedName,
+    },
+  });
+  if (existingTier) {
+    throw new AppError(`Hạng vé "${trimmedName}" đã tồn tại trong sự kiện này.`, 400);
+  }
+
+  const eventEnd = event.endTime ? new Date(event.endTime) : new Date(event.startTime);
+  let saleStartTime = payload.saleStartTime ? new Date(payload.saleStartTime) : new Date();
+  let saleEndTime = payload.saleEndTime ? new Date(payload.saleEndTime) : new Date(event.startTime);
+
+  if (saleEndTime > eventEnd) {
+    saleEndTime = new Date(eventEnd);
+  }
+
+  if (saleEndTime <= saleStartTime) {
+    saleStartTime = new Date(saleEndTime.getTime() - 24 * 60 * 60 * 1000);
   }
 
   return TicketType.create({
     ...payload,
+    saleStartTime,
+    saleEndTime,
     eventId: event.id,
     currentSupply: 0,
   });
 };
 
 // 7. Organizer: Gửi sự kiện để Admin duyệt (draft/rejected -> pending)
-export const submitEventForReview = async (eventId, organizerId) => {
+export const submitEventForReview = async (eventId, organizerId, userRole = null) => {
   const event = await getEventOrFail(eventId, {
     include: [{ model: TicketType, as: "ticketTypes" }],
   });
-  assertEventOwner(event, organizerId);
+  if (userRole !== "admin") {
+    assertEventOwner(event, organizerId);
+  }
 
   if (!EDITABLE_STATUSES.includes(event.status)) {
     throw new AppError(
@@ -294,6 +356,7 @@ export const getOrganizerStats = async (organizerId) => {
     }
   }
 
+  let recentSettlements = [];
   if (eventIds.length > 0) {
     checkedInCount = await Ticket.count({
       where: {
@@ -301,6 +364,29 @@ export const getOrganizerStats = async (organizerId) => {
         isUsed: true,
       },
     });
+
+    const recentTickets = await Ticket.findAll({
+      where: { eventId: { [Op.in]: eventIds } },
+      include: [
+        { model: Event, as: "event", attributes: ["id", "title"] },
+        { model: TicketType, as: "ticketType", attributes: ["id", "name"] },
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: 20,
+    });
+
+    recentSettlements = recentTickets.map((t) => ({
+      id: t.id,
+      type: "primary_sale",
+      typeLabel: "Bán vé sơ cấp",
+      eventTitle: t.event?.title || "Sự kiện",
+      ticketTypeName: t.ticketType?.name,
+      tokenId: t.tokenId,
+      amountEth: Number(t.originalPrice),
+      txHash: t.txHash,
+      time: t.createdAt,
+      status: "confirmed",
+    }));
   }
 
   const activeEventsCount = events.filter((e) =>
@@ -318,5 +404,6 @@ export const getOrganizerStats = async (organizerId) => {
     totalRevenueEth: +totalRevenueEth.toFixed(4),
     totalRevenueUsd: Math.round(totalRevenueEth * 3150),
     checkedInCount,
+    recentSettlements,
   };
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     Box,
     Container,
@@ -37,6 +37,7 @@ import {
     CheckCircle,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
+import { ethers } from 'ethers';
 import { useAppTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -73,13 +74,95 @@ const Navbar = () => {
     const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '');
     const [walletBalance, setWalletBalance] = useState('');
 
-    useEffect(() => {
-        if (user?.walletAddress) {
-            setWalletAddress(user.walletAddress);
-        } else {
-            setWalletAddress('');
+    const fetchWalletBalance = useCallback(async (address) => {
+        if (!address) {
+            setWalletBalance('');
+            return;
         }
-    }, [user]);
+        try {
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const balanceBigInt = await browserProvider.getBalance(address);
+                const ethStr = ethers.formatEther(balanceBigInt);
+                const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                setWalletBalance(`${ethNum} ETH`);
+            } else {
+                try {
+                    const rpcProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
+                    const balanceBigInt = await rpcProvider.getBalance(address);
+                    const ethStr = ethers.formatEther(balanceBigInt);
+                    const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                    setWalletBalance(`${ethNum} ETH`);
+                } catch {
+                    setWalletBalance('');
+                }
+            }
+        } catch (err) {
+            console.error('Lỗi khi lấy số dư ví Navbar:', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+        const checkWallet = async () => {
+            if (window.ethereum) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts && accounts[0]) {
+                        if (isMounted) {
+                            setWalletAddress(accounts[0]);
+                            await fetchWalletBalance(accounts[0]);
+                        }
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Lỗi kiểm tra eth_accounts Navbar:', err);
+                }
+            }
+            if (user?.walletAddress) {
+                setWalletAddress(user.walletAddress);
+                fetchWalletBalance(user.walletAddress);
+            } else {
+                setWalletAddress('');
+                setWalletBalance('');
+            }
+        };
+
+        checkWallet();
+        return () => {
+            isMounted = false;
+        };
+    }, [user, fetchWalletBalance]);
+
+    useEffect(() => {
+        if (!window.ethereum) return;
+
+        const handleAccountsChanged = async (accounts) => {
+            if (accounts && accounts.length > 0) {
+                setWalletAddress(accounts[0]);
+                await fetchWalletBalance(accounts[0]);
+            } else {
+                setWalletAddress('');
+                setWalletBalance('');
+            }
+        };
+
+        const handleChainChanged = () => {
+            if (walletAddress) {
+                fetchWalletBalance(walletAddress);
+            }
+        };
+
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+
+        return () => {
+            if (window.ethereum?.removeListener) {
+                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+                window.ethereum.removeListener('chainChanged', handleChainChanged);
+            }
+        };
+    }, [walletAddress, fetchWalletBalance]);
 
     const handleConnectWallet = async () => {
         if (window.ethereum) {
@@ -87,6 +170,7 @@ const Navbar = () => {
                 const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 if (accounts && accounts[0]) {
                     setWalletAddress(accounts[0]);
+                    await fetchWalletBalance(accounts[0]);
                 }
             } catch (err) {
                 console.error('Lỗi kết nối ví MetaMask:', err);
@@ -105,7 +189,6 @@ const Navbar = () => {
                 { label: 'Bảng điều khiển', path: '/admin/dashboard' },
                 { label: 'Duyệt sự kiện', path: '/admin/events' },
                 { label: 'Quản lý người dùng', path: '/admin/users' },
-                { label: 'Xem trang chủ', path: '/' },
             ];
         }
 
@@ -114,7 +197,6 @@ const Navbar = () => {
                 { label: 'Bảng điều khiển', path: '/organizer/dashboard' },
                 { label: 'Tạo sự kiện', path: '/organizer/create-event' },
                 { label: 'Soát vé tại cổng', path: '/organizer/check-in' },
-                { label: 'Xem trang chủ', path: '/' },
             ];
         }
 

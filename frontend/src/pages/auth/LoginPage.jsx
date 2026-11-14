@@ -58,10 +58,11 @@ const LoginPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const fromPath = location.state?.from?.pathname;
+    const fromState = location.state?.from?.state;
 
     const handleRedirectAfterLogin = (usr) => {
         if (fromPath && fromPath !== '/login' && fromPath !== '/register') {
-            navigate(fromPath, { replace: true });
+            navigate(fromPath, { replace: true, state: fromState });
             return;
         }
         if (usr.role === 'admin') {

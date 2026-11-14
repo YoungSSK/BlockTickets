@@ -69,6 +69,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { adminAPI, authAPI } from '../../services/api';
+import DashboardLayout from '../../layouts/DashboardLayout';
 
 // Helper rút gọn địa chỉ ví
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -429,126 +430,53 @@ const UserManagementPage = () => {
         );
     };
 
-    return (
-        <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 8 }}>
-            {/* ═══════════════════════════════════════════════════════════════════
-                1. TOP HEADER / APP BAR
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Box
-                sx={{
-                    bgcolor: 'background.paper',
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                    py: 2,
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 1100,
-                    backdropFilter: 'blur(8px)',
-                }}
+    const topActions = (
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Button
+                variant="contained"
+                color="primary"
+                startIcon={<Add />}
+                onClick={() => setCreateUserModalOpen(true)}
+                sx={{ height: 38, borderRadius: '8px' }}
             >
-                <Container maxWidth="xl">
-                    <Stack
-                        direction={{ xs: 'column', md: 'row' }}
-                        alignItems={{ xs: 'flex-start', md: 'center' }}
-                        justifyContent="space-between"
-                        spacing={2}
+                Thêm tài khoản
+            </Button>
+
+            <Tooltip title="Làm mới danh sách người dùng">
+                <span>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        startIcon={
+                            <Refresh
+                                sx={{
+                                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                                    '@keyframes spin': {
+                                        '0%': { transform: 'rotate(0deg)' },
+                                        '100%': { transform: 'rotate(360deg)' },
+                                    },
+                                }}
+                            />
+                        }
+                        sx={{ height: 38, borderRadius: '8px' }}
                     >
-                        {/* Title & Back button */}
-                        <Box>
-                            <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
-                                <Button
-                                    size="small"
-                                    onClick={() => navigate('/')}
-                                    sx={{ color: 'text.secondary', px: 0, minWidth: 'auto', '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}
-                                >
-                                    Trang chủ
-                                </Button>
-                                <Typography variant="caption" color="text.disabled">/</Typography>
-                                <Button
-                                    size="small"
-                                    startIcon={<ArrowBack />}
-                                    onClick={() => navigate('/admin/dashboard')}
-                                    sx={{ color: 'text.secondary', px: 0, '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}
-                                >
-                                    Bảng điều khiển Quản trị
-                                </Button>
-                            </Stack>
-                            <Stack direction="row" alignItems="center" spacing={1.5}>
-                                <Typography variant="h2" color="text.primary">
-                                    Quản Lý Người Dùng & Tài Khoản Web3
-                                </Typography>
-                                <Chip
-                                    label={`${stats.totalUsers} tài khoản`}
-                                    size="small"
-                                    color="primary"
-                                    sx={{ fontWeight: 700, fontSize: '0.75rem', height: 24 }}
-                                />
-                            </Stack>
-                            <Typography variant="body2" color="text.secondary">
-                                Tra cứu hồ sơ người dùng, giám sát ví MetaMask, phân quyền vai trò và khóa các tài khoản có hành vi gian lận
-                            </Typography>
-                        </Box>
+                        Đồng bộ
+                    </Button>
+                </span>
+            </Tooltip>
+        </Stack>
+    );
 
-                        {/* Top Actions: Create User, Refresh, Theme Toggle */}
-                        <Stack direction="row" alignItems="center" spacing={1.5}>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                startIcon={<Add />}
-                                onClick={() => setCreateUserModalOpen(true)}
-                                sx={{ height: 40 }}
-                            >
-                                Thêm tài khoản
-                            </Button>
-
-                            <Tooltip title="Làm mới danh sách từ MongoDB Atlas">
-                                <span>
-                                    <Button
-                                        variant="outlined"
-                                        size="medium"
-                                        onClick={handleRefresh}
-                                        disabled={isRefreshing}
-                                        startIcon={
-                                            <Refresh
-                                                sx={{
-                                                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-                                                    '@keyframes spin': {
-                                                        '0%': { transform: 'rotate(0deg)' },
-                                                        '100%': { transform: 'rotate(360deg)' },
-                                                    },
-                                                }}
-                                            />
-                                        }
-                                        sx={{ height: 40 }}
-                                    >
-                                        Đồng bộ
-                                    </Button>
-                                </span>
-                            </Tooltip>
-
-                            <Tooltip title={mode === 'light' ? 'Chuyển Dark Mode' : 'Chuyển Light Mode'}>
-                                <IconButton
-                                    aria-label="Chuyển đổi giao diện sáng tối"
-                                    onClick={toggleTheme}
-                                    sx={{
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: '8px',
-                                        width: 40,
-                                        height: 40,
-                                        color: 'text.secondary',
-                                        '&:hover': { bgcolor: 'action.hover' },
-                                    }}
-                                >
-                                    {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
-                                </IconButton>
-                            </Tooltip>
-                        </Stack>
-                    </Stack>
-                </Container>
-            </Box>
-
-            <Container maxWidth="xl" sx={{ mt: 4 }}>
+    return (
+        <DashboardLayout
+            role="admin"
+            title="Quản Lý Người Dùng & Web3"
+            subtitle="Tra cứu hồ sơ, phân quyền tài khoản và kiểm soát địa chỉ ví"
+            topActions={topActions}
+        >
+            <Box sx={{ width: '100%' }}>
                 {/* ═══════════════════════════════════════════════════════════════════
                     2. THỐNG KÊ NHANH NGƯỜI DÙNG (USER METRICS CARDS)
                 ═══════════════════════════════════════════════════════════════════ */}
@@ -1006,7 +934,7 @@ const UserManagementPage = () => {
                         labelRowsPerPage="Số dòng mỗi trang:"
                     />
                 </Card>
-            </Container>
+            </Box>
 
             {/* ═══════════════════════════════════════════════════════════════════
                 5. MODAL CHI TIẾT HỒ SƠ NGƯỜI DÙNG (PROFILE DIALOG)
@@ -1431,7 +1359,7 @@ const UserManagementPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </DashboardLayout>
     );
 };
 

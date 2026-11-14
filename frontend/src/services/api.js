@@ -68,10 +68,14 @@ api.interceptors.response.use(
         }
 
         // Trả về error object có sẵn message tiếng Việt từ backend
-        const message =
-            error.response?.data?.message ||
-            error.response?.data?.error ||
-            'Đã xảy ra lỗi khi kết nối đến máy chủ. Vui lòng thử lại sau.';
+        const validationErrors = error.response?.data?.errors;
+        let message = error.response?.data?.message || error.response?.data?.error;
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+            message = validationErrors.map((e) => e.message).join('; ');
+        }
+        if (!message) {
+            message = 'Đã xảy ra lỗi khi kết nối đến máy chủ. Vui lòng thử lại sau.';
+        }
         return Promise.reject({ ...error, message });
     }
 );
@@ -154,6 +158,9 @@ export const ticketAPI = {
 
     // Niêm yết vé bán lại trên sàn thứ cấp (trần giá 120%)
     listForResale: (id, resaleData) => api.post(`/tickets/${id}/resale`, resaleData),
+
+    // Hủy niêm yết vé bán lại
+    cancelResale: (id) => api.delete(`/tickets/${id}/resale`),
 };
 
 export const marketplaceAPI = {
@@ -205,6 +212,17 @@ export const checkInAPI = {
 
     // Lấy thống kê check-in thời gian thực theo sự kiện
     getStats: (eventId) => api.get(`/check-in/stats/${eventId}`),
+};
+
+export const userAPI = {
+    // Lấy thông tin hồ sơ người dùng
+    getProfile: () => api.get('/users/profile'),
+
+    // Cập nhật thông tin hồ sơ
+    updateProfile: (data) => api.put('/users/profile', data),
+
+    // Liên kết ví MetaMask với tài khoản hiện tại
+    linkWallet: (data) => api.post('/users/link-wallet', data),
 };
 
 export default api;

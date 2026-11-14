@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     Box,
     Container,
@@ -66,6 +66,9 @@ import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { marketplaceAPI } from '../../services/api';
+import { ethers } from 'ethers';
+import { TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
+import TicketMarketplaceABI from '../../constants/abi/TicketMarketplace.json';
 
 // MetaMask SVG Icon
 const MetaMaskIcon = ({ size = 20 }) => (
@@ -151,8 +154,95 @@ const MarketplacePage = () => {
     const [priceRange, setPriceRange] = useState('all'); // 'all' | 'under_01' | '01_to_025' | 'above_025'
 
     // Ví MetaMask & Số dư
-    const [walletAddress] = useState(user?.walletAddress || '');
-    const [walletBalance] = useState('');
+    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '');
+    const [walletBalance, setWalletBalance] = useState('');
+
+    const fetchWalletBalance = useCallback(async (address) => {
+        if (!address) {
+            setWalletBalance('');
+            return;
+        }
+        try {
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const balanceBigInt = await browserProvider.getBalance(address);
+                const ethStr = ethers.formatEther(balanceBigInt);
+                const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                setWalletBalance(`${ethNum} ETH`);
+            } else {
+                try {
+                    const rpcProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
+                    const balanceBigInt = await rpcProvider.getBalance(address);
+                    const ethStr = ethers.formatEther(balanceBigInt);
+                    const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                    setWalletBalance(`${ethNum} ETH`);
+                } catch {
+                    setWalletBalance('');
+                }
+            }
+        } catch (err) {
+            console.error('Lỗi khi lấy số dư ví Marketplace:', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+        const checkWallet = async () => {
+            if (window.ethereum) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts && accounts[0]) {
+                        if (isMounted) {
+                            setWalletAddress(accounts[0]);
+                            await fetchWalletBalance(accounts[0]);
+                        }
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Lỗi kiểm tra eth_accounts Marketplace:', err);
+                }
+            }
+            if (user?.walletAddress) {
+                setWalletAddress(user.walletAddress);
+                fetchWalletBalance(user.walletAddress);
+            }
+        };
+
+        checkWallet();
+        return () => {
+            isMounted = false;
+        };
+    }, [user, fetchWalletBalance]);
+
+    useEffect(() => {
+        if (!window.ethereum) return;
+
+        const handleAccountsChanged = async (accounts) => {
+            if (accounts && accounts.length > 0) {
+                setWalletAddress(accounts[0]);
+                await fetchWalletBalance(accounts[0]);
+            } else {
+                setWalletAddress('');
+                setWalletBalance('');
+            }
+        };
+
+        const handleChainChanged = () => {
+            if (walletAddress) {
+                fetchWalletBalance(walletAddress);
+            }
+        };
+
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+
+        return () => {
+            if (window.ethereum?.removeListener) {
+                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+                window.ethereum.removeListener('chainChanged', handleChainChanged);
+            }
+        };
+    }, [walletAddress, fetchWalletBalance]);
 
     // Dialog giải thích BR-02
     const [openRuleDialog, setOpenRuleDialog] = useState(false);
@@ -245,47 +335,53 @@ const MarketplacePage = () => {
         setBuyStep('pending_signature');
 
         try {
-            const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const signer = await browserProvider.getSigner();
+                const marketplaceContract = new ethers.Contract(TICKET_MARKETPLACE_ADDRESS, TicketMarketplaceABI, signer);
 
-            // Giả lập hoặc gọi MetaMask
-            if (window.ethereum && window.ethereum.isMetaMask) {
-                try {
-                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                    if (accounts && accounts.length > 0) {
-                        await new Promise((r) => setTimeout(r, 1800));
+                const priceEth = String(selectedTicket?.resalePrice || selectedTicket?.price || '0');
+                const priceWei = ethers.parseEther(Number(priceEth).toFixed(6));
+
+                // Gọi smart contract mua vé thứ cấp trên Sepolia
+                const tx = await marketplaceContract.buyResaleTicket(BigInt(selectedTicket.tokenId), {
+                    value: priceWei,
+                });
+
+                // Bước 2: Nhận txHash thật, chờ đóng Block (verifying_block)
+                setGeneratedTxHash(tx.hash);
+                setBuyStep('verifying_block');
+
+                await tx.wait();
+
+                // Đồng bộ đổi chủ sở hữu vé trên Backend
+                if (selectedTicket?.id) {
+                    try {
+                        const buyerAddr = await signer.getAddress();
+                        await marketplaceAPI.syncPurchase({
+                            listingId: selectedTicket.id,
+                            buyerWallet: buyerAddr,
+                            txHash: tx.hash,
+                        });
+                    } catch (apiErr) {
+                        console.log('Đồng bộ mua vé trên server:', apiErr.message);
                     }
-                } catch (e) {
-                    console.log('Ký ví MetaMask:', e.message);
                 }
+
+                // Bước 3: Đóng block thành công trên Sepolia
+                setBuyStep('confirmed');
+                setListings((prev) => prev.filter((item) => item.tokenId !== selectedTicket.tokenId));
+                showSnackbar(`Giao dịch mua vé Token #${selectedTicket.tokenId} thành công! Vé đã được chuyển về ví của bạn trên Sepolia.`, 'success');
             } else {
-                await new Promise((r) => setTimeout(r, 1800));
+                throw new Error('Vui lòng cài đặt và kết nối ví MetaMask để thực hiện giao dịch.');
             }
-
-            // Bước 2: Nhận txHash, chờ đóng Block (verifying_block)
-            setGeneratedTxHash(mockTx);
-            setBuyStep('verifying_block');
-
-            // Đồng bộ đổi chủ sở hữu vé trên Backend
-            if (selectedTicket?.id) {
-                try {
-                    await marketplaceAPI.syncPurchase({
-                        listingId: selectedTicket.id,
-                        buyerWallet: walletAddress,
-                        txHash: mockTx,
-                    });
-                } catch (apiErr) {
-                    console.log('Đồng bộ mua vé trên server:', apiErr.message);
-                }
-            }
-
-            await new Promise((r) => setTimeout(r, 2200));
-
-            // Bước 3: Đóng block thành công trên Sepolia
-            setBuyStep('confirmed');
-            setListings((prev) => prev.filter((item) => item.tokenId !== selectedTicket.tokenId));
-            showSnackbar(`Giao dịch mua vé Token #${selectedTicket.tokenId} thành công! Vé đã được chuyển về ví của bạn.`, 'success');
         } catch (err) {
-            showSnackbar(err.message || 'Giao dịch mua vé thất bại.', 'error');
+            if (err.code === 4001 || err.info?.error?.code === 4001) {
+                showSnackbar('Người dùng đã từ chối ký giao dịch trên ví MetaMask.', 'warning');
+            } else {
+                const errorMsg = err.reason || err.info?.error?.message || err.message;
+                showSnackbar(errorMsg || 'Giao dịch mua vé thất bại.', 'error');
+            }
             setBuyStep('initial');
             setOpenBuyModal(false);
         }

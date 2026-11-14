@@ -108,7 +108,13 @@ const RegisterPage = () => {
                 navigate('/');
             }
         } catch (err) {
-            setServerError(err.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.');
+            const msg = err.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.';
+            if (msg.toLowerCase().includes('tên')) {
+                setErrors((prev) => ({ ...prev, fullName: msg }));
+            } else if (msg.toLowerCase().includes('email')) {
+                setErrors((prev) => ({ ...prev, email: msg }));
+            }
+            setServerError(msg);
         } finally {
             setLoading(false);
         }

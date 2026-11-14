@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box,
     Container,
@@ -51,11 +51,15 @@ import {
     Phone,
     Shield,
     Launch,
+    Refresh,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { orderAPI } from '../../services/api';
+import { ethers } from 'ethers';
+import { EVENT_TICKET_ADDRESS } from '../../constants/contracts';
+import EventTicketABI from '../../constants/abi/EventTicket.json';
 
 // MetaMask SVG Icon
 const MetaMaskIcon = ({ size = 20 }) => (
@@ -95,7 +99,20 @@ const CheckoutPage = () => {
     }, [eventData, tier, navigate]);
 
     // Form đặt vé
-    const [quantity, setQuantity] = useState(1);
+    const initialQuantity = Math.max(
+        1,
+        Math.min(4, Number(location.state?.quantity || eventData?.quantity || 1))
+    );
+    const [quantity, setQuantity] = useState(initialQuantity);
+
+    // Cập nhật số lượng nếu được truyền từ trang chi tiết sự kiện
+    useEffect(() => {
+        const passedQty = Number(location.state?.quantity || eventData?.quantity);
+        if (passedQty && passedQty >= 1 && passedQty <= 4) {
+            setQuantity(passedQty);
+        }
+    }, [location.state, eventData?.quantity]);
+
     const [customerName, setCustomerName] = useState(user?.fullName || '');
     const [customerEmail, setCustomerEmail] = useState(user?.email || '');
     const [customerPhone, setCustomerPhone] = useState(user?.phoneNumber || '');
@@ -143,6 +160,109 @@ const CheckoutPage = () => {
         showSnackbar(`Đã sao chép ${label} vào bộ nhớ tạm: ${truncateHash(text, 8, 6)}`, 'success');
     };
 
+    // Lấy số dư ETH thực tế từ MetaMask trên mạng Sepolia
+    const fetchWalletBalance = useCallback(async (address) => {
+        if (!address) {
+            setWalletBalance(0);
+            return;
+        }
+        try {
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const balanceBigInt = await browserProvider.getBalance(address);
+                const ethStr = ethers.formatEther(balanceBigInt);
+                const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                setWalletBalance(ethNum);
+                setFormErrors((prev) => {
+                    if (prev.balance && ethNum >= totalEth) {
+                        const { balance, ...rest } = prev;
+                        return rest;
+                    }
+                    return prev;
+                });
+            } else {
+                try {
+                    const rpcProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
+                    const balanceBigInt = await rpcProvider.getBalance(address);
+                    const ethStr = ethers.formatEther(balanceBigInt);
+                    const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                    setWalletBalance(ethNum);
+                } catch {
+                    // Demo Sandbox fallback
+                    setWalletBalance(1.5);
+                }
+            }
+        } catch (err) {
+            console.error('Lỗi khi lấy số dư ví MetaMask:', err);
+        }
+    }, [totalEth]);
+
+    // Tự động kiểm tra ví đã kết nối trong MetaMask khi mở trang
+    useEffect(() => {
+        let isMounted = true;
+        const checkConnectedWallet = async () => {
+            if (window.ethereum) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts && accounts[0]) {
+                        if (isMounted) {
+                            setWalletAddress(accounts[0]);
+                            await fetchWalletBalance(accounts[0]);
+                        }
+                        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                        if (isMounted) {
+                            setNetworkChainId(parseInt(chainIdHex, 16));
+                        }
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Lỗi kiểm tra eth_accounts:', err);
+                }
+            }
+            if (walletAddress) {
+                fetchWalletBalance(walletAddress);
+            }
+        };
+
+        checkConnectedWallet();
+        return () => {
+            isMounted = false;
+        };
+    }, [walletAddress, fetchWalletBalance]);
+
+    // Lắng nghe sự kiện chuyển đổi ví hoặc chuyển mạng trong MetaMask
+    useEffect(() => {
+        if (!window.ethereum) return;
+
+        const handleAccountsChanged = async (accounts) => {
+            if (accounts && accounts.length > 0) {
+                setWalletAddress(accounts[0]);
+                await fetchWalletBalance(accounts[0]);
+                showSnackbar(`Đã chuyển sang ví: ${truncateHash(accounts[0], 6, 4)}`, 'info');
+            } else {
+                setWalletAddress('');
+                setWalletBalance(0);
+            }
+        };
+
+        const handleChainChanged = (chainIdHex) => {
+            setNetworkChainId(parseInt(chainIdHex, 16));
+            if (walletAddress) {
+                fetchWalletBalance(walletAddress);
+            }
+        };
+
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+
+        return () => {
+            if (window.ethereum?.removeListener) {
+                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+                window.ethereum.removeListener('chainChanged', handleChainChanged);
+            }
+        };
+    }, [walletAddress, fetchWalletBalance]);
+
     // Kết nối ví MetaMask
     const handleConnectWallet = async () => {
         setIsConnectingWallet(true);
@@ -153,12 +273,14 @@ const CheckoutPage = () => {
                     setWalletAddress(accounts[0]);
                     const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
                     setNetworkChainId(parseInt(chainIdHex, 16));
+                    await fetchWalletBalance(accounts[0]);
                     showSnackbar(`Đã kết nối ví: ${truncateHash(accounts[0], 6, 4)}`, 'success');
                 }
             } else {
                 // Giả lập ví nếu browser không cài MetaMask extension
                 await new Promise((r) => setTimeout(r, 600));
                 setWalletAddress('0x789b9102934812301928394819203849102334ef');
+                setWalletBalance(1.5);
                 showSnackbar('Đã kết nối ví MetaMask Sepolia (Demo Sandbox)', 'success');
             }
         } catch (err) {
@@ -175,7 +297,9 @@ const CheckoutPage = () => {
         if (!customerEmail.trim()) errors.email = 'Vui lòng nhập địa chỉ email nhận vé.';
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) errors.email = 'Email không hợp lệ.';
         if (!walletAddress) errors.wallet = 'Vui lòng kết nối ví MetaMask để nhận vé NFT.';
-        if (walletBalance < totalEth) errors.balance = `Số dư ví không đủ (${walletBalance} ETH < ${totalEth} ETH).`;
+        if (walletAddress && walletBalance < totalEth) {
+            errors.balance = `Số dư ví không đủ (${walletBalance} ETH < ${totalEth} ETH). Vui lòng nạp thêm SepoliaETH vào ví của bạn.`;
+        }
 
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
@@ -209,49 +333,67 @@ const CheckoutPage = () => {
                 console.log('Tạo đơn trên API (sẽ fallback nếu chạy offline):', createErr.message);
             }
 
-            // Gọi MetaMask hoặc sinh giao dịch on-chain
-            if (window.ethereum && window.ethereum.isMetaMask) {
+            // Gọi MetaMask hoặc sinh giao dịch on-chain thật
+            if (window.ethereum) {
                 try {
-                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                    if (accounts && accounts.length > 0) {
-                        const randomHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+                    const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                    const signer = await browserProvider.getSigner();
 
-                        // Chờ người dùng xác nhận trên MetaMask
-                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                    // Khởi tạo contract EventTicket với ví người dùng đã kết nối
+                    const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
 
-                        // Bước 2: Ký xong -> Nhận txHash, chờ đóng Block (verifying_block)
-                        setTxHash(randomHash);
-                        setTxStatus('verifying_block');
+                    // Tính tổng tiền ETH cần thanh toán
+                    const subtotal = Number(tier?.originalPrice || 0) * quantity;
+                    const totalCostWei = ethers.parseEther(subtotal.toFixed(6));
 
-                        // Gửi xác nhận txHash lên Backend để phát hành vé NFT
-                        let confirmedTokenIds = null;
-                        if (backendOrderId) {
-                            try {
-                                const verifyRes = await orderAPI.verifyOrderTx(backendOrderId, { txHash: randomHash });
-                                const tickets = verifyRes.data?.data?.tickets;
-                                if (Array.isArray(tickets) && tickets.length > 0) {
-                                    confirmedTokenIds = tickets.map((t) => t.tokenId);
-                                }
-                            } catch (verifyErr) {
-                                console.log('Xác thực đơn hàng:', verifyErr.message);
+                    // Xác định onChainEventId và onChainTierId
+                    const eventOnChainId = BigInt(eventData?.onChainEventId || 1);
+                    const tierOnChainId = BigInt(tier?.onChainTierId || tier?.id || 1);
+
+                    // Mở popup MetaMask cho người dùng ký giao dịch mua vé
+                    const tx = await contract.buyTicket(eventOnChainId, tierOnChainId, quantity, {
+                        value: totalCostWei,
+                    });
+
+                    // Bước 2: Ký xong -> Nhận txHash thật, chờ thợ đào đóng Block Sepolia
+                    setTxHash(tx.hash);
+                    setTxStatus('verifying_block');
+
+                    await tx.wait(); // Đợi giao dịch hoàn tất trên mạng blockchain
+
+                    // Gửi xác nhận txHash thật lên Backend để đối soát và cấp vé vào MySQL
+                    let confirmedTokenIds = null;
+                    if (backendOrderId) {
+                        try {
+                            const verifyRes = await orderAPI.verifyOrderTx(backendOrderId, { txHash: tx.hash });
+                            const tickets = verifyRes.data?.data?.tickets;
+                            if (Array.isArray(tickets) && tickets.length > 0) {
+                                confirmedTokenIds = tickets.map((t) => t.tokenId);
                             }
+                        } catch (verifyErr) {
+                            console.log('Xác thực đơn hàng backend:', verifyErr.message);
                         }
-
-                        // Chờ hiệu ứng xác nhận block
-                        await new Promise((resolve) => setTimeout(resolve, 2500));
-
-                        // Bước 3: Hoàn tất
-                        const tokenIds = confirmedTokenIds || Array.from({ length: quantity }, (_, i) => 1420 + i + Math.floor(Math.random() * 80));
-                        setMintedTokenIds(tokenIds);
-                        setTxStatus('confirmed');
-                        showSnackbar('Giao dịch thành công! Vé NFT đã được lưu vào Kho vé của bạn.', 'success');
-                        return;
                     }
+
+                    // Bước 3: Hoàn tất
+                    const tokenIds = confirmedTokenIds || Array.from({ length: quantity }, (_, i) => 1420 + i);
+                    setMintedTokenIds(tokenIds);
+                    setTxStatus('confirmed');
+                    showSnackbar('Giao dịch thành công! Vé NFT đã được lưu vĩnh viễn trên Sepolia.', 'success');
+                    return;
                 } catch (walletErr) {
-                    if (walletErr.code === 4001) {
+                    if (walletErr.code === 4001 || walletErr.info?.error?.code === 4001) {
                         throw new Error('Người dùng đã từ chối ký giao dịch trên ví MetaMask.');
                     }
-                    throw walletErr;
+                    console.warn('Lỗi gọi contract on-chain:', walletErr);
+                    const errorMsg = walletErr.reason || walletErr.info?.error?.message || walletErr.message;
+                    if (errorMsg?.includes('Event does not exist')) {
+                        throw new Error('Sự kiện này chưa được tạo on-chain trên Smart Contract mới deploy. Vui lòng tạo sự kiện mới từ tài khoản Organizer.');
+                    }
+                    if (errorMsg?.includes('insufficient funds')) {
+                        throw new Error('Số dư Sepolia ETH trong ví của bạn không đủ để thanh toán vé và phí gas.');
+                    }
+                    throw new Error(errorMsg || 'Giao dịch trên Smart Contract thất bại.');
                 }
             }
 
@@ -652,7 +794,18 @@ const CheckoutPage = () => {
                                                 </Stack>
 
                                                 <Box textAlign="right">
-                                                    <Typography variant="caption" color="text.secondary">SỐ DƯ KHẢ DỤNG</Typography>
+                                                    <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={0.5}>
+                                                        <Typography variant="caption" color="text.secondary">SỐ DƯ KHẢ DỤNG</Typography>
+                                                        <Tooltip title="Làm mới số dư ví">
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() => fetchWalletBalance(walletAddress)}
+                                                                sx={{ p: 0.2 }}
+                                                            >
+                                                                <Refresh sx={{ fontSize: 13 }} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </Stack>
                                                     <Typography variant="subtitle1" color="primary.main" fontWeight={700}>
                                                         {walletBalance} ETH
                                                     </Typography>

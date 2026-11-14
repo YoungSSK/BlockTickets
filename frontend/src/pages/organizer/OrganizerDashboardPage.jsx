@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     Box,
     Container,
@@ -63,15 +63,33 @@ import {
     Shield,
     MonetizationOn,
     Payments,
+    ReceiptLong,
     ArrowForward,
     Settings,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import Navbar from '../../components/Navbar';
+import DashboardLayout from '../../layouts/DashboardLayout';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { organizerAPI } from '../../services/api';
+import { organizerAPI, authAPI, userAPI } from '../../services/api';
+import { ethers } from 'ethers';
+import { EVENT_TICKET_ADDRESS } from '../../constants/contracts';
+import EventTicketABI from '../../constants/abi/EventTicket.json';
+
+// MetaMask Fox inline SVG
+const MetaMaskIcon = ({ size = 20 }) => (
+    <svg width={size} height={size} viewBox="0 0 318 318" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M274.1 35.5L174.6 108.7L193.5 64.3L274.1 35.5Z" fill="#E2761B" stroke="#E2761B" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M44.4 35.5L143.1 109.4L125.1 64.3L44.4 35.5Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M238.3 206.8L211.8 248.1L268.5 263.4L284.5 207.7L238.3 206.8Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M34.1 207.7L49.9 263.4L106.6 248.1L80.1 206.8L34.1 207.7Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M103.6 138.2L88.1 161.7L144.4 164.2L142.5 103.8L103.6 138.2Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M214.9 138.2L175.5 103.1L174.6 164.2L230.5 161.7L214.9 138.2Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M106.6 248.1L141 232.7L111.4 208.1L106.6 248.1Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M177.5 232.7L211.8 248.1L207.1 208.1L177.5 232.7Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
 
 // Helper: Rút gọn địa chỉ ví và mã băm
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -108,16 +126,20 @@ const OrganizerDashboardPage = () => {
     // Dữ liệu chỉ số & sự kiện
     const [metrics, setMetrics] = useState(INITIAL_ORGANIZER_METRICS);
     const [events, setEvents] = useState(INITIAL_MY_EVENTS);
-    const [financialLogs] = useState(INITIAL_FINANCIAL_LOGS);
+    const [financialLogs, setFinancialLogs] = useState(INITIAL_FINANCIAL_LOGS);
 
     // Bộ lọc & Tab
     const [statusTab, setStatusTab] = useState('all'); // 'all' | 'published' | 'pending' | 'ended'
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Modal rút doanh thu on-chain
+    // Modal đối soát doanh thu on-chain
     const [openWithdrawModal, setOpenWithdrawModal] = useState(false);
-    const [withdrawStep, setWithdrawStep] = useState('initial'); // 'initial' | 'pending_signature' | 'verifying_block' | 'confirmed'
-    const [withdrawTxHash, setWithdrawTxHash] = useState('');
+
+    // State ví Web3 của Ban tổ chức
+    const [connectedWallet, setConnectedWallet] = useState(user?.walletAddress || '');
+    const [walletBalance, setWalletBalance] = useState('');
+    const [isConnectingWallet, setIsConnectingWallet] = useState(false);
+    const [isLinkingWallet, setIsLinkingWallet] = useState(false);
 
     // Snackbar thông báo
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
@@ -130,6 +152,166 @@ const OrganizerDashboardPage = () => {
     const handleCopy = (text, label) => {
         navigator.clipboard.writeText(text);
         showSnackbar(`Đã sao chép ${label} vào bộ nhớ tạm!`, 'success');
+    };
+
+    // Lấy số dư ETH thật từ MetaMask trên mạng Sepolia
+    const fetchWalletBalance = useCallback(async (address) => {
+        if (!address) {
+            setWalletBalance('');
+            return;
+        }
+        try {
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const balanceBigInt = await browserProvider.getBalance(address);
+                const ethStr = ethers.formatEther(balanceBigInt);
+                const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                setWalletBalance(`${ethNum} ETH`);
+            } else {
+                try {
+                    const rpcProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
+                    const balanceBigInt = await rpcProvider.getBalance(address);
+                    const ethStr = ethers.formatEther(balanceBigInt);
+                    const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                    setWalletBalance(`${ethNum} ETH`);
+                } catch {
+                    setWalletBalance('');
+                }
+            }
+        } catch (err) {
+            console.error('Lỗi lấy số dư ví Organizer:', err);
+        }
+    }, []);
+
+    // Tự động kiểm tra ví đã kết nối trong MetaMask
+    useEffect(() => {
+        let isMounted = true;
+        const checkWallet = async () => {
+            if (window.ethereum) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts && accounts[0]) {
+                        if (isMounted) {
+                            setConnectedWallet(accounts[0]);
+                            await fetchWalletBalance(accounts[0]);
+                        }
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Lỗi eth_accounts Organizer:', err);
+                }
+            }
+            if (user?.walletAddress) {
+                setConnectedWallet(user.walletAddress);
+                fetchWalletBalance(user.walletAddress);
+            }
+        };
+
+        checkWallet();
+        return () => {
+            isMounted = false;
+        };
+    }, [user?.walletAddress, fetchWalletBalance]);
+
+    // Lắng nghe sự kiện đổi ví và đổi mạng trong MetaMask
+    useEffect(() => {
+        if (!window.ethereum) return;
+
+        const handleAccountsChanged = async (accounts) => {
+            if (accounts && accounts.length > 0) {
+                setConnectedWallet(accounts[0]);
+                await fetchWalletBalance(accounts[0]);
+                showSnackbar(`Đã chuyển sang ví MetaMask: ${truncateHash(accounts[0], 6, 4)}`, 'info');
+            } else {
+                setConnectedWallet('');
+                setWalletBalance('');
+            }
+        };
+
+        const handleChainChanged = () => {
+            if (connectedWallet) {
+                fetchWalletBalance(connectedWallet);
+            }
+        };
+
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+
+        return () => {
+            if (window.ethereum?.removeListener) {
+                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+                window.ethereum.removeListener('chainChanged', handleChainChanged);
+            }
+        };
+    }, [connectedWallet, fetchWalletBalance]);
+
+    // Kết nối ví MetaMask
+    const handleConnectWallet = async () => {
+        if (!window.ethereum) {
+            showSnackbar('Vui lòng cài đặt tiện ích mở rộng MetaMask trên trình duyệt!', 'warning');
+            return;
+        }
+
+        setIsConnectingWallet(true);
+        try {
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            if (accounts && accounts[0]) {
+                const addr = accounts[0];
+                setConnectedWallet(addr);
+                await fetchWalletBalance(addr);
+                showSnackbar(`Đã kết nối ví MetaMask: ${truncateHash(addr, 6, 4)}`, 'success');
+            }
+        } catch (err) {
+            if (err?.code === 4001 || err?.info?.error?.code === 4001) {
+                showSnackbar('Bạn đã từ chối yêu cầu kết nối ví MetaMask.', 'warning');
+            } else {
+                showSnackbar(err.message || 'Lỗi khi kết nối ví MetaMask.', 'error');
+            }
+        } finally {
+            setIsConnectingWallet(false);
+        }
+    };
+
+    // Liên kết ví MetaMask vào hồ sơ tài khoản BTC
+    const handleLinkWalletToProfile = async () => {
+        if (!connectedWallet) {
+            showSnackbar('Vui lòng kết nối ví MetaMask trước!', 'warning');
+            return;
+        }
+
+        setIsLinkingWallet(true);
+        try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
+            const nonceRes = await authAPI.getNonce(connectedWallet);
+            const nonce = nonceRes.data?.data?.nonce;
+            if (!nonce) throw new Error('Không thể lấy mã xác thực nonce từ máy chủ.');
+
+            const signature = await signer.signMessage(nonce);
+            await userAPI.linkWallet({
+                walletAddress: connectedWallet,
+                signature,
+                nonce,
+            });
+
+            showSnackbar('Liên kết ví MetaMask vào hồ sơ Ban Tổ Chức thành công!', 'success');
+            // Cập nhật localStorage
+            const stored = localStorage.getItem('blocktickets_user');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                parsed.walletAddress = connectedWallet;
+                localStorage.setItem('blocktickets_user', JSON.stringify(parsed));
+            }
+            window.location.reload();
+        } catch (err) {
+            if (err?.code === 4001 || err?.info?.error?.code === 4001) {
+                showSnackbar('Bạn đã hủy ký xác nhận liên kết ví.', 'warning');
+            } else {
+                showSnackbar(err?.response?.data?.message || err.message || 'Lỗi khi liên kết ví.', 'error');
+            }
+        } finally {
+            setIsLinkingWallet(false);
+        }
     };
 
     // Tải dữ liệu thật từ Backend API
@@ -156,6 +338,9 @@ const OrganizerDashboardPage = () => {
                     draftEventsCount: Number(s.draftEventsCount) || 0,
                     endedEventsCount: Number(s.endedEventsCount) || 0,
                 });
+                if (Array.isArray(s.recentSettlements)) {
+                    setFinancialLogs(s.recentSettlements);
+                }
             }
 
             if (eventsRes.status === 'fulfilled') {
@@ -204,8 +389,93 @@ const OrganizerDashboardPage = () => {
     // Xử lý công bố sự kiện đã được duyệt
     const handlePublishEvent = async (eventId) => {
         try {
-            await organizerAPI.publishEvent(eventId);
-            showSnackbar('Đã công khai mở bán sự kiện thành công!', 'success');
+            const targetEvt = events.find((e) => e.id === eventId);
+            if (!targetEvt) {
+                showSnackbar('Không tìm thấy sự kiện cần công bố.', 'error');
+                return;
+            }
+
+            let onChainEventId = targetEvt.onChainEventId || null;
+
+            // Nếu sự kiện chưa có trên Smart Contract, bắt buộc phải kết nối MetaMask để tạo on-chain
+            if (!onChainEventId) {
+                if (!window.ethereum) {
+                    showSnackbar('Vui lòng cài đặt và kết nối ví MetaMask để đưa sự kiện lên Blockchain Sepolia!', 'warning');
+                    return;
+                }
+
+                try {
+                    const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                    const accounts = await browserProvider.send('eth_requestAccounts', []);
+                    if (!accounts || accounts.length === 0) {
+                        showSnackbar('Vui lòng mở và kết nối ví MetaMask để tiếp tục.', 'warning');
+                        return;
+                    }
+
+                    const signer = await browserProvider.getSigner();
+                    const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
+
+                    showSnackbar('Đang mở popup MetaMask để ký khởi tạo sự kiện trên Sepolia...', 'info');
+                    const startTimeUnix = Math.floor(new Date(targetEvt.startTime).getTime() / 1000);
+                    const endTimeUnix = Math.floor(new Date(targetEvt.endTime || Date.now() + 86400000 * 30).getTime() / 1000);
+
+                    // 1. Tạo sự kiện on-chain: createEvent(startTime, endTime)
+                    const tx = await contract.createEvent(startTimeUnix, endTimeUnix);
+                    showSnackbar('Đang chờ thợ đào xác nhận sự kiện trên mạng Sepolia...', 'info');
+                    const receipt = await tx.wait();
+
+                    // Đọc EventCreated log để lấy eventId
+                    const iface = new ethers.Interface(EventTicketABI);
+                    for (const log of receipt.logs) {
+                        try {
+                            const parsed = iface.parseLog(log);
+                            if (parsed && parsed.name === 'EventCreated') {
+                                onChainEventId = Number(parsed.args.eventId);
+                                break;
+                            }
+                        } catch (_) {}
+                    }
+
+                    if (!onChainEventId) {
+                        throw new Error('Không thể lấy mã Event ID từ Blockchain.');
+                    }
+
+                    // 2. Thêm từng hạng vé lên contract: addTicketTier(...)
+                    if (targetEvt.ticketTypes && targetEvt.ticketTypes.length > 0) {
+                        showSnackbar(`Khởi tạo thành công sự kiện ID #${onChainEventId}. Đang thêm các hạng vé on-chain...`, 'info');
+                        for (const tier of targetEvt.ticketTypes) {
+                            const priceWei = ethers.parseEther(Number(tier.originalPrice || tier.price || 0.01).toFixed(6));
+                            const maxSupply = BigInt(tier.maxSupply || tier.capacity || 100);
+                            const saleStartUnix = Math.floor(new Date(tier.saleStartTime || targetEvt.startTime).getTime() / 1000);
+                            let saleEndUnix = Math.floor(new Date(tier.saleEndTime || targetEvt.endTime).getTime() / 1000);
+                            if (saleEndUnix > endTimeUnix) saleEndUnix = endTimeUnix;
+                            if (saleEndUnix <= saleStartUnix) saleEndUnix = saleStartUnix + 3600;
+
+                            const tierTx = await contract.addTicketTier(
+                                onChainEventId,
+                                priceWei,
+                                maxSupply,
+                                saleStartUnix,
+                                saleEndUnix
+                            );
+                            await tierTx.wait();
+                        }
+                    }
+                } catch (onChainErr) {
+                    console.error('Lỗi khởi tạo sự kiện on-chain:', onChainErr);
+                    const errMsg = onChainErr?.reason || onChainErr?.info?.error?.message || onChainErr?.message || 'Lỗi khi gọi Smart Contract';
+                    if (onChainErr?.code === 4001 || onChainErr?.info?.error?.code === 4001) {
+                        showSnackbar('Bạn đã từ chối ký giao dịch trên ví MetaMask. Sự kiện chưa được công bố.', 'warning');
+                    } else {
+                        showSnackbar(`Lỗi khởi tạo on-chain: ${errMsg}`, 'error');
+                    }
+                    return; // Chặn không công bố vào database nếu on-chain chưa xong!
+                }
+            }
+
+            // 3. Sau khi on-chain thành công mới cập nhật trạng thái trong database
+            await organizerAPI.publishEvent(eventId, onChainEventId ? { onChainEventId } : {});
+            showSnackbar('Đã công khai mở bán sự kiện thành công trên cả Hệ Thống và Blockchain Sepolia!', 'success');
             loadOrganizerData();
         } catch (err) {
             showSnackbar(err.message || 'Lỗi khi công bố sự kiện', 'error');
@@ -235,47 +505,46 @@ const OrganizerDashboardPage = () => {
         });
     }, [events, statusTab, searchTerm]);
 
-    // Xử lý rút tiền on-chain
-    const handleConfirmWithdraw = () => {
-        setWithdrawStep('pending_signature');
-
-        setTimeout(() => {
-            const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-            setWithdrawTxHash(mockTx);
-            setWithdrawStep('verifying_block');
-
-            setTimeout(() => {
-                setWithdrawStep('confirmed');
-                // Cập nhật số dư có thể rút về 0 ETH
-                setMetrics((prev) => ({
-                    ...prev,
-                    withdrawableBalanceEth: 0.00,
-                }));
-            }, 3000);
-        }, 2000);
-    };
-
     // Tính tỷ lệ check-in tổng thể
     const overallCheckInRate = metrics.totalTicketsSold > 0
         ? ((metrics.totalCheckedInCount / metrics.totalTicketsSold) * 100).toFixed(1)
         : '0.0';
 
-    return (
-        <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <Navbar />
+    const topActions = (
+        <Stack direction="row" spacing={1.5} alignItems="center">
+            <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                component={RouterLink}
+                to="/organizer/check-in"
+                startIcon={<QrCodeScanner />}
+                sx={{ height: 38, borderRadius: '8px', fontWeight: 600 }}
+            >
+                Soát vé
+            </Button>
+            <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                component={RouterLink}
+                to="/organizer/create-event"
+                startIcon={<Add />}
+                sx={{ height: 38, borderRadius: '8px', fontWeight: 700 }}
+            >
+                Tạo sự kiện
+            </Button>
+        </Stack>
+    );
 
-            <Box component="main" sx={{ flexGrow: 1, py: { xs: 3, md: 5 } }}>
-                <Container maxWidth="lg">
-                    {/* BREADCRUMB */}
-                    <Breadcrumbs
-                        aria-label="breadcrumb"
-                        sx={{ mb: 2.5, '& a': { textDecoration: 'none', color: 'text.secondary', '&:hover': { color: 'primary.main' } } }}
-                    >
-                        <Link component={RouterLink} to="/">Trang chủ</Link>
-                        <Typography color="text.primary" fontWeight={600}>
-                            Bảng điều khiển Nhà tổ chức (Organizer)
-                        </Typography>
-                    </Breadcrumbs>
+    return (
+        <DashboardLayout
+            role="organizer"
+            title="Bảng Điều Khiển Nhà Tổ Chức"
+            subtitle="Quản lý sự kiện, theo dõi doanh thu vé NFT và quyết toán On-Chain"
+            topActions={topActions}
+        >
+            <Box sx={{ width: '100%' }}>
 
                     {/* HERO HEADER SECTION */}
                     <Box
@@ -355,56 +624,129 @@ const OrganizerDashboardPage = () => {
 
                         {/* THÔNG TIN VÍ & QUYẾT TOÁN ON-CHAIN */}
                         <Box sx={{ mt: 3, pt: 3, borderTop: 1, borderColor: 'divider' }}>
-                            <Grid container spacing={2} alignItems="center">
-                                <Grid item xs={12} sm={6} md={7}>
-                                    <Stack direction="row" spacing={1.5} alignItems="center">
-                                        <AccountBalanceWallet color="primary" sx={{ fontSize: 28 }} />
-                                        <Box>
-                                            <Typography variant="caption" color="text.secondary">
-                                                Địa chỉ ví thụ hưởng doanh thu của BTC (Sepolia):
-                                            </Typography>
-                                            <Stack direction="row" spacing={1} alignItems="center">
-                                                <Typography variant="body2" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
-                                                    {user?.walletAddress || 'Chưa liên kết ví'}
+                            <Grid container spacing={2.5} alignItems="center">
+                                <Grid item xs={12} md={7}>
+                                    <Stack direction="row" spacing={2} alignItems="center">
+                                        <Box
+                                            sx={{
+                                                width: 48,
+                                                height: 48,
+                                                borderRadius: '12px',
+                                                bgcolor: connectedWallet ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <MetaMaskIcon size={26} />
+                                        </Box>
+                                        <Box sx={{ flex: 1 }}>
+                                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                                    Ví Web3 Ban Tổ Chức (Ký tạo sự kiện & Nhận doanh thu):
                                                 </Typography>
-                                                <Tooltip title="Sao chép ví">
-                                                    <IconButton
+                                                {connectedWallet ? (
+                                                    <Chip
+                                                        icon={<CheckCircle sx={{ fontSize: '12px !important' }} />}
+                                                        label="Đã kết nối Sepolia"
                                                         size="small"
-                                                        aria-label="Sao chép địa chỉ ví ban tổ chức"
-                                                        onClick={() => handleCopy(user?.walletAddress || '', 'địa chỉ ví')}
-                                                        disabled={!user?.walletAddress}
-                                                    >
-                                                        <ContentCopy sx={{ fontSize: 13 }} />
-                                                    </IconButton>
-                                                </Tooltip>
+                                                        color="success"
+                                                        sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                                                    />
+                                                ) : (
+                                                    <Chip
+                                                        label="Chưa kết nối ví"
+                                                        size="small"
+                                                        color="warning"
+                                                        sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                                                    />
+                                                )}
                                             </Stack>
+
+                                            {connectedWallet ? (
+                                                <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap">
+                                                    <Typography variant="body1" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
+                                                        {truncateHash(connectedWallet, 8, 6)}
+                                                    </Typography>
+                                                    <Tooltip title="Sao chép địa chỉ ví">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleCopy(connectedWallet, 'địa chỉ ví')}
+                                                            sx={{ p: 0.3 }}
+                                                        >
+                                                            <ContentCopy sx={{ fontSize: 14 }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Typography variant="body2" color="primary.main" fontWeight={700} sx={{ ml: 1 }}>
+                                                        Số dư ví: {walletBalance || '... ETH'}
+                                                    </Typography>
+                                                    <Tooltip title="Làm mới số dư ví">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => fetchWalletBalance(connectedWallet)}
+                                                            sx={{ p: 0.3 }}
+                                                        >
+                                                            <Refresh sx={{ fontSize: 14 }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    {user && !user.walletAddress && (
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            color="success"
+                                                            disabled={isLinkingWallet}
+                                                            onClick={handleLinkWalletToProfile}
+                                                            sx={{ height: 26, fontSize: '0.68rem', fontWeight: 700, borderRadius: '6px', ml: 1 }}
+                                                        >
+                                                            {isLinkingWallet ? 'Đang lưu...' : 'Lưu vào hồ sơ BTC'}
+                                                        </Button>
+                                                    )}
+                                                </Stack>
+                                            ) : (
+                                                <Stack direction="row" spacing={1.5} alignItems="center" mt={0.8}>
+                                                    <Button
+                                                        variant="contained"
+                                                        color="primary"
+                                                        size="small"
+                                                        onClick={handleConnectWallet}
+                                                        disabled={isConnectingWallet}
+                                                        startIcon={isConnectingWallet ? <CircularProgress size={14} color="inherit" /> : <MetaMaskIcon />}
+                                                        sx={{ height: 34, borderRadius: '8px', fontWeight: 700 }}
+                                                    >
+                                                        {isConnectingWallet ? 'Đang kết nối...' : 'Kết nối ví MetaMask ngay'}
+                                                    </Button>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Cần kết nối ví để ký đưa sự kiện lên Smart Contract Sepolia.
+                                                    </Typography>
+                                                </Stack>
+                                            )}
                                         </Box>
                                     </Stack>
                                 </Grid>
 
-                                <Grid item xs={12} sm={6} md={5}>
-                                    <Stack direction="row" spacing={2} justifyContent={{ xs: 'flex-start', sm: 'flex-end' }} alignItems="center">
-                                        <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+                                <Grid item xs={12} md={5}>
+                                    <Stack direction="row" spacing={2} justifyContent={{ xs: 'flex-start', md: 'flex-end' }} alignItems="center">
+                                        <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
                                             <Typography variant="caption" color="text.secondary" display="block">
-                                                Số dư có thể rút on-chain:
+                                                Doanh thu quyết toán về ví On-Chain:
                                             </Typography>
                                             <Typography variant="h3" fontWeight={800} color="primary.main">
-                                                {metrics.withdrawableBalanceEth} ETH
+                                                {metrics.totalRevenueEth} ETH
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ color: 'success.main', display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 0.5, fontWeight: 600 }}>
+                                                <CheckCircle sx={{ fontSize: 13 }} /> Đã chuyển thẳng vào ví Web3
                                             </Typography>
                                         </Box>
 
                                         <Button
                                             variant="contained"
                                             color="primary"
-                                            startIcon={<Payments />}
-                                            disabled={metrics.withdrawableBalanceEth <= 0}
-                                            onClick={() => {
-                                                setWithdrawStep('initial');
-                                                setOpenWithdrawModal(true);
-                                            }}
+                                            startIcon={<ReceiptLong />}
+                                            onClick={() => setOpenWithdrawModal(true)}
                                             sx={{ borderRadius: '8px', fontWeight: 600, height: 40, px: 2.5 }}
                                         >
-                                            Rút Doanh Thu
+                                            Đối Soát On-Chain
                                         </Button>
                                     </Stack>
                                 </Grid>
@@ -786,7 +1128,10 @@ const OrganizerDashboardPage = () => {
                             <Button
                                 size="small"
                                 color="inherit"
-                                onClick={() => showSnackbar('Đã đồng bộ giao dịch mới nhất từ blockchain!', 'success')}
+                                onClick={async () => {
+                                    await loadOrganizerData();
+                                    showSnackbar('Đã đồng bộ giao dịch mới nhất từ blockchain!', 'success');
+                                }}
                                 startIcon={<Refresh />}
                                 sx={{ textTransform: 'none', fontWeight: 600 }}
                             >
@@ -851,8 +1196,15 @@ const OrganizerDashboardPage = () => {
                                             )}
                                         </Stack>
                                         <Typography variant="caption" color="text.secondary">
-                                            Thời gian: {log.time} • TxHash:{' '}
-                                            <span style={{ fontFamily: 'monospace' }}>{truncateHash(log.txHash, 8, 6)}</span>
+                                            Thời gian: {log.time ? new Date(log.time).toLocaleString('vi-VN') : ''} • TxHash:{' '}
+                                            <Link
+                                                href={`https://sepolia.etherscan.io/tx/${log.txHash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                sx={{ fontFamily: 'monospace', color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                                            >
+                                                {truncateHash(log.txHash, 8, 6)} ↗
+                                            </Link>
                                         </Typography>
                                     </Box>
 
@@ -878,18 +1230,13 @@ const OrganizerDashboardPage = () => {
                         )}
                         </Stack>
                     </Paper>
-                </Container>
-            </Box>
+                </Box>
 
-            {/* MODAL RÚT DOANH THU ON-CHAIN VỀ VÍ BAN TỔ CHỨC */}
+            {/* MODAL ĐỐI SOÁT & QUYẾT TOÁN DOANH THU ON-CHAIN */}
             <Dialog
                 open={openWithdrawModal}
-                onClose={() => {
-                    if (withdrawStep !== 'verifying_block') {
-                        setOpenWithdrawModal(false);
-                    }
-                }}
-                maxWidth="xs"
+                onClose={() => setOpenWithdrawModal(false)}
+                maxWidth="sm"
                 fullWidth
                 PaperProps={{
                     sx: {
@@ -904,8 +1251,8 @@ const OrganizerDashboardPage = () => {
                         <Stack direction="row" spacing={1.5} alignItems="center">
                             <Box
                                 sx={{
-                                    width: 40,
-                                    height: 40,
+                                    width: 42,
+                                    height: 42,
                                     borderRadius: '10px',
                                     bgcolor: 'action.selected',
                                     color: 'primary.main',
@@ -914,153 +1261,190 @@ const OrganizerDashboardPage = () => {
                                     justifyContent: 'center',
                                 }}
                             >
-                                <Payments />
+                                <ReceiptLong />
                             </Box>
                             <Box>
                                 <Typography variant="h3" fontWeight={700}>
-                                    Rút Doanh Thu On-Chain
+                                    Đối Soát Doanh Thu On-Chain
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    Giải ngân từ Smart Contract về ví BTC
+                                    Quyết toán trực tiếp qua Smart Contract về ví cá nhân
                                 </Typography>
                             </Box>
                         </Stack>
-                        {withdrawStep !== 'verifying_block' && (
-                            <IconButton
-                                size="small"
-                                aria-label="Đóng popup rút doanh thu"
-                                onClick={() => setOpenWithdrawModal(false)}
-                            >
-                                <Close />
-                            </IconButton>
-                        )}
+                        <IconButton
+                            size="small"
+                            aria-label="Đóng popup đối soát doanh thu"
+                            onClick={() => setOpenWithdrawModal(false)}
+                        >
+                            <Close />
+                        </IconButton>
                     </Stack>
                 </DialogTitle>
 
                 <DialogContent sx={{ pt: 1.5 }}>
-                    {withdrawStep === 'initial' && (
-                        <Stack spacing={2}>
-                            <Paper
-                                elevation={0}
-                                sx={{
-                                    p: 2,
-                                    borderRadius: '12px',
-                                    bgcolor: 'background.subtle',
-                                    border: 1,
-                                    borderColor: 'divider',
-                                    textAlign: 'center',
-                                }}
-                            >
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Số tiền giải ngân khả dụng:
-                                </Typography>
-                                <Typography variant="h1" fontWeight={800} color="primary.main" my={0.5}>
-                                    {metrics.withdrawableBalanceEth} ETH
-                                </Typography>
+                    <Stack spacing={2.5}>
+                        {/* THẺ TỔNG DOANH THU */}
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                p: 2.5,
+                                borderRadius: '12px',
+                                bgcolor: 'background.subtle',
+                                border: 1,
+                                borderColor: 'divider',
+                                textAlign: 'center',
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary" display="block" fontWeight={600}>
+                                TỔNG DOANH THU ĐÃ QUYẾT TOÁN ON-CHAIN:
+                            </Typography>
+                            <Typography variant="h1" fontWeight={800} color="primary.main" my={0.5}>
+                                {metrics.totalRevenueEth} ETH
+                            </Typography>
+                            <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" flexWrap="wrap">
+                                <Chip
+                                    icon={<CheckCircle sx={{ fontSize: '1rem !important' }} />}
+                                    label="100% Tiền đã chuyển thẳng vào ví"
+                                    size="small"
+                                    color="success"
+                                    variant="outlined"
+                                    sx={{ fontWeight: 700, fontSize: '0.75rem' }}
+                                />
                                 <Typography variant="caption" color="text.secondary">
-                                    Bao gồm doanh thu bán vé sơ cấp và 5% phí bản quyền
+                                    ~${metrics.totalRevenueUsd?.toLocaleString() || Math.round(metrics.totalRevenueEth * 3150)} USD
                                 </Typography>
-                            </Paper>
+                            </Stack>
+                        </Paper>
 
-                            <Box sx={{ border: 1, borderColor: 'divider', borderRadius: '10px', p: 1.5 }}>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Ví đích nhận thanh toán:
-                                </Typography>
-                                <Typography variant="body2" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
-                                    {user?.walletAddress ? truncateHash(user.walletAddress, 10, 8) : 'Chưa liên kết ví Web3'}
-                                </Typography>
-                            </Box>
-
-                            <Alert severity="info" sx={{ fontSize: '0.8rem', borderRadius: '8px' }}>
-                                Giao dịch rút tiền sẽ được gửi trực tiếp đến hàm <code>withdrawOrganizerFunds()</code> trên Smart Contract Sepolia.
-                            </Alert>
-                        </Stack>
-                    )}
-
-                    {withdrawStep === 'pending_signature' && (
-                        <Box sx={{ py: 3, textAlign: 'center' }}>
-                            <AccountBalanceWallet sx={{ fontSize: 50, color: 'primary.main', mb: 2 }} />
-                            <Typography variant="h3" fontWeight={700} gutterBottom>
-                                Vui lòng xác nhận trên ví MetaMask
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                Đang mở cửa sổ ký giao dịch giải ngân {metrics.withdrawableBalanceEth} ETH...
-                            </Typography>
-                            <LinearProgress sx={{ width: '70%', mx: 'auto', borderRadius: 4, height: 6 }} />
+                        {/* ĐỊA CHỈ VÍ BTC NHẬN TIỀN */}
+                        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: '10px', p: 2, bgcolor: 'background.paper' }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        Địa chỉ ví Ban Tổ Chức nhận tiền:
+                                    </Typography>
+                                    <Typography variant="body2" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
+                                        {user?.walletAddress || 'Chưa liên kết ví'}
+                                    </Typography>
+                                </Box>
+                                {user?.walletAddress && (
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        component="a"
+                                        href={`https://sepolia.etherscan.io/address/${user.walletAddress}#internaltx`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        endIcon={<OpenInNew sx={{ fontSize: '0.9rem !important' }} />}
+                                        sx={{ textTransform: 'none', borderRadius: '8px', fontSize: '0.75rem' }}
+                                    >
+                                        Xem trên Etherscan
+                                    </Button>
+                                )}
+                            </Stack>
                         </Box>
-                    )}
 
-                    {withdrawStep === 'verifying_block' && (
-                        <Box sx={{ py: 3, textAlign: 'center' }}>
-                            <HourglassEmpty sx={{ fontSize: 50, color: theme.palette.status?.onchain || 'primary.main', mb: 2 }} />
-                            <Typography variant="h3" fontWeight={700} gutterBottom>
-                                Đang đóng khối giao dịch Sepolia...
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                TxHash: {truncateHash(withdrawTxHash, 10, 8)}
-                            </Typography>
-                            <LinearProgress
-                                sx={{
-                                    width: '80%',
-                                    mx: 'auto',
-                                    borderRadius: 4,
-                                    height: 6,
-                                    bgcolor: theme.palette.status?.onchainBg,
-                                    '& .MuiLinearProgress-bar': { bgcolor: theme.palette.status?.onchain },
-                                }}
-                            />
-                        </Box>
-                    )}
+                        {/* GIẢI THÍCH CƠ CHẾ SMART CONTRACT */}
+                        <Alert severity="success" sx={{ fontSize: '0.82rem', borderRadius: '10px', lineHeight: 1.6 }}>
+                            <strong>Cơ chế thanh toán phi tập trung (Non-custodial Settlement):</strong>
+                            <br />
+                            Trong hệ thống BlockTickets, Smart Contract <code>EventTicket</code> và <code>TicketMarketplace</code> không giữ tiền trung gian của Ban tổ chức. 
+                            Mỗi khi khán giả mua vé sơ cấp hoặc trả phí bản quyền 5% thứ cấp, <strong>Smart Contract lập tức chuyển trực tiếp ETH vào ví MetaMask của bạn</strong> trong cùng block giao dịch. 
+                            Bạn <strong>không cần thực hiện lệnh rút thủ công</strong> và không phải trả thêm bất kỳ khoản phí gas nào!
+                        </Alert>
 
-                    {withdrawStep === 'confirmed' && (
-                        <Box sx={{ py: 2, textAlign: 'center' }}>
-                            <CheckCircle sx={{ fontSize: 56, color: 'success.main', mb: 1.5 }} />
-                            <Typography variant="h3" fontWeight={800} color="text.primary" gutterBottom>
-                                Rút Doanh Thu Thành Công!
+                        {/* DANH SÁCH LỊCH SỬ GIAO DỊCH QUYẾT TOÁN */}
+                        <Box>
+                            <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                                Lịch sử giao dịch quyết toán gần nhất ({financialLogs.length})
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" paragraph>
-                                Số tiền đã được chuyển trực tiếp vào ví MetaMask của bạn trên mạng Ethereum Sepolia Testnet.
-                            </Typography>
+                            {financialLogs.length === 0 ? (
+                                <Paper elevation={0} sx={{ p: 2, textAlign: 'center', bgcolor: 'background.subtle', borderRadius: '8px' }}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Chưa có giao dịch mua vé nào phát sinh.
+                                    </Typography>
+                                </Paper>
+                            ) : (
+                                <Stack spacing={1} sx={{ maxHeight: 240, overflowY: 'auto', pr: 0.5 }}>
+                                    {financialLogs.map((log) => (
+                                        <Paper
+                                            key={log.id}
+                                            elevation={0}
+                                            sx={{
+                                                p: 1.5,
+                                                borderRadius: '8px',
+                                                bgcolor: 'background.subtle',
+                                                border: 1,
+                                                borderColor: 'divider',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                            }}
+                                        >
+                                            <Box>
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    <Chip
+                                                        label={log.typeLabel || 'Bán vé'}
+                                                        size="small"
+                                                        color="primary"
+                                                        sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
+                                                    />
+                                                    <Typography variant="body2" fontWeight={700}>
+                                                        Token #{log.tokenId} {log.ticketTypeName ? `• ${log.ticketTypeName}` : ''}
+                                                    </Typography>
+                                                </Stack>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                    {log.time ? new Date(log.time).toLocaleString('vi-VN') : ''} • TxHash:{' '}
+                                                    <Link
+                                                        href={`https://sepolia.etherscan.io/tx/${log.txHash}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        sx={{ fontFamily: 'monospace', color: 'primary.main', textDecoration: 'none' }}
+                                                    >
+                                                        {truncateHash(log.txHash, 6, 4)} ↗
+                                                    </Link>
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ textAlign: 'right' }}>
+                                                <Typography variant="subtitle2" fontWeight={800} color="success.main">
+                                                    +{log.amountEth} ETH
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Đã vào ví ✓
+                                                </Typography>
+                                            </Box>
+                                        </Paper>
+                                    ))}
+                                </Stack>
+                            )}
                         </Box>
-                    )}
+                    </Stack>
                 </DialogContent>
 
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    {withdrawStep === 'initial' && (
-                        <Stack direction="row" spacing={1.5} width="100%" justifyContent="flex-end">
-                            <Button
-                                variant="outlined"
-                                color="inherit"
-                                onClick={() => setOpenWithdrawModal(false)}
-                                sx={{ borderRadius: '8px' }}
-                            >
-                                Hủy Bỏ
-                            </Button>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                onClick={handleConfirmWithdraw}
-                                sx={{ borderRadius: '8px', fontWeight: 600, px: 3 }}
-                            >
-                                Xác Nhận Rút
-                            </Button>
-                        </Stack>
-                    )}
-
-                    {withdrawStep === 'confirmed' && (
+                <DialogActions sx={{ p: 2, pt: 1 }}>
+                    {user?.walletAddress && (
                         <Button
-                            variant="contained"
+                            variant="outlined"
                             color="primary"
-                            fullWidth
-                            onClick={() => {
-                                setOpenWithdrawModal(false);
-                                showSnackbar('Giao dịch rút tiền đã được xác nhận on-chain!', 'success');
-                            }}
-                            sx={{ borderRadius: '8px', fontWeight: 600 }}
+                            component="a"
+                            href={`https://sepolia.etherscan.io/address/${user.walletAddress}#internaltx`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            startIcon={<OpenInNew />}
+                            sx={{ borderRadius: '8px', fontWeight: 600, mr: 'auto' }}
                         >
-                            Hoàn Tất & Đóng
+                            Tra cứu Internal Txns trên Etherscan
                         </Button>
                     )}
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => setOpenWithdrawModal(false)}
+                        sx={{ borderRadius: '8px', fontWeight: 600, px: 3 }}
+                    >
+                        Đóng
+                    </Button>
                 </DialogActions>
             </Dialog>
 
@@ -1081,7 +1465,7 @@ const OrganizerDashboardPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </DashboardLayout>
     );
 };
 

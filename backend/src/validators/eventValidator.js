@@ -22,7 +22,7 @@ export const eventIdParamSchema = z.object({
 export const listEventsQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(50).default(12),
+    limit: z.coerce.number().int().min(1).max(100).default(12),
     search: z.string().trim().optional(),
     category: z.enum(CATEGORIES).optional(),
     city: z.string().trim().optional(),
@@ -35,7 +35,7 @@ export const listEventsQuerySchema = z.object({
 export const myEventsQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(50).default(12),
+    limit: z.coerce.number().int().min(1).max(100).default(12),
     status: z.enum(EVENT_STATUSES).optional(),
   }),
 });
@@ -59,6 +59,7 @@ export const createEventSchema = z.object({
       venueCity: z.string({ error: "Thiếu thành phố" }).trim().min(2).max(100),
       startTime: z.coerce.date({ error: "Thời gian bắt đầu không hợp lệ" }),
       endTime: z.coerce.date({ error: "Thời gian kết thúc không hợp lệ" }),
+      ticketTypes: z.array(z.any()).optional(),
     })
     .refine((data) => data.endTime > data.startTime, {
       message: "Thời gian kết thúc phải sau thời gian bắt đầu",
@@ -99,10 +100,15 @@ export const createTicketTypeSchema = z.object({
         .number({ error: "Số lượng tối đa không hợp lệ" })
         .int("maxSupply phải là số nguyên")
         .min(1, "Số lượng vé tối thiểu là 1"),
-      saleStartTime: z.coerce.date({ error: "Thời điểm mở bán không hợp lệ" }),
-      saleEndTime: z.coerce.date({ error: "Thời điểm đóng bán không hợp lệ" }),
+      saleStartTime: z.coerce.date({ error: "Thời điểm mở bán không hợp lệ" }).optional(),
+      saleEndTime: z.coerce.date({ error: "Thời điểm đóng bán không hợp lệ" }).optional(),
     })
-    .refine((data) => data.saleEndTime > data.saleStartTime, {
+    .refine((data) => {
+      if (data.saleStartTime && data.saleEndTime) {
+        return data.saleEndTime > data.saleStartTime;
+      }
+      return true;
+    }, {
       message: "Thời điểm đóng bán phải sau thời điểm mở bán",
       path: ["saleEndTime"],
     }),

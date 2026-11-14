@@ -57,7 +57,7 @@ import {
     VerifiedUser,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import Navbar from '../../components/Navbar';
+import DashboardLayout from '../../layouts/DashboardLayout';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -175,16 +175,30 @@ const CreateEventPage = () => {
         });
     };
 
+    // Helper định dạng ngày giờ cho input type="datetime-local" (YYYY-MM-DDTHH:mm)
+    const toDatetimeLocal = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '';
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
     // Thêm hạng vé mới
     const handleAddTier = () => {
+        const now = new Date();
+        const eventStart = eventData.startTime ? new Date(eventData.startTime) : null;
+        const defaultStart = toDatetimeLocal(now);
+        const defaultEnd = eventStart && eventStart > now ? toDatetimeLocal(eventStart) : toDatetimeLocal(new Date(now.getTime() + 7 * 24 * 3600 * 1000));
+
         const newTier = {
             id: Date.now(),
             name: `Hạng vé mới #${ticketTiers.length + 1}`,
             description: 'Mô tả quyền lợi hạng vé...',
-            originalPrice: 0.1,
+            originalPrice: 0.05,
             maxSupply: 100,
-            saleStartTime: '2026-11-15T00:00',
-            saleEndTime: '2026-12-14T23:59',
+            saleStartTime: defaultStart,
+            saleEndTime: defaultEnd,
             perks: 'Quyền lợi vé tiêu chuẩn',
         };
         setTicketTiers((prev) => [...prev, newTier]);
@@ -207,14 +221,17 @@ const CreateEventPage = () => {
 
         if (step === 0) {
             if (!eventData.title.trim()) newErrors.title = 'Vui lòng nhập tên sự kiện';
+            else if (eventData.title.trim().length < 5) newErrors.title = 'Tên sự kiện tối thiểu 5 ký tự';
             if (!eventData.description.trim()) newErrors.description = 'Vui lòng nhập mô tả chi tiết sự kiện';
+            else if (eventData.description.trim().length < 20) newErrors.description = 'Mô tả sự kiện tối thiểu 20 ký tự (theo quy chuẩn xét duyệt)';
             if (!eventData.bannerUrl.trim()) newErrors.bannerUrl = 'Vui lòng chọn hoặc nhập URL ảnh poster';
         } else if (step === 1) {
             if (!eventData.venueName.trim()) newErrors.venueName = 'Vui lòng nhập tên địa điểm tổ chức';
             if (!eventData.venueAddress.trim()) newErrors.venueAddress = 'Vui lòng nhập địa chỉ cụ thể';
             if (!eventData.startTime) newErrors.startTime = 'Vui lòng chọn thời gian bắt đầu';
+            else if (new Date(eventData.startTime) <= new Date()) newErrors.startTime = 'Thời gian bắt đầu sự kiện phải ở tương lai';
             if (!eventData.endTime) newErrors.endTime = 'Vui lòng chọn thời gian kết thúc';
-            if (new Date(eventData.endTime) <= new Date(eventData.startTime)) {
+            if (eventData.startTime && eventData.endTime && new Date(eventData.endTime) <= new Date(eventData.startTime)) {
                 newErrors.endTime = 'Thời gian kết thúc phải sau thời gian bắt đầu';
             }
         } else if (step === 2) {
@@ -222,6 +239,7 @@ const CreateEventPage = () => {
                 showSnackbar('Cần ít nhất một hạng vé!', 'error');
                 return false;
             }
+            const eventEnd = eventData.endTime ? new Date(eventData.endTime) : null;
             ticketTiers.forEach((tier, index) => {
                 if (!tier.name.trim()) newErrors[`tier_${index}_name`] = 'Thiếu tên hạng vé';
                 if (!tier.originalPrice || Number(tier.originalPrice) <= 0) {
@@ -229,6 +247,16 @@ const CreateEventPage = () => {
                 }
                 if (!tier.maxSupply || Number(tier.maxSupply) <= 0) {
                     newErrors[`tier_${index}_supply`] = 'Số lượng phát hành trần phải lớn hơn 0';
+                }
+                if (!tier.saleStartTime) {
+                    newErrors[`tier_${index}_saleStart`] = 'Vui lòng chọn thời gian bắt đầu mở bán vé';
+                }
+                if (!tier.saleEndTime) {
+                    newErrors[`tier_${index}_saleEnd`] = 'Vui lòng chọn thời gian kết thúc bán vé';
+                } else if (tier.saleStartTime && new Date(tier.saleEndTime) <= new Date(tier.saleStartTime)) {
+                    newErrors[`tier_${index}_saleEnd`] = 'Thời gian kết thúc bán vé phải sau thời gian mở bán';
+                } else if (eventEnd && new Date(tier.saleEndTime) > eventEnd) {
+                    newErrors[`tier_${index}_saleEnd`] = 'Thời gian kết thúc bán vé không được sau khi sự kiện kết thúc';
                 }
             });
         }
@@ -240,6 +268,22 @@ const CreateEventPage = () => {
     // Chuyển sang bước kế tiếp
     const handleNext = () => {
         if (validateStep(activeStep)) {
+            // Khi từ bước 1 sang bước 2, nếu hạng vé đầu tiên chưa có ngày mở/đóng bán thì tự điền gợi ý
+            if (activeStep === 1 && ticketTiers.length > 0 && !ticketTiers[0].saleStartTime) {
+                const now = new Date();
+                const eventStart = eventData.startTime ? new Date(eventData.startTime) : null;
+                const defaultStart = toDatetimeLocal(now);
+                const defaultEnd = eventStart && eventStart > now ? toDatetimeLocal(eventStart) : toDatetimeLocal(new Date(now.getTime() + 7 * 24 * 3600 * 1000));
+                setTicketTiers((prev) => {
+                    const updated = [...prev];
+                    updated[0] = {
+                        ...updated[0],
+                        saleStartTime: defaultStart,
+                        saleEndTime: defaultEnd,
+                    };
+                    return updated;
+                });
+            }
             setActiveStep((prev) => prev + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
@@ -262,8 +306,36 @@ const CreateEventPage = () => {
 
     // Gửi sự kiện để Admin phê duyệt hoặc lưu bản nháp
     const handleSubmitEvent = async (isDraft = false) => {
+        // Kiểm tra hợp lệ cả 3 bước trước khi gửi
+        const isStep0Valid = validateStep(0);
+        const isStep1Valid = validateStep(1);
+        const isStep2Valid = validateStep(2);
+
+        if (!isStep0Valid || !isStep1Valid || !isStep2Valid) {
+            showSnackbar('Vui lòng kiểm tra lại thông tin ở các bước trước khi gửi duyệt!', 'error');
+            if (!isStep0Valid) setActiveStep(0);
+            else if (!isStep1Valid) setActiveStep(1);
+            else if (!isStep2Valid) setActiveStep(2);
+            return;
+        }
+
         setIsSubmitting(true);
         try {
+            const eventStart = new Date(eventData.startTime);
+            const now = new Date();
+            const defaultSaleStart = now < eventStart ? now.toISOString() : new Date(eventStart.getTime() - 24 * 3600 * 1000).toISOString();
+            const defaultSaleEnd = eventStart.toISOString();
+
+            const preparedTicketTiers = ticketTiers.map((tier) => ({
+                name: tier.name.trim(),
+                description: tier.description?.trim() || `${tier.name.trim()} - Vé sự kiện NFT`,
+                originalPrice: Number(tier.originalPrice),
+                currency: 'ETH',
+                maxSupply: Number(tier.maxSupply),
+                saleStartTime: tier.saleStartTime ? new Date(tier.saleStartTime).toISOString() : defaultSaleStart,
+                saleEndTime: tier.saleEndTime ? new Date(tier.saleEndTime).toISOString() : defaultSaleEnd,
+            }));
+
             const eventPayload = {
                 title: eventData.title.trim(),
                 description: eventData.description.trim(),
@@ -272,80 +344,47 @@ const CreateEventPage = () => {
                 venueName: eventData.venueName.trim(),
                 venueAddress: eventData.venueAddress.trim(),
                 venueCity: eventData.venueCity || 'Hà Nội',
-                startTime: new Date(eventData.startTime).toISOString(),
+                startTime: eventStart.toISOString(),
                 endTime: new Date(eventData.endTime).toISOString(),
+                ticketTypes: preparedTicketTiers,
             };
 
-            let createdId = 'EVT-2026-' + Math.floor(100 + Math.random() * 900);
+            const res = await organizerAPI.createEvent(eventPayload);
+            const createdId = res.data?.data?.event?.id;
+            if (!createdId) {
+                throw new Error('Không nhận được mã sự kiện từ máy chủ.');
+            }
 
-            try {
-                const res = await organizerAPI.createEvent(eventPayload);
-                if (res.data?.data?.event?.id) {
-                    createdId = res.data.data.event.id;
-                }
-
-                // Tạo các hạng vé cho sự kiện
-                for (const tier of ticketTiers) {
-                    await organizerAPI.addTicketType(createdId, {
-                        name: tier.name.trim(),
-                        description: tier.description?.trim() || `${tier.name} - Vé sự kiện NFT`,
-                        originalPrice: Number(tier.originalPrice),
-                        currency: 'ETH',
-                        maxSupply: Number(tier.maxSupply),
-                    });
-                }
-
-                // Nếu không phải draft thì gửi duyệt luôn
-                if (!isDraft) {
-                    await organizerAPI.submitReview(createdId);
-                }
-            } catch (apiErr) {
-                console.warn('API error (using fallback local id):', apiErr);
-                // Nếu người dùng chưa đăng nhập tài khoản Organizer hoặc demo mode
-                if (apiErr.response?.status === 401 || apiErr.response?.status === 403) {
-                    showSnackbar(apiErr.message || 'Lưu ý: Bạn đang thực hiện ở chế độ mô phỏng chưa cấp quyền Organizer.', 'warning');
-                } else if (apiErr.message) {
-                    showSnackbar(apiErr.message, 'error');
-                    setIsSubmitting(false);
-                    return;
-                }
+            // Nếu không phải draft thì gửi duyệt luôn
+            if (!isDraft) {
+                await organizerAPI.submitReview(createdId);
             }
 
             setSubmittedEventId(createdId);
 
             if (isDraft) {
-                showSnackbar(`Đã lưu bản nháp sự kiện ${createdId} thành công!`, 'success');
+                showSnackbar(`Đã lưu bản nháp sự kiện #${createdId} thành công!`, 'success');
                 navigate('/organizer/dashboard');
                 return;
             }
 
-            // Mở popup thông báo thành công
+            showSnackbar('Đã gửi sự kiện lên ban quản trị xét duyệt thành công!', 'success');
             setOpenSuccessModal(true);
-        } catch (error) {
-            console.error('Lỗi khi submit sự kiện:', error);
-            showSnackbar('Đã xảy ra lỗi khi tạo sự kiện. Vui lòng kiểm tra lại.', 'error');
+        } catch (apiErr) {
+            console.error('Lỗi khi gửi duyệt sự kiện:', apiErr);
+            showSnackbar(apiErr.message || 'Đã xảy ra lỗi khi tạo sự kiện. Vui lòng kiểm tra lại.', 'error');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <Navbar />
-
-            <Box component="main" sx={{ flexGrow: 1, py: { xs: 3, md: 5 } }}>
-                <Container maxWidth="lg">
-                    {/* BREADCRUMB */}
-                    <Breadcrumbs
-                        aria-label="breadcrumb"
-                        sx={{ mb: 2, '& a': { textDecoration: 'none', color: 'text.secondary', '&:hover': { color: 'primary.main' } } }}
-                    >
-                        <Link component={RouterLink} to="/">Trang chủ</Link>
-                        <Link component={RouterLink} to="/admin/events">Duyệt sự kiện</Link>
-                        <Typography color="text.primary" fontWeight={600}>
-                            Tạo sự kiện mới
-                        </Typography>
-                    </Breadcrumbs>
+        <DashboardLayout
+            role="organizer"
+            title="Tạo Sự Kiện Mới"
+            subtitle="Khởi tạo sự kiện, cấu hình địa điểm và thiết lập các hạng vé NFT"
+        >
+            <Box sx={{ width: '100%' }}>
 
                     {/* HEADER BANNER */}
                     <Box
@@ -810,6 +849,36 @@ const CreateEventPage = () => {
                                                         />
                                                     </Grid>
 
+                                                    {/* Thời gian bắt đầu mở bán vé */}
+                                                    <Grid item xs={12} sm={6}>
+                                                        <TextField
+                                                            fullWidth
+                                                            size="small"
+                                                            type="datetime-local"
+                                                            label="Thời gian bắt đầu mở bán vé *"
+                                                            value={tier.saleStartTime || ''}
+                                                            onChange={(e) => handleTierChange(index, 'saleStartTime', e.target.value)}
+                                                            error={Boolean(errors[`tier_${index}_saleStart`])}
+                                                            helperText={errors[`tier_${index}_saleStart`] || 'Thời điểm bắt đầu cho phép mua vé'}
+                                                            InputLabelProps={{ shrink: true }}
+                                                        />
+                                                    </Grid>
+
+                                                    {/* Thời gian kết thúc bán vé */}
+                                                    <Grid item xs={12} sm={6}>
+                                                        <TextField
+                                                            fullWidth
+                                                            size="small"
+                                                            type="datetime-local"
+                                                            label="Thời gian kết thúc bán vé *"
+                                                            value={tier.saleEndTime || ''}
+                                                            onChange={(e) => handleTierChange(index, 'saleEndTime', e.target.value)}
+                                                            error={Boolean(errors[`tier_${index}_saleEnd`])}
+                                                            helperText={errors[`tier_${index}_saleEnd`] || 'Hạn chót mua vé (không được sau giờ sự kiện kết thúc)'}
+                                                            InputLabelProps={{ shrink: true }}
+                                                        />
+                                                    </Grid>
+
                                                     {/* Tóm tắt tính toán trần giá 120% */}
                                                     <Grid item xs={12}>
                                                         <Box
@@ -1084,8 +1153,7 @@ const CreateEventPage = () => {
                             </Stack>
                         </Box>
                     </Card>
-                </Container>
-            </Box>
+                </Box>
 
             {/* MODAL THÔNG BÁO GỬI PHÊ DUYỆT THÀNH CÔNG */}
             <Dialog
@@ -1169,25 +1237,25 @@ const CreateEventPage = () => {
                         color="inherit"
                         onClick={() => {
                             setOpenSuccessModal(false);
-                            navigate('/');
+                            navigate('/organizer/dashboard');
                         }}
                         sx={{ borderRadius: '8px', fontWeight: 600 }}
                     >
-                        Về Trang Chủ
+                        Đóng
                     </Button>
                     <Button
                         variant="contained"
                         color="primary"
-                        component={RouterLink}
-                        to="/admin/events"
+                        onClick={() => {
+                            setOpenSuccessModal(false);
+                            navigate('/organizer/dashboard');
+                        }}
                         sx={{ borderRadius: '8px', fontWeight: 600, px: 2.5 }}
                     >
-                        Xem Hàng Đợi Duyệt
+                        Quản Lý Sự Kiện Của Tôi
                     </Button>
                 </DialogActions>
             </Dialog>
-
-            <Footer />
 
             <Snackbar
                 open={snackbar.open}
@@ -1204,7 +1272,7 @@ const CreateEventPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </DashboardLayout>
     );
 };
 

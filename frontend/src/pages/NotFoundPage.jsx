@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   Box,
   Container,
@@ -18,6 +19,13 @@ import {
 export default function NotFoundPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const { user } = useAuth();
+
+  const getHomePath = () => {
+    if (user?.role === 'admin') return '/admin/dashboard';
+    if (user?.role === 'organizer') return '/organizer/dashboard';
+    return '/';
+  };
 
   return (
     <Box
@@ -154,7 +162,7 @@ export default function NotFoundPage() {
               variant="contained"
               size="large"
               startIcon={<HomeIcon />}
-              onClick={() => navigate('/')}
+              onClick={() => navigate(getHomePath())}
               sx={{
                 px: 3,
                 py: 1.25,
