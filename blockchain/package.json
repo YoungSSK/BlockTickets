@@ -2,6 +2,7 @@
   "name": "blocktickets-blockchain",
   "version": "1.0.0",
   "description": "Smart contracts and tests for BlockTickets",
+  "type": "module",
   "scripts": {
     "test": "hardhat test",
     "compile": "hardhat compile",
