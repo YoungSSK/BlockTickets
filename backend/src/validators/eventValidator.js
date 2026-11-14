@@ -22,7 +22,7 @@ export const eventIdParamSchema = z.object({
 export const listEventsQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(50).default(12),
+    limit: z.coerce.number().int().min(1).max(100).default(12),
     search: z.string().trim().optional(),
     category: z.enum(CATEGORIES).optional(),
     city: z.string().trim().optional(),
@@ -35,7 +35,7 @@ export const listEventsQuerySchema = z.object({
 export const myEventsQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(50).default(12),
+    limit: z.coerce.number().int().min(1).max(100).default(12),
     status: z.enum(EVENT_STATUSES).optional(),
   }),
 });
