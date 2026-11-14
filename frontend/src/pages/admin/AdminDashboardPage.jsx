@@ -60,7 +60,6 @@ import {
     AdminPanelSettings,
     FiberManualRecord,
     InfoOutlined,
-    Home,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
@@ -477,18 +476,8 @@ const AdminDashboardPage = () => {
                             </Stack>
                         </Box>
 
-                        {/* Top Actions: Home, Time range, Refresh, Theme Toggle */}
+                        {/* Top Actions: Time range, Refresh, Theme Toggle */}
                         <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
-                            <Button
-                                variant="outlined"
-                                size="medium"
-                                startIcon={<Home />}
-                                onClick={() => navigate('/')}
-                                sx={{ height: 40 }}
-                            >
-                                Trang chủ
-                            </Button>
-
                             <FormControl size="small" sx={{ minWidth: 140 }}>
                                 <Select
                                     value={timeRange}

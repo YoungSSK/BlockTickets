@@ -105,7 +105,6 @@ const Navbar = () => {
                 { label: 'Bảng điều khiển', path: '/admin/dashboard' },
                 { label: 'Duyệt sự kiện', path: '/admin/events' },
                 { label: 'Quản lý người dùng', path: '/admin/users' },
-                { label: 'Xem trang chủ', path: '/' },
             ];
         }
 
@@ -114,7 +113,6 @@ const Navbar = () => {
                 { label: 'Bảng điều khiển', path: '/organizer/dashboard' },
                 { label: 'Tạo sự kiện', path: '/organizer/create-event' },
                 { label: 'Soát vé tại cổng', path: '/organizer/check-in' },
-                { label: 'Xem trang chủ', path: '/' },
             ];
         }
 

@@ -357,7 +357,6 @@ const CreateEventPage = () => {
                         aria-label="breadcrumb"
                         sx={{ mb: 2, '& a': { textDecoration: 'none', color: 'text.secondary', '&:hover': { color: 'primary.main' } } }}
                     >
-                        <Link component={RouterLink} to="/">Trang chủ</Link>
                         <Link component={RouterLink} to="/organizer/dashboard">Bảng điều khiển</Link>
                         <Typography color="text.primary" fontWeight={600}>
                             Tạo sự kiện mới
@@ -1186,11 +1185,11 @@ const CreateEventPage = () => {
                         color="inherit"
                         onClick={() => {
                             setOpenSuccessModal(false);
-                            navigate('/');
+                            navigate('/organizer/dashboard');
                         }}
                         sx={{ borderRadius: '8px', fontWeight: 600 }}
                     >
-                        Về Trang Chủ
+                        Đóng
                     </Button>
                     <Button
                         variant="contained"

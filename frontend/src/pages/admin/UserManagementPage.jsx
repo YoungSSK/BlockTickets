@@ -458,14 +458,6 @@ const UserManagementPage = () => {
                             <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
                                 <Button
                                     size="small"
-                                    onClick={() => navigate('/')}
-                                    sx={{ color: 'text.secondary', px: 0, minWidth: 'auto', '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}
-                                >
-                                    Trang chủ
-                                </Button>
-                                <Typography variant="caption" color="text.disabled">/</Typography>
-                                <Button
-                                    size="small"
                                     startIcon={<ArrowBack />}
                                     onClick={() => navigate('/admin/dashboard')}
                                     sx={{ color: 'text.secondary', px: 0, '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}

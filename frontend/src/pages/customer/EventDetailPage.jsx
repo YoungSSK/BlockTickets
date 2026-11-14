@@ -308,7 +308,21 @@ const EventDetailPage = () => {
                         },
                         startTime: backendEvent.startTime ? new Date(backendEvent.startTime).toLocaleString('vi-VN') : '',
                         endTime: backendEvent.endTime ? new Date(backendEvent.endTime).toLocaleString('vi-VN') : '',
-                        countdownDays: 14,
+                        countdownDays: (() => {
+                            if (!backendEvent.startTime) return 0;
+                            const diff = new Date(backendEvent.startTime).getTime() - Date.now();
+                            return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0;
+                        })(),
+                        countdownText: (() => {
+                            if (!backendEvent.startTime) return 'Đang diễn ra';
+                            const diff = new Date(backendEvent.startTime).getTime() - Date.now();
+                            if (diff <= 0) return 'Đang diễn ra';
+                            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            if (days > 0) return `Còn ${days} ngày`;
+                            if (hours > 0) return `Còn ${hours} giờ`;
+                            return 'Sắp bắt đầu';
+                        })(),
                         contractAddress: backendEvent.contractAddress || '0x71C948261901823901928394819203849102A319',
                         marketplaceAddress: '0x48D11894aB01029384910293849102938491B281',
                         network: 'Ethereum Sepolia Testnet (ChainId 11155111)',
@@ -972,7 +986,7 @@ const EventDetailPage = () => {
                                         </Typography>
                                         <Chip
                                             icon={<HourglassBottom sx={{ fontSize: '13px !important' }} />}
-                                            label={`Còn ${event.countdownDays} ngày`}
+                                            label={event.countdownText || (event.countdownDays ? `Còn ${event.countdownDays} ngày` : 'Sắp diễn ra')}
                                             size="small"
                                             sx={{ bgcolor: 'status.pendingBg', color: 'status.pending', fontWeight: 600, height: 22 }}
                                         />
