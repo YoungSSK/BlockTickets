@@ -73,221 +73,33 @@ const truncateHash = (hash, start = 6, end = 4) => {
     return `${hash.slice(0, start)}...${hash.slice(-end)}`;
 };
 
-// Dữ liệu mẫu khởi tạo mô phỏng MongoDB Atlas & Ethereum Sepolia
-const INITIAL_METRICS = {
-    totalRevenueEth: 158.45,
-    totalRevenueUsd: 498200,
-    revenueGrowth: '+18.4%',
-    resaleRoyaltyEth: 4.85,
-    totalTicketsMinted: 8420,
-    totalTicketsMaxSupply: 10000,
-    checkedInCount: 5210,
-    totalEvents: 42,
-    pendingEventsCount: 5,
-    activeEventsCount: 18,
-    endedEventsCount: 19,
-    totalUsers: 3180,
-    connectedWallets: 2840,
-    complianceScore: 100, // 100% tuân thủ trần giá 120%
+// Dữ liệu chỉ số ban đầu của hệ thống
+const EMPTY_METRICS = {
+    totalRevenueEth: 0,
+    totalRevenueUsd: 0,
+    revenueGrowth: '0%',
+    resaleRoyaltyEth: 0,
+    totalTicketsMinted: 0,
+    totalTicketsMaxSupply: 0,
+    checkedInCount: 0,
+    totalEvents: 0,
+    pendingEventsCount: 0,
+    activeEventsCount: 0,
+    endedEventsCount: 0,
+    totalUsers: 0,
+    connectedWallets: 0,
+    complianceScore: 100,
 };
 
-const INITIAL_PENDING_EVENTS = [
-    {
-        id: 'EVT-2026-001',
-        title: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        organizer: 'Hanoi Symphony Orchestra',
-        organizerWallet: '0x3A2198Ccfa31E4082218901Dfb8293aa7e9B1102',
-        category: 'music',
-        categoryLabel: 'Âm nhạc',
-        venue: 'Nhà Hát Lớn Hà Nội, 01 Tràng Tiền, Hoàn Kiếm',
-        startTime: '15/11/2026 - 20:00',
-        ticketPriceRange: '0.08 - 0.25 ETH',
-        maxSupply: 800,
-        submittedAt: '25 phút trước',
-        description: 'Đêm hòa nhạc cổ điển quốc tế với sự tham gia của dàn nhạc giao hưởng danh tiếng. Phát hành 2 hạng vé: Standard và VIP.',
-        bannerUrl: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600&auto=format&fit=crop&q=80',
-    },
-    {
-        id: 'EVT-2026-002',
-        title: 'Vietnam Blockchain Summit 2026',
-        organizer: 'TechChain Foundation',
-        organizerWallet: '0x8F4211A990812Da7201bF241cba0982E12Da9911',
-        category: 'technology',
-        categoryLabel: 'Công nghệ',
-        venue: 'Trung tâm Hội nghị Quốc gia, Nam Từ Liêm, Hà Nội',
-        startTime: '28/11/2026 - 08:30',
-        ticketPriceRange: '0.15 - 0.50 ETH',
-        maxSupply: 1500,
-        submittedAt: '2 giờ trước',
-        description: 'Hội nghị cấp cao về công nghệ Blockchain, Web3, Smart Contract & Tokenization lớn nhất năm 2026 tại Việt Nam.',
-        bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&auto=format&fit=crop&q=80',
-    },
-    {
-        id: 'EVT-2026-003',
-        title: 'Giải Marathon Quốc Tế Vịnh Hạ Long',
-        organizer: 'Halong Running Club',
-        organizerWallet: '0x11B988Cc009941aB28394Fa019283738C0882190',
-        category: 'sports',
-        categoryLabel: 'Thể thao',
-        venue: 'Bờ biển Bãi Cháy, TP. Hạ Long, Quảng Ninh',
-        startTime: '05/12/2026 - 05:00',
-        ticketPriceRange: '0.05 ETH',
-        maxSupply: 3000,
-        submittedAt: '5 giờ trước',
-        description: 'Giải chạy việt dã quốc tế bên bờ di sản thiên nhiên thế giới Hạ Long, quy tụ hơn 3000 vận động viên toàn cầu.',
-        bannerUrl: 'https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?w=600&auto=format&fit=crop&q=80',
-    },
-    {
-        id: 'EVT-2026-004',
-        title: 'Workshop Chuyên Sâu Smart Contract Security & DeFi',
-        organizer: 'Web3 Builders Guild',
-        organizerWallet: '0x7E1922Ab00192Fa93847291823901923AA559812',
-        category: 'workshop',
-        categoryLabel: 'Hội thảo',
-        venue: 'Tòa nhà FPT Tower, số 10 Phạm Văn Bạch, Cầu Giấy, Hà Nội',
-        startTime: '10/12/2026 - 14:00',
-        ticketPriceRange: '0.03 ETH',
-        maxSupply: 200,
-        submittedAt: '1 ngày trước',
-        description: 'Đào tạo kỹ năng kiểm toán bảo mật hợp đồng thông minh Solidity, các kỹ thuật phòng thủ re-entrancy, flash loan.',
-        bannerUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&auto=format&fit=crop&q=80',
-    },
-    {
-        id: 'EVT-2026-005',
-        title: 'Lễ Hội Âm Nhạc Điện Tử EDM Sonic Wave 2026',
-        organizer: 'Sonic Events Asia',
-        organizerWallet: '0x992B4871923485aa8394827189283921EE108371',
-        category: 'music',
-        categoryLabel: 'Âm nhạc',
-        venue: 'Công viên Yên Sở, Hoàng Mai, Hà Nội',
-        startTime: '20/12/2026 - 16:00',
-        ticketPriceRange: '0.12 - 0.35 ETH',
-        maxSupply: 5000,
-        submittedAt: '1 ngày trước',
-        description: 'Đại nhạc hội âm thanh ánh sáng ngoài trời với Top 100 DJ quốc tế cùng hệ thống soát vé QR động tốc độ cao.',
-        bannerUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
-    },
-];
+const INITIAL_METRICS = EMPTY_METRICS;
 
-const INITIAL_TRANSACTIONS = [
-    {
-        txHash: '0x8a9f3b12dc089148b39019284918239018294018234810239481902371ef8923',
-        type: 'primary_mint',
-        typeLabel: 'Mint Vé Sơ Cấp (ERC-721)',
-        eventTitle: 'Vietnam Blockchain Summit 2026',
-        tokenId: 1420,
-        ticketTier: 'VIP Pass',
-        wallet: '0x789b9102934812301928394819203849102334ef',
-        valueEth: 0.50,
-        status: 'success',
-        blockNumber: 7421898,
-        timestamp: '1 phút trước',
-    },
-    {
-        txHash: '0x3c2a11f8e4092837491029384019283491029384910293849102938490a18374',
-        type: 'resale_secondary',
-        typeLabel: 'Giao Dịch Chuyển Nhượng Thứ Cấp',
-        eventTitle: 'Hòa Nhạc Giao Hưởng Mùa Thu',
-        tokenId: 312,
-        ticketTier: 'Standard',
-        wallet: '0x619a82739182390192839481920384910293bb41',
-        valueEth: 0.096,
-        note: 'Trần giá 120% hợp lệ (Gốc 0.08 ETH)',
-        status: 'success',
-        blockNumber: 7421895,
-        timestamp: '4 phút trước',
-    },
-    {
-        txHash: '0x91df7a28e3b019283940192834910293849102938491029384910293187ca019',
-        type: 'primary_mint',
-        typeLabel: 'Mint Vé Sơ Cấp (ERC-721)',
-        eventTitle: 'EDM Sonic Wave 2026',
-        tokenId: 891,
-        ticketTier: 'GA Pass',
-        wallet: '0x10ae9102938491029384910293849102938449bc',
-        valueEth: 0.12,
-        status: 'onchain',
-        blockNumber: null,
-        timestamp: 'Vừa xong (Chờ xác nhận block)',
-    },
-    {
-        txHash: '0x65bb9103af4c10293849102938491029384910293849102938491029328eb920',
-        type: 'check_in',
-        typeLabel: 'Quét QR Check-in Cổng Sự Kiện',
-        eventTitle: 'Workshop Smart Contract Security',
-        tokenId: 45,
-        ticketTier: 'Standard',
-        wallet: '0x55aa102938491029384910293849102938493341',
-        valueEth: 0.0,
-        status: 'checkedIn',
-        blockNumber: 7421880,
-        timestamp: '12 phút trước',
-    },
-    {
-        txHash: '0x00ae2140bb991029384910293849102938491029384910293849102977df9812',
-        type: 'resale_secondary',
-        typeLabel: 'Giao Dịch Chuyển Nhượng Thứ Cấp',
-        eventTitle: 'Giải Marathon Quốc Tế Vịnh Hạ Long',
-        tokenId: 109,
-        ticketTier: 'Full Marathon 42km',
-        wallet: '0x88bb1029384910293849102938491029384977aa',
-        valueEth: 0.055,
-        note: 'Trần giá 120% hợp lệ (Gốc 0.05 ETH)',
-        status: 'success',
-        blockNumber: 7421872,
-        timestamp: '28 phút trước',
-    },
-    {
-        txHash: '0x54ec1992aa001029384910293849102938491029384910293849102944ee1928',
-        type: 'primary_mint',
-        typeLabel: 'Mint Vé Sơ Cấp (ERC-721)',
-        eventTitle: 'Vietnam Blockchain Summit 2026',
-        tokenId: 1421,
-        ticketTier: 'Standard Pass',
-        wallet: '0x22ee1029384910293849102938491029384999ff',
-        valueEth: 0.15,
-        status: 'error',
-        blockNumber: 7421865,
-        timestamp: '45 phút trước',
-    },
-];
+const INITIAL_PENDING_EVENTS = [];
 
-const AUDIT_LOGS = [
-    {
-        id: 'LOG-8812',
-        adminName: 'Admin System (Superuser)',
-        adminWallet: '0x1234567890123456789012345678901234567890',
-        action: 'APPROVE_EVENT',
-        target: 'EVT-2026-000 (Triển Lãm Nghệ Thuật Số NFT)',
-        ipAddress: '113.190.24.18',
-        timestamp: '3 giờ trước',
-    },
-    {
-        id: 'LOG-8811',
-        adminName: 'Admin System (Superuser)',
-        adminWallet: '0x1234567890123456789012345678901234567890',
-        action: 'UPDATE_CONFIG',
-        target: 'TicketMarketplace.sol (Royalty: 2.5%)',
-        ipAddress: '113.190.24.18',
-        timestamp: '1 ngày trước',
-    },
-    {
-        id: 'LOG-8810',
-        adminName: 'Admin Operator #02',
-        adminWallet: '0x9876543210987654321098765432109876543210',
-        action: 'SUSPEND_USER',
-        target: 'User ID: 0x99af...1102 (Hành vi spam đơn hàng lặp)',
-        ipAddress: '14.232.19.82',
-        timestamp: '2 ngày trước',
-    },
-];
+const INITIAL_TRANSACTIONS = [];
 
-const CATEGORIES_DATA = [
-    { name: 'Âm nhạc (Music)', percent: 42, color: '#2563EB', events: 18, tickets: '4,200 vé' },
-    { name: 'Công nghệ (Tech & Web3)', percent: 28, color: '#6366F1', events: 12, tickets: '2,800 vé' },
-    { name: 'Thể thao (Sports)', percent: 18, color: '#10B981', events: 8, tickets: '1,800 vé' },
-    { name: 'Hội thảo (Workshop)', percent: 12, color: '#F59E0B', events: 4, tickets: '1,200 vé' },
-];
+const AUDIT_LOGS = [];
+
+const CATEGORIES_DATA = [];
 
 const normalizePendingEvent = (evt) => ({
     ...evt,
@@ -329,6 +141,7 @@ const AdminDashboardPage = () => {
     const [metrics, setMetrics] = useState(INITIAL_METRICS);
     const [pendingEvents, setPendingEvents] = useState(INITIAL_PENDING_EVENTS);
     const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
+    const [auditLogs, setAuditLogs] = useState([]);
 
     // Modal dialog states
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -356,9 +169,10 @@ const AdminDashboardPage = () => {
     const fetchDashboardData = async () => {
         setIsRefreshing(true);
         try {
-            const [metricsRes, pendingRes] = await Promise.allSettled([
+            const [metricsRes, pendingRes, auditRes] = await Promise.allSettled([
                 adminAPI.getMetrics(),
                 adminAPI.getPendingEvents({ limit: 10 }),
+                adminAPI.getAuditLogs({ limit: 10 }),
             ]);
 
             if (metricsRes.status === 'fulfilled' && metricsRes.value.data?.data) {
@@ -370,8 +184,23 @@ const AdminDashboardPage = () => {
 
             if (pendingRes.status === 'fulfilled') {
                 const pEvents = pendingRes.value.data?.data?.events;
-                if (Array.isArray(pEvents) && pEvents.length > 0) {
+                if (Array.isArray(pEvents)) {
                     setPendingEvents(pEvents.map(normalizePendingEvent));
+                }
+            }
+
+            if (auditRes.status === 'fulfilled') {
+                const rawLogs = auditRes.value.data?.data?.logs;
+                if (Array.isArray(rawLogs)) {
+                    setAuditLogs(rawLogs.map((l) => ({
+                        id: `LOG-${l.id}`,
+                        adminName: l.user?.fullName || 'Hệ thống Admin',
+                        adminWallet: l.user?.walletAddress || '0x0000...0000',
+                        action: l.action,
+                        target: l.targetId ? `ID: ${l.targetId}` : 'Hệ thống',
+                        ipAddress: l.ipAddress || '127.0.0.1',
+                        timestamp: l.createdAt ? new Date(l.createdAt).toLocaleString('vi-VN') : '',
+                    })));
                 }
             }
 
@@ -1243,7 +1072,14 @@ const AdminDashboardPage = () => {
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {transactions.slice(0, 4).map((tx) => (
+                                            {transactions.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                                                        Chưa có giao dịch on-chain nào được ghi nhận
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                transactions.slice(0, 4).map((tx) => (
                                                 <TableRow key={tx.txHash} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                                     <TableCell>
                                                         <Stack direction="row" alignItems="center" spacing={0.5}>
@@ -1318,7 +1154,8 @@ const AdminDashboardPage = () => {
                                                         )}
                                                     </TableCell>
                                                 </TableRow>
-                                            ))}
+                                                ))
+                                            )}
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
@@ -1338,34 +1175,40 @@ const AdminDashboardPage = () => {
                                     </Typography>
                                 </Box>
                                 <CardContent sx={{ p: 3 }}>
-                                    {CATEGORIES_DATA.map((cat) => (
-                                        <Box key={cat.name} sx={{ mb: 2.5, '&:last-child': { mb: 0 } }}>
-                                            <Stack direction="row" justifyContent="space-between" mb={0.5}>
-                                                <Typography variant="body2" color="text.primary" fontWeight={500}>
-                                                    {cat.name}
-                                                </Typography>
-                                                <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                                                    {cat.percent}% ({cat.events} SK)
-                                                </Typography>
-                                            </Stack>
-                                            <LinearProgress
-                                                variant="determinate"
-                                                value={cat.percent}
-                                                sx={{
-                                                    height: 8,
-                                                    borderRadius: 4,
-                                                    bgcolor: 'action.hover',
-                                                    '& .MuiLinearProgress-bar': {
-                                                        bgcolor: cat.color,
+                                    {CATEGORIES_DATA.length === 0 ? (
+                                        <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                                            Chưa có dữ liệu phân bổ thể loại
+                                        </Typography>
+                                    ) : (
+                                        CATEGORIES_DATA.map((cat) => (
+                                            <Box key={cat.name} sx={{ mb: 2.5, '&:last-child': { mb: 0 } }}>
+                                                <Stack direction="row" justifyContent="space-between" mb={0.5}>
+                                                    <Typography variant="body2" color="text.primary" fontWeight={500}>
+                                                        {cat.name}
+                                                    </Typography>
+                                                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                                                        {cat.percent}% ({cat.events} SK)
+                                                    </Typography>
+                                                </Stack>
+                                                <LinearProgress
+                                                    variant="determinate"
+                                                    value={cat.percent}
+                                                    sx={{
+                                                        height: 8,
                                                         borderRadius: 4,
-                                                    },
-                                                }}
-                                            />
-                                            <Typography variant="caption" color="text.disabled" mt={0.5} display="block">
-                                                Tổng vé phát hành: {cat.tickets}
-                                            </Typography>
-                                        </Box>
-                                    ))}
+                                                        bgcolor: 'action.hover',
+                                                        '& .MuiLinearProgress-bar': {
+                                                            bgcolor: cat.color,
+                                                            borderRadius: 4,
+                                                        },
+                                                    }}
+                                                />
+                                                <Typography variant="caption" color="text.disabled" mt={0.5} display="block">
+                                                    Tổng vé phát hành: {cat.tickets}
+                                                </Typography>
+                                            </Box>
+                                        ))
+                                    )}
                                 </CardContent>
                             </Card>
 
@@ -1675,7 +1518,14 @@ const AdminDashboardPage = () => {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {transactions.map((tx) => (
+                                    {transactions.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                                                Chưa có giao dịch on-chain nào được ghi nhận
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        transactions.map((tx) => (
                                         <TableRow key={tx.txHash} hover>
                                             <TableCell>
                                                 <Stack direction="row" alignItems="center" spacing={0.5}>
@@ -1765,7 +1615,8 @@ const AdminDashboardPage = () => {
                                                 )}
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                        ))
+                                    )}
                                 </TableBody>
                             </Table>
                         </TableContainer>
@@ -1799,7 +1650,14 @@ const AdminDashboardPage = () => {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {AUDIT_LOGS.map((log) => (
+                                    {auditLogs.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                                                Chưa có nhật ký hoạt động nào
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        auditLogs.map((log) => (
                                         <TableRow key={log.id} hover>
                                             <TableCell>
                                                 <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
@@ -1839,7 +1697,8 @@ const AdminDashboardPage = () => {
                                                 </Typography>
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                        ))
+                                    )}
                                 </TableBody>
                             </Table>
                         </TableContainer>

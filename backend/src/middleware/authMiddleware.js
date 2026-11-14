@@ -34,6 +34,14 @@ export const protect = async (req, res, next) => {
       req.user = user;
       return next();
     } catch (error) {
+      if (error.name === "TokenExpiredError") {
+        console.warn("Lưu ý: Token xác thực đã hết hạn (TokenExpiredError).");
+        return res.status(401).json({
+          success: false,
+          code: "TOKEN_EXPIRED",
+          message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại hoặc làm mới token.",
+        });
+      }
       console.error("Lỗi xác thực Token: ", error.message);
       return res.status(401).json({
         success: false,
@@ -60,12 +68,28 @@ export const authorize = (...roles) => {
     return next();
   };
 };
-//
+
 export const optionalProtect = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    req.user = null; // Không có người dùng, nhưng không trả về lỗi
+    req.user = null;
     return next();
   }
-  return protect(req, res, next); // Nếu có token, sử dụng middleware protect để xác thực
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    const user = await User.findByPk(decoded.id, {
+      attributes: { exclude: ["passwordHash"] },
+    });
+    if (user && user.status === "active") {
+      req.user = user;
+    } else {
+      req.user = null;
+    }
+  } catch (error) {
+    // Đối với các route công khai (optional), nếu token đã hết hạn hoặc không hợp lệ,
+    // coi như khách vãng lai để không chặn việc tải trang hoặc xem sự kiện.
+    req.user = null;
+  }
+  return next();
 };

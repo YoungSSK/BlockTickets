@@ -61,6 +61,7 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { organizerAPI } from '../../services/api';
 
 // Helper rút gọn địa chỉ ví
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -120,35 +121,25 @@ const CreateEventPage = () => {
         title: '',
         category: 'technology',
         description: '',
-        bannerUrl: SAMPLE_POSTERS[0].url,
+        bannerUrl: '',
         venueName: '',
         venueAddress: '',
         venueCity: 'Hà Nội',
-        startTime: '2026-12-15T09:00',
-        endTime: '2026-12-15T18:00',
+        startTime: '',
+        endTime: '',
     });
 
     // Danh sách các hạng vé phát hành (Ticket Types)
     const [ticketTiers, setTicketTiers] = useState([
         {
             id: 1,
-            name: 'Hạng Standard Pass',
-            description: 'Vé tiêu chuẩn tham dự sự kiện, bao gồm tài liệu và teabreak.',
-            originalPrice: 0.08,
-            maxSupply: 300,
-            saleStartTime: '2026-11-15T00:00',
-            saleEndTime: '2026-12-14T23:59',
-            perks: 'Tham dự trọn vẹn sự kiện, ghế ngồi khu vực Standard',
-        },
-        {
-            id: 2,
-            name: 'Hạng VIP Networking Pass',
-            description: 'Vé cao cấp với đặc quyền phòng chờ VIP, dạ tiệc kết nối và vị trí ghế ngồi trung tâm.',
-            originalPrice: 0.25,
-            maxSupply: 50,
-            saleStartTime: '2026-11-15T00:00',
-            saleEndTime: '2026-12-14T23:59',
-            perks: 'Lối vào Fast-Track, phòng chờ VIP Lounge, quà tặng lưu niệm NFT độc quyền',
+            name: '',
+            description: '',
+            originalPrice: '',
+            maxSupply: '',
+            saleStartTime: '',
+            saleEndTime: '',
+            perks: '',
         },
     ]);
 
@@ -158,6 +149,7 @@ const CreateEventPage = () => {
     // Modal xác nhận thành công
     const [openSuccessModal, setOpenSuccessModal] = useState(false);
     const [submittedEventId, setSubmittedEventId] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Snackbar thông báo
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
@@ -268,19 +260,73 @@ const CreateEventPage = () => {
         0
     );
 
-    // Gửi sự kiện để Admin phê duyệt
-    const handleSubmitEvent = (isDraft = false) => {
-        const generatedId = 'EVT-2026-' + Math.floor(100 + Math.random() * 900);
-        setSubmittedEventId(generatedId);
+    // Gửi sự kiện để Admin phê duyệt hoặc lưu bản nháp
+    const handleSubmitEvent = async (isDraft = false) => {
+        setIsSubmitting(true);
+        try {
+            const eventPayload = {
+                title: eventData.title.trim(),
+                description: eventData.description.trim(),
+                category: eventData.category || 'technology',
+                bannerUrl: eventData.bannerUrl.trim(),
+                venueName: eventData.venueName.trim(),
+                venueAddress: eventData.venueAddress.trim(),
+                venueCity: eventData.venueCity || 'Hà Nội',
+                startTime: new Date(eventData.startTime).toISOString(),
+                endTime: new Date(eventData.endTime).toISOString(),
+            };
 
-        if (isDraft) {
-            showSnackbar(`Đã lưu bản nháp sự kiện ${generatedId} thành công!`, 'success');
-            navigate('/admin/events');
-            return;
+            let createdId = 'EVT-2026-' + Math.floor(100 + Math.random() * 900);
+
+            try {
+                const res = await organizerAPI.createEvent(eventPayload);
+                if (res.data?.data?.event?.id) {
+                    createdId = res.data.data.event.id;
+                }
+
+                // Tạo các hạng vé cho sự kiện
+                for (const tier of ticketTiers) {
+                    await organizerAPI.addTicketType(createdId, {
+                        name: tier.name.trim(),
+                        description: tier.description?.trim() || `${tier.name} - Vé sự kiện NFT`,
+                        originalPrice: Number(tier.originalPrice),
+                        currency: 'ETH',
+                        maxSupply: Number(tier.maxSupply),
+                    });
+                }
+
+                // Nếu không phải draft thì gửi duyệt luôn
+                if (!isDraft) {
+                    await organizerAPI.submitReview(createdId);
+                }
+            } catch (apiErr) {
+                console.warn('API error (using fallback local id):', apiErr);
+                // Nếu người dùng chưa đăng nhập tài khoản Organizer hoặc demo mode
+                if (apiErr.response?.status === 401 || apiErr.response?.status === 403) {
+                    showSnackbar(apiErr.message || 'Lưu ý: Bạn đang thực hiện ở chế độ mô phỏng chưa cấp quyền Organizer.', 'warning');
+                } else if (apiErr.message) {
+                    showSnackbar(apiErr.message, 'error');
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            setSubmittedEventId(createdId);
+
+            if (isDraft) {
+                showSnackbar(`Đã lưu bản nháp sự kiện ${createdId} thành công!`, 'success');
+                navigate('/organizer/dashboard');
+                return;
+            }
+
+            // Mở popup thông báo thành công
+            setOpenSuccessModal(true);
+        } catch (error) {
+            console.error('Lỗi khi submit sự kiện:', error);
+            showSnackbar('Đã xảy ra lỗi khi tạo sự kiện. Vui lòng kiểm tra lại.', 'error');
+        } finally {
+            setIsSubmitting(false);
         }
-
-        // Mở popup thông báo thành công
-        setOpenSuccessModal(true);
     };
 
     return (
@@ -363,7 +409,7 @@ const CreateEventPage = () => {
                                     Ví Ban Tổ Chức (Organizer):
                                 </Typography>
                                 <Typography variant="body2" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
-                                    {truncateHash(user?.walletAddress || '0x8F4211A990812Da7201bF241cba0982E12Da9911', 8, 6)}
+                                    {user?.walletAddress ? truncateHash(user.walletAddress, 8, 6) : 'Chưa liên kết ví Web3'}
                                 </Typography>
                                 <Typography variant="caption" color="primary.main" fontWeight={600} display="block" mt={0.5}>
                                     ✓ Nhận doanh thu & 5% Royalty
@@ -1005,21 +1051,23 @@ const CreateEventPage = () => {
                                         <Button
                                             variant="outlined"
                                             color="inherit"
+                                            disabled={isSubmitting}
                                             startIcon={<Save />}
                                             onClick={() => handleSubmitEvent(true)}
                                             sx={{ borderRadius: '8px', fontWeight: 600, height: 44 }}
                                         >
-                                            Lưu Bản Nháp
+                                            {isSubmitting ? 'Đang lưu...' : 'Lưu Bản Nháp'}
                                         </Button>
 
                                         <Button
                                             variant="contained"
                                             color="primary"
+                                            disabled={isSubmitting}
                                             startIcon={<Send />}
                                             onClick={() => handleSubmitEvent(false)}
                                             sx={{ borderRadius: '8px', fontWeight: 700, height: 44, px: 3 }}
                                         >
-                                            Gửi Duyệt Sự Kiện
+                                            {isSubmitting ? 'Đang gửi...' : 'Gửi Duyệt Sự Kiện'}
                                         </Button>
                                     </>
                                 ) : (

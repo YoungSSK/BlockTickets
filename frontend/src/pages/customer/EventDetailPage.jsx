@@ -22,6 +22,7 @@ import {
     RadioGroup,
     Radio,
     FormControlLabel,
+    CircularProgress,
 } from '@mui/material';
 import {
     ArrowBack,
@@ -47,7 +48,7 @@ import {
     InfoOutlined,
     Lan,
 } from '@mui/icons-material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { eventAPI } from '../../services/api';
 
@@ -242,11 +243,11 @@ const EventDetailPage = () => {
     const navigate = useNavigate();
     const { id } = useParams();
 
-    // Tìm kiếm sự kiện theo ID, nếu không có lấy mặc định EVT-2026-002
-    const [event, setEvent] = useState(() => EVENTS_DATABASE[id] || EVENTS_DATABASE['EVT-2026-002']);
+    const [event, setEvent] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     // State chọn vé
-    const [selectedTierId, setSelectedTierId] = useState(event.ticketTypes[0]?.id || '');
+    const [selectedTierId, setSelectedTierId] = useState('');
     const [quantity, setQuantity] = useState(1);
     const [isBookmarked, setIsBookmarked] = useState(false);
 
@@ -327,7 +328,7 @@ const EventDetailPage = () => {
                             'Chống phe vé chợ đen với quy tắc trần giá bán lại 120%',
                         ],
                         description: backendEvent.description,
-                        ticketTypes: ticketTypes.length > 0 ? ticketTypes : event.ticketTypes,
+                        ticketTypes,
                         faqs: [],
                     };
 
@@ -337,7 +338,10 @@ const EventDetailPage = () => {
                     }
                 }
             } catch (err) {
-                console.log('Chưa kết nối API chi tiết sự kiện:', err.message);
+                console.error('Lỗi khi tải chi tiết sự kiện:', err.message);
+                setEvent(null);
+            } finally {
+                setLoading(false);
             }
         };
         fetchDetail();
@@ -345,7 +349,8 @@ const EventDetailPage = () => {
 
     // Lấy hạng vé đang chọn
     const activeTier = useMemo(() => {
-        return event.ticketTypes.find((t) => t.id === selectedTierId) || event.ticketTypes[0];
+        if (!event || !Array.isArray(event.ticketTypes)) return null;
+        return event.ticketTypes.find((t) => t.id === selectedTierId) || event.ticketTypes[0] || null;
     }, [event, selectedTierId]);
 
     // Tính toán giá tiền
@@ -395,6 +400,37 @@ const EventDetailPage = () => {
             },
         });
     };
+
+    if (loading) {
+        return (
+            <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', alignItems: 'center', justifyContent: 'center', py: 12 }}>
+                <Stack alignItems="center" spacing={2}>
+                    <CircularProgress />
+                    <Typography variant="body1" color="text.secondary">Đang tải chi tiết sự kiện...</Typography>
+                </Stack>
+            </Box>
+        );
+    }
+
+    if (!event) {
+        return (
+            <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: 10, textAlign: 'center' }}>
+                <Container maxWidth="sm">
+                    <Card sx={{ p: 4, borderRadius: '16px' }}>
+                        <Typography variant="h3" fontWeight={700} gutterBottom>
+                            Không tìm thấy sự kiện
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                            Sự kiện này không tồn tại hoặc chưa được công bố công khai.
+                        </Typography>
+                        <Button variant="contained" component={RouterLink} to="/">
+                            Quay về Trang chủ
+                        </Button>
+                    </Card>
+                </Container>
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 10 }}>

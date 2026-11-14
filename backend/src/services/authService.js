@@ -14,9 +14,9 @@ if (!JWT_ACCESS_SECRET || !JWT_REFRESH_SECRET) {
   );
 }
 
-const ACCESS_TOKEN_TTL = "15m";
-const REFRESH_TOKEN_TTL = "7d";
-const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const ACCESS_TOKEN_TTL = process.env.JWT_ACCESS_EXPIRES_IN || "7d";
+const REFRESH_TOKEN_TTL = process.env.JWT_REFRESH_EXPIRES_IN || "30d";
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
 // Lưu tạm nonce cho ví chưa tồn tại trong bảng users (tránh ghi user rác khi chỉ mới lấy nonce)

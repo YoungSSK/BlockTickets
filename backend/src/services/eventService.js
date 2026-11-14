@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { Event, TicketType, User } from "../models/index.js";
+import { Event, TicketType, User, Ticket, Order, sequelize } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
 
 const EDITABLE_STATUSES = ["draft", "rejected"];
@@ -267,4 +267,55 @@ export const publishApprovedEvent = async (
   await event.save();
 
   return event;
+};
+
+// 9. Organizer: Thống kê số liệu Dashboard của Ban tổ chức
+export const getOrganizerStats = async (organizerId) => {
+  const events = await Event.findAll({
+    where: { organizerId },
+    include: [{ model: TicketType, as: "ticketTypes" }],
+  });
+
+  const eventIds = events.map((e) => e.id);
+
+  let totalTicketsMinted = 0;
+  let totalRevenueEth = 0;
+  let checkedInCount = 0;
+
+  for (const event of events) {
+    if (Array.isArray(event.ticketTypes)) {
+      for (const tt of event.ticketTypes) {
+        totalTicketsMinted += Number(tt.currentSupply || tt.mintedAmount || 0);
+        totalRevenueEth +=
+          Number(tt.currentSupply || tt.mintedAmount || 0) *
+          Number(tt.originalPrice || 0);
+      }
+    }
+  }
+
+  if (eventIds.length > 0) {
+    checkedInCount = await Ticket.count({
+      where: {
+        eventId: { [Op.in]: eventIds },
+        isUsed: true,
+      },
+    });
+  }
+
+  const activeEventsCount = events.filter((e) =>
+    ["approved", "published"].includes(e.status),
+  ).length;
+  const pendingEventsCount = events.filter((e) => e.status === "pending").length;
+  const draftEventsCount = events.filter((e) => e.status === "draft").length;
+
+  return {
+    totalEvents: events.length,
+    activeEventsCount,
+    pendingEventsCount,
+    draftEventsCount,
+    totalTicketsMinted,
+    totalRevenueEth: +totalRevenueEth.toFixed(4),
+    totalRevenueUsd: Math.round(totalRevenueEth * 3150),
+    checkedInCount,
+  };
 };
