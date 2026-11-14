@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -25,7 +25,7 @@ import {
     SwapHoriz,
     QrCode2,
 } from '@mui/icons-material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -54,8 +54,30 @@ const FEATURES = [
 
 const LoginPage = () => {
     const { mode, toggleTheme } = useAppTheme();
-    const { login } = useAuth();
+    const { login, isAuthenticated, user: currentUser } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+    const fromPath = location.state?.from?.pathname;
+
+    const handleRedirectAfterLogin = (usr) => {
+        if (fromPath && fromPath !== '/login' && fromPath !== '/register') {
+            navigate(fromPath, { replace: true });
+            return;
+        }
+        if (usr.role === 'admin') {
+            navigate('/admin/dashboard', { replace: true });
+        } else if (usr.role === 'organizer') {
+            navigate('/organizer/dashboard', { replace: true });
+        } else {
+            navigate('/', { replace: true });
+        }
+    };
+
+    useEffect(() => {
+        if (isAuthenticated && currentUser) {
+            handleRedirectAfterLogin(currentUser);
+        }
+    }, [isAuthenticated, currentUser]);
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -89,15 +111,7 @@ const LoginPage = () => {
             });
             const { user, accessToken, refreshToken } = res.data.data;
             login(user, accessToken, refreshToken);
-
-            // Chuyển hướng theo vai trò người dùng
-            if (user.role === 'admin') {
-                navigate('/admin/dashboard');
-            } else if (user.role === 'organizer') {
-                navigate('/organizer/dashboard');
-            } else {
-                navigate('/');
-            }
+            handleRedirectAfterLogin(user);
         } catch (err) {
             setServerError(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu.');
         } finally {
@@ -136,15 +150,7 @@ const LoginPage = () => {
 
             const { user, accessToken, refreshToken } = verifyRes.data.data;
             login(user, accessToken, refreshToken);
-
-            // Chuyển hướng theo vai trò người dùng
-            if (user.role === 'admin') {
-                navigate('/admin/dashboard');
-            } else if (user.role === 'organizer') {
-                navigate('/organizer/dashboard');
-            } else {
-                navigate('/');
-            }
+            handleRedirectAfterLogin(user);
         } catch (err) {
             if (err?.code === 'ACTION_REJECTED' || err?.code === 4001) {
                 setServerError('Bạn đã từ chối ký xác nhận trên ví MetaMask.');

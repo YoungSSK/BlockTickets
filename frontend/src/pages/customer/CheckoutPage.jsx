@@ -78,60 +78,38 @@ const truncateHash = (hash, start = 6, end = 4) => {
     return `${hash.slice(0, start)}...${hash.slice(-end)}`;
 };
 
-// Dữ liệu sự kiện mặc định phục vụ đặt vé
-const DEFAULT_EVENT_DATA = {
-    id: 'EVT-2026-002',
-    title: 'Vietnam Blockchain Summit 2026',
-    organizer: 'TechChain Foundation',
-    organizerWallet: '0x8F4211A990812Da7201bF241cba0982E12Da9911',
-    category: 'technology',
-    categoryLabel: 'Công nghệ & Web3',
-    venue: 'Trung tâm Hội nghị Quốc gia, Đại lộ Thăng Long, Hà Nội',
-    startTime: '28/11/2026 - 08:30',
-    bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
-    selectedTier: {
-        id: 'TT-04',
-        name: 'VIP Networking Pass',
-        originalPrice: 0.25,
-        maxResalePrice: 0.30,
-        currency: 'ETH',
-        remainingSupply: 142,
-        maxSupply: 500,
-        perks: [
-            'Tham dự trọn vẹn 2 ngày hội thảo thượng đỉnh',
-            'Quyền truy cập phòng VIP Lounge & Teabreak cao cấp',
-            'Dạ tiệc Networking kết nối hơn 50 quỹ đầu tư Web3',
-            'Vé NFT có thể chuyển nhượng với trần giá 120%',
-        ],
-    },
-};
-
 const CheckoutPage = () => {
     const { mode, toggleTheme } = useAppTheme();
     const { user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Dữ liệu sự kiện nhận từ state hoặc dùng mặc định
-    const eventData = location.state?.eventData || DEFAULT_EVENT_DATA;
-    const tier = eventData.selectedTier;
+    // Dữ liệu sự kiện nhận từ trang EventDetail
+    const eventData = location.state?.eventData || null;
+    const tier = eventData?.selectedTier || null;
+
+    useEffect(() => {
+        if (!eventData || !tier) {
+            navigate('/', { replace: true });
+        }
+    }, [eventData, tier, navigate]);
 
     // Form đặt vé
     const [quantity, setQuantity] = useState(1);
-    const [customerName, setCustomerName] = useState(user?.fullName || 'Nguyễn Tuấn An');
-    const [customerEmail, setCustomerEmail] = useState(user?.email || 'nguyen.an.dev@gmail.com');
-    const [customerPhone, setCustomerPhone] = useState('0987654321');
+    const [customerName, setCustomerName] = useState(user?.fullName || '');
+    const [customerEmail, setCustomerEmail] = useState(user?.email || '');
+    const [customerPhone, setCustomerPhone] = useState(user?.phoneNumber || '');
     const [formErrors, setFormErrors] = useState({});
 
     // Trạng thái ví Web3
-    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '0x789b9102934812301928394819203849102334ef');
-    const [walletBalance, setWalletBalance] = useState(1.45); // Số dư Sepolia ETH
+    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '');
+    const [walletBalance, setWalletBalance] = useState(0); // Số dư Sepolia ETH
     const [isConnectingWallet, setIsConnectingWallet] = useState(false);
     const [networkChainId, setNetworkChainId] = useState(11155111); // Sepolia ChainID
 
     // Ước tính Gas & Phí
     const estimatedGasEth = 0.0028;
-    const subtotalEth = tier.originalPrice * quantity;
+    const subtotalEth = tier ? tier.originalPrice * quantity : 0;
     const totalEth = Number((subtotalEth + estimatedGasEth).toFixed(4));
     const ethToUsdRate = 3140; // $3,140 / 1 ETH
     const totalUsd = Math.round(totalEth * ethToUsdRate);

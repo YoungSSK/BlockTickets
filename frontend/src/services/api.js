@@ -22,10 +22,51 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response interceptor: xử lý bắt lỗi tập trung
+// Response interceptor: xử lý bắt lỗi tập trung & tự động gia hạn token nếu hết hạn
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+        const originalRequest = error.config;
+
+        // Nếu mã lỗi là 401 do token hết hạn và chưa từng retry
+        if (
+            error.response?.status === 401 &&
+            originalRequest &&
+            !originalRequest._retry &&
+            !originalRequest.url?.includes('/auth/login') &&
+            !originalRequest.url?.includes('/auth/refresh-token')
+        ) {
+            originalRequest._retry = true;
+            const refreshToken = localStorage.getItem('blocktickets_refresh_token');
+
+            if (refreshToken) {
+                try {
+                    const refreshRes = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+                        refreshToken,
+                    });
+
+                    const newAccessToken = refreshRes.data?.data?.accessToken;
+                    if (newAccessToken) {
+                        localStorage.setItem('blocktickets_token', newAccessToken);
+                        if (refreshRes.data?.data?.refreshToken) {
+                            localStorage.setItem('blocktickets_refresh_token', refreshRes.data.data.refreshToken);
+                        }
+                        // Gắn token mới và thực hiện lại request ban đầu
+                        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                        return api(originalRequest);
+                    }
+                } catch (refreshErr) {
+                    console.warn('Phiên đăng nhập đã hết hạn hoàn toàn, cần đăng nhập lại:', refreshErr);
+                    localStorage.removeItem('blocktickets_token');
+                    localStorage.removeItem('blocktickets_user');
+                    localStorage.removeItem('blocktickets_refresh_token');
+                }
+            } else {
+                localStorage.removeItem('blocktickets_token');
+                localStorage.removeItem('blocktickets_user');
+            }
+        }
+
         // Trả về error object có sẵn message tiếng Việt từ backend
         const message =
             error.response?.data?.message ||
@@ -113,6 +154,57 @@ export const ticketAPI = {
 
     // Niêm yết vé bán lại trên sàn thứ cấp (trần giá 120%)
     listForResale: (id, resaleData) => api.post(`/tickets/${id}/resale`, resaleData),
+};
+
+export const marketplaceAPI = {
+    // Lấy danh sách vé đang rao bán trên Marketplace
+    getListings: (params) => api.get('/marketplace/listings', { params }),
+
+    // Kiểm tra tính hợp lệ của giá bán lại theo quy tắc trần 120%
+    validatePrice: (priceData) => api.post('/marketplace/validate-price', priceData),
+
+    // Đồng bộ trạng thái niêm yết vé sau khi gọi Smart Contract
+    syncListing: (listingData) => api.post('/marketplace/sync-listing', listingData),
+
+    // Đồng bộ mua vé sau khi gọi hàm buyTicket trên Smart Contract
+    syncPurchase: (purchaseData) => api.post('/marketplace/sync-purchase', purchaseData),
+
+    // Hủy niêm yết vé khỏi Marketplace
+    cancelListing: (listingId) => api.post(`/marketplace/cancel-listing/${listingId}`),
+};
+
+export const organizerAPI = {
+    // Thống kê tổng quan của ban tổ chức (BTC)
+    getStats: () => api.get('/events/organizer/stats'),
+
+    // Danh sách sự kiện do BTC hiện tại quản lý
+    getMyEvents: (params) => api.get('/events/organizer/my-events', { params }),
+
+    // Tạo sự kiện mới (trạng thái draft)
+    createEvent: (data) => api.post('/events', data),
+
+    // Cập nhật sự kiện
+    updateEvent: (id, data) => api.put(`/events/${id}`, data),
+
+    // Thêm hạng vé cho sự kiện
+    addTicketType: (eventId, data) => api.post(`/events/${eventId}/ticket-types`, data),
+
+    // Gửi sự kiện cho Admin xét duyệt (draft -> pending)
+    submitReview: (eventId) => api.post(`/events/${eventId}/submit-review`),
+
+    // Công bố bán vé sau khi Admin duyệt (approved -> published)
+    publishEvent: (eventId, data = {}) => api.post(`/events/${eventId}/publish`, data),
+};
+
+export const checkInAPI = {
+    // Soát vé: quét mã QR và kiểm tra tính hợp lệ
+    verifyTicket: (data) => api.post('/check-in/verify', data),
+
+    // Xác nhận check-in (đóng dấu vé đã dùng)
+    confirmCheckIn: (data) => api.post('/check-in/confirm', data),
+
+    // Lấy thống kê check-in thời gian thực theo sự kiện
+    getStats: (eventId) => api.get(`/check-in/stats/${eventId}`),
 };
 
 export default api;

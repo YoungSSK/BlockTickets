@@ -63,97 +63,7 @@ const truncateHash = (hash, start = 6, end = 4) => {
     return `${hash.slice(0, start)}...${hash.slice(-end)}`;
 };
 
-// Dữ liệu mẫu các vé NFT cá nhân sở hữu
-const INITIAL_MY_TICKETS = [
-    {
-        tokenId: 1422,
-        eventTitle: 'Vietnam Blockchain Summit 2026',
-        category: 'technology',
-        categoryLabel: 'Công nghệ & Web3',
-        tierName: 'VIP Networking Pass',
-        bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
-        venue: 'Trung tâm Hội nghị Quốc gia, Đại lộ Thăng Long, Hà Nội',
-        gate: 'Cổng VIP - Sảnh Chính Tầng 1 (Lối Fast-Track)',
-        startTime: '28/11/2026 - 08:30',
-        attendeeName: 'Nguyễn Tuấn An',
-        originalPrice: 0.25,
-        maxResalePrice: 0.30,
-        status: 'valid', // 'valid' | 'resale' | 'used'
-        isUsed: false,
-        usedAt: null,
-        isListedForResale: false,
-        resalePrice: null,
-        txHash: '0x8a9f3b12dc089148b39019284918239018294018234810239481902371ef8923',
-        ownerWallet: '0x789b9102934812301928394819203849102334ef',
-        mintedAt: '2 giờ trước',
-    },
-    {
-        tokenId: 312,
-        eventTitle: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        category: 'music',
-        categoryLabel: 'Âm nhạc cổ điển',
-        tierName: 'Hạng Standard Pass',
-        bannerUrl: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
-        venue: 'Nhà Hát Lớn Hà Nội, 01 Tràng Tiền, Hoàn Kiếm',
-        gate: 'Cửa Khán Phòng Tầng 2 - Cửa B',
-        startTime: '15/11/2026 - 20:00',
-        attendeeName: 'Nguyễn Tuấn An',
-        originalPrice: 0.08,
-        maxResalePrice: 0.096,
-        status: 'valid',
-        isUsed: false,
-        usedAt: null,
-        isListedForResale: false,
-        resalePrice: null,
-        txHash: '0x3c2a11f8e4092837491029384019283491029384910293849102938490a18374',
-        ownerWallet: '0x789b9102934812301928394819203849102334ef',
-        mintedAt: '1 ngày trước',
-    },
-    {
-        tokenId: 891,
-        eventTitle: 'Lễ Hội Âm Nhạc Điện Tử EDM Sonic Wave 2026',
-        category: 'music',
-        categoryLabel: 'Âm nhạc EDM',
-        tierName: 'GA Early Bird Pass',
-        bannerUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
-        venue: 'Công viên Yên Sở, Hoàng Mai, Hà Nội',
-        gate: 'Cổng GA 02 - Lối vào sân cỏ',
-        startTime: '20/12/2026 - 16:00',
-        attendeeName: 'Nguyễn Tuấn An',
-        originalPrice: 0.12,
-        maxResalePrice: 0.144,
-        status: 'resale',
-        isUsed: false,
-        usedAt: null,
-        isListedForResale: true,
-        resalePrice: 0.135,
-        txHash: '0x91df7a28e3b019283940192834910293849102938491029384910293187ca019',
-        ownerWallet: '0x789b9102934812301928394819203849102334ef',
-        mintedAt: '3 ngày trước',
-    },
-    {
-        tokenId: 45,
-        eventTitle: 'Workshop Smart Contract Security & DeFi',
-        category: 'workshop',
-        categoryLabel: 'Hội thảo đào tạo',
-        tierName: 'Vé Đào Tạo Trực Tiếp',
-        bannerUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80',
-        venue: 'Tòa nhà FPT Tower, Cầu Giấy, Hà Nội',
-        gate: 'Phòng Hội Thảo 402, Tầng 4',
-        startTime: '10/10/2026 - 14:00',
-        attendeeName: 'Nguyễn Tuấn An',
-        originalPrice: 0.03,
-        maxResalePrice: 0.036,
-        status: 'used',
-        isUsed: true,
-        usedAt: '14:05 - 10/10/2026',
-        isListedForResale: false,
-        resalePrice: null,
-        txHash: '0x65bb9103af4c10293849102938491029384910293849102938491029328eb920',
-        ownerWallet: '0x789b9102934812301928394819203849102334ef',
-        mintedAt: '25 ngày trước',
-    },
-];
+// Chuẩn hóa vé từ Backend API
 
 const normalizeTicket = (t) => {
     const origPrice = Number(t.originalPrice || t.ticketType?.originalPrice || 0);
@@ -192,7 +102,7 @@ const MyTicketsPage = () => {
     const navigate = useNavigate();
 
     // Data state
-    const [tickets, setTickets] = useState(INITIAL_MY_TICKETS);
+    const [tickets, setTickets] = useState([]);
     const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'valid' | 'resale' | 'used'
     const [searchQuery, setSearchQuery] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -230,11 +140,14 @@ const MyTicketsPage = () => {
         try {
             const res = await ticketAPI.getMyTickets();
             const backendTickets = res.data?.data?.tickets;
-            if (Array.isArray(backendTickets) && backendTickets.length > 0) {
+            if (Array.isArray(backendTickets)) {
                 setTickets(backendTickets.map(normalizeTicket));
+            } else {
+                setTickets([]);
             }
         } catch (err) {
-            console.log('Chưa kết nối API vé hoặc chưa có vé thật:', err.message);
+            console.warn('Lỗi khi tải danh sách vé NFT:', err.message);
+            setTickets([]);
         } finally {
             setIsRefreshing(false);
         }

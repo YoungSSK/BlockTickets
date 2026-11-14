@@ -124,3 +124,16 @@ export const publishEvent = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const getOrganizerStats = async (req, res, next) => {
+  try {
+    const stats = await eventService.getOrganizerStats(req.user.id);
+    return res.status(200).json({
+      success: true,
+      message: "Lấy thống kê ban tổ chức thành công.",
+      data: { stats },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};

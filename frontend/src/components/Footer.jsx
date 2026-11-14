@@ -82,11 +82,11 @@ const Footer = () => {
                             <Link component={RouterLink} to="/events" color="text.secondary" variant="body2" underline="hover">
                                 Sự kiện nổi bật
                             </Link>
-                            <Link component={RouterLink} to="/events/EVT-2026-002" color="text.secondary" variant="body2" underline="hover">
-                                Blockchain Summit
+                            <Link component={RouterLink} to="/marketplace" color="text.secondary" variant="body2" underline="hover">
+                                Chợ vé thứ cấp
                             </Link>
-                            <Link component={RouterLink} to="/events/EVT-2026-001" color="text.secondary" variant="body2" underline="hover">
-                                Hòa nhạc giao hưởng
+                            <Link component={RouterLink} to="/my-tickets" color="text.secondary" variant="body2" underline="hover">
+                                Kho vé của tôi
                             </Link>
                         </Stack>
                     </Grid>

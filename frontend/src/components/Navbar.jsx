@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Box,
     Container,
@@ -66,13 +66,20 @@ const Navbar = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // State ví MetaMask
-    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '0x789b9102934812301928394819203849102334ef');
-    const [walletBalance, setWalletBalance] = useState('1.45 ETH');
-
-    // Menu tài khoản
-    const [anchorEl, setAnchorEl] = useState(null);
+    // State menu điều hướng trên thiết bị di động
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+    // State ví MetaMask
+    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '');
+    const [walletBalance, setWalletBalance] = useState('');
+
+    useEffect(() => {
+        if (user?.walletAddress) {
+            setWalletAddress(user.walletAddress);
+        } else {
+            setWalletAddress('');
+        }
+    }, [user]);
 
     const handleConnectWallet = async () => {
         if (window.ethereum) {
@@ -82,25 +89,48 @@ const Navbar = () => {
                     setWalletAddress(accounts[0]);
                 }
             } catch (err) {
-                console.error(err);
+                console.error('Lỗi kết nối ví MetaMask:', err);
             }
         } else {
-            setWalletAddress('0x789b9102934812301928394819203849102334ef');
+            alert('Vui lòng cài đặt tiện ích mở rộng MetaMask trên trình duyệt của bạn!');
         }
     };
 
-    const navLinks = [
-        { label: 'Trang chủ', path: '/' },
-        { label: 'Khám phá sự kiện', path: '/events' },
-        { label: 'Chợ vé thứ cấp', path: '/marketplace' },
-        { label: 'Kho vé của tôi', path: '/my-tickets' },
-        { label: 'Bảng điều khiển Organizer', path: '/organizer/dashboard' },
-        { label: 'Tạo sự kiện', path: '/organizer/create-event' },
-        { label: 'Soát vé tại cổng', path: '/organizer/check-in' },
-        { label: 'Bảng điều khiển Admin', path: '/admin/dashboard' },
-        { label: 'Duyệt sự kiện', path: '/admin/events' },
-        { label: 'Quản lý người dùng', path: '/admin/users' },
-    ];
+    // Danh sách menu điều hướng động theo phân hệ/vai trò tài khoản đang đăng nhập
+    const navLinks = useMemo(() => {
+        const role = user?.role;
+
+        if (role === 'admin') {
+            return [
+                { label: 'Bảng điều khiển', path: '/admin/dashboard' },
+                { label: 'Duyệt sự kiện', path: '/admin/events' },
+                { label: 'Quản lý người dùng', path: '/admin/users' },
+                { label: 'Xem trang chủ', path: '/' },
+            ];
+        }
+
+        if (role === 'organizer') {
+            return [
+                { label: 'Bảng điều khiển', path: '/organizer/dashboard' },
+                { label: 'Tạo sự kiện', path: '/organizer/create-event' },
+                { label: 'Soát vé tại cổng', path: '/organizer/check-in' },
+                { label: 'Xem trang chủ', path: '/' },
+            ];
+        }
+
+        // Phân hệ Khách hàng (Customer) hoặc người dùng chưa đăng nhập
+        const customerLinks = [
+            { label: 'Trang chủ', path: '/' },
+            { label: 'Khám phá sự kiện', path: '/events' },
+            { label: 'Chợ vé thứ cấp', path: '/marketplace' },
+        ];
+
+        if (isAuthenticated) {
+            customerLinks.push({ label: 'Kho vé của tôi', path: '/my-tickets' });
+        }
+
+        return customerLinks;
+    }, [user?.role, isAuthenticated]);
 
     return (
         <Box
@@ -128,7 +158,7 @@ const Navbar = () => {
                         alignItems="center"
                         spacing={1.5}
                         component={RouterLink}
-                        to="/"
+                        to={user?.role === 'admin' ? '/admin/dashboard' : user?.role === 'organizer' ? '/organizer/dashboard' : '/'}
                         sx={{ textDecoration: 'none', color: 'inherit' }}
                     >
                         <Box
@@ -265,16 +295,43 @@ const Navbar = () => {
                         </Tooltip>
 
                         {/* Auth / Profile Button */}
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            size="small"
-                            component={RouterLink}
-                            to="/login"
-                            sx={{ height: 38, borderRadius: '8px', display: { xs: 'none', sm: 'inline-flex' } }}
-                        >
-                            Đăng nhập
-                        </Button>
+                        {isAuthenticated ? (
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ display: { xs: 'none', sm: 'flex' } }}>
+                                <Tooltip title={`${user?.fullName || 'Người dùng'} (${user?.role || 'customer'})`}>
+                                    <Chip
+                                        label={user?.fullName || 'Tài khoản'}
+                                        size="small"
+                                        color="primary"
+                                        variant="outlined"
+                                        sx={{ fontWeight: 600, maxWidth: 140 }}
+                                    />
+                                </Tooltip>
+                                <Button
+                                    variant="outlined"
+                                    color="error"
+                                    size="small"
+                                    onClick={() => {
+                                        logout();
+                                        navigate('/login');
+                                    }}
+                                    startIcon={<Logout />}
+                                    sx={{ height: 38, borderRadius: '8px' }}
+                                >
+                                    Đăng xuất
+                                </Button>
+                            </Stack>
+                        ) : (
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                size="small"
+                                component={RouterLink}
+                                to="/login"
+                                sx={{ height: 38, borderRadius: '8px', display: { xs: 'none', sm: 'inline-flex' } }}
+                            >
+                                Đăng nhập
+                            </Button>
+                        )}
 
                         {/* Mobile Hamburger Menu */}
                         <IconButton
@@ -318,19 +375,49 @@ const Navbar = () => {
                         </ListItem>
                     ))}
                     <Divider sx={{ my: 1.5 }} />
-                    <ListItem disablePadding>
-                        <ListItemButton
-                            component={RouterLink}
-                            to="/login"
-                            onClick={() => setMobileDrawerOpen(false)}
-                            sx={{ borderRadius: '8px', bgcolor: 'action.selected' }}
-                        >
-                            <ListItemIcon sx={{ minWidth: 36, color: 'primary.main' }}>
-                                <Login fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText primary="Đăng nhập tài khoản" primaryTypographyProps={{ fontWeight: 600, color: 'primary.main' }} />
-                        </ListItemButton>
-                    </ListItem>
+                    {isAuthenticated ? (
+                        <>
+                            <ListItem disablePadding sx={{ mb: 1 }}>
+                                <Box sx={{ px: 2, py: 1, width: '100%', bgcolor: 'background.subtle', borderRadius: '8px' }}>
+                                    <Typography variant="body2" fontWeight={700} color="text.primary">
+                                        {user?.fullName || 'Người dùng'}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {user?.email || ''} ({user?.role || 'customer'})
+                                    </Typography>
+                                </Box>
+                            </ListItem>
+                            <ListItem disablePadding>
+                                <ListItemButton
+                                    onClick={() => {
+                                        logout();
+                                        setMobileDrawerOpen(false);
+                                        navigate('/login');
+                                    }}
+                                    sx={{ borderRadius: '8px', color: 'error.main' }}
+                                >
+                                    <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}>
+                                        <Logout fontSize="small" />
+                                    </ListItemIcon>
+                                    <ListItemText primary="Đăng xuất" primaryTypographyProps={{ fontWeight: 600 }} />
+                                </ListItemButton>
+                            </ListItem>
+                        </>
+                    ) : (
+                        <ListItem disablePadding>
+                            <ListItemButton
+                                component={RouterLink}
+                                to="/login"
+                                onClick={() => setMobileDrawerOpen(false)}
+                                sx={{ borderRadius: '8px', bgcolor: 'action.selected' }}
+                            >
+                                <ListItemIcon sx={{ minWidth: 36, color: 'primary.main' }}>
+                                    <Login fontSize="small" />
+                                </ListItemIcon>
+                                <ListItemText primary="Đăng nhập tài khoản" primaryTypographyProps={{ fontWeight: 600, color: 'primary.main' }} />
+                            </ListItemButton>
+                        </ListItem>
+                    )}
                 </List>
             </Drawer>
         </Box>

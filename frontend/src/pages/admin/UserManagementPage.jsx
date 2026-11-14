@@ -78,158 +78,7 @@ const truncateHash = (hash, start = 6, end = 4) => {
 };
 
 // Dữ liệu mẫu danh sách người dùng hệ thống BlockTickets
-const INITIAL_USERS = [
-    {
-        id: 'USR-001',
-        fullName: 'Nguyễn Văn Quản Trị (Admin)',
-        email: 'admin@blocktickets.io',
-        role: 'admin',
-        walletAddress: '0x1234567890123456789012345678901234567890',
-        status: 'active',
-        createdAt: '10/01/2026',
-        lastLogin: '10 phút trước',
-        avatarText: 'AD',
-        nftCount: 0,
-        eventsCreated: 0,
-        suspendReason: '',
-        notes: 'Tài khoản Quản trị viên cấp cao toàn quyền hệ thống.',
-    },
-    {
-        id: 'USR-002',
-        fullName: 'Hanoi Symphony Orchestra',
-        email: 'contact@hanoisymphony.vn',
-        role: 'organizer',
-        walletAddress: '0x3A2198Ccfa31E4082218901Dfb8293aa7e9B1102',
-        status: 'active',
-        createdAt: '15/02/2026',
-        lastLogin: '25 phút trước',
-        avatarText: 'HS',
-        nftCount: 0,
-        eventsCreated: 8,
-        suspendReason: '',
-        notes: 'Nhà tổ chức hòa nhạc cổ điển uy tín 98%.',
-    },
-    {
-        id: 'USR-003',
-        fullName: 'TechChain Foundation',
-        email: 'events@techchain.io',
-        role: 'organizer',
-        walletAddress: '0x8F4211A990812Da7201bF241cba0982E12Da9911',
-        status: 'active',
-        createdAt: '01/03/2026',
-        lastLogin: '2 giờ trước',
-        avatarText: 'TC',
-        nftCount: 0,
-        eventsCreated: 12,
-        suspendReason: '',
-        notes: 'Tổ chức hội nghị thượng đỉnh Blockchain thường niên.',
-    },
-    {
-        id: 'USR-004',
-        fullName: 'Halong Running Club',
-        email: 'marathon@halongrunning.org',
-        role: 'organizer',
-        walletAddress: '0x11B988Cc009941aB28394Fa019283738C0882190',
-        status: 'active',
-        createdAt: '20/03/2026',
-        lastLogin: '5 giờ trước',
-        avatarText: 'HR',
-        nftCount: 0,
-        eventsCreated: 5,
-        suspendReason: '',
-        notes: 'Ban tổ chức giải chạy marathon di sản.',
-    },
-    {
-        id: 'USR-005',
-        fullName: 'Nguyễn Tuấn An',
-        email: 'nguyen.an.dev@gmail.com',
-        role: 'customer',
-        walletAddress: '0x789b9102934812301928394819203849102334ef',
-        status: 'active',
-        createdAt: '05/04/2026',
-        lastLogin: '1 phút trước',
-        avatarText: 'TA',
-        nftCount: 4,
-        eventsCreated: 0,
-        suspendReason: '',
-        notes: 'Khách hàng thân thiết, sở hữu vé VIP Vietnam Blockchain Summit 2026.',
-    },
-    {
-        id: 'USR-006',
-        fullName: 'Trần Minh Trí',
-        email: 'tran.minh.tri@outlook.com',
-        role: 'customer',
-        walletAddress: '0x619a82739182390192839481920384910293bb41',
-        status: 'active',
-        createdAt: '18/04/2026',
-        lastLogin: '4 phút trước',
-        avatarText: 'MT',
-        nftCount: 2,
-        eventsCreated: 0,
-        suspendReason: '',
-        notes: 'Đã mua lại vé thứ cấp tuân thủ trần giá 120% hợp lệ.',
-    },
-    {
-        id: 'USR-007',
-        fullName: 'Lê Hoàng Yến',
-        email: 'le.hoang.yen@gmail.com',
-        role: 'customer',
-        walletAddress: null, // Chưa liên kết ví MetaMask
-        status: 'active',
-        createdAt: '22/04/2026',
-        lastLogin: 'Hôm qua',
-        avatarText: 'HY',
-        nftCount: 0,
-        eventsCreated: 0,
-        suspendReason: '',
-        notes: 'Đăng nhập bằng Email/Password truyền thống, chưa kết nối ví Web3.',
-    },
-    {
-        id: 'USR-008',
-        fullName: 'Phạm Quốc Huy',
-        email: 'pham.quoc.huy@yahoo.com',
-        role: 'customer',
-        walletAddress: '0x10ae9102938491029384910293849102938449bc',
-        status: 'active',
-        createdAt: '25/04/2026',
-        lastLogin: '1 ngày trước',
-        avatarText: 'QH',
-        nftCount: 1,
-        eventsCreated: 0,
-        suspendReason: '',
-        notes: 'Đang nắm giữ vé GA Pass EDM Sonic Wave.',
-    },
-    {
-        id: 'USR-009',
-        fullName: 'Tài khoản Đầu cơ Bot',
-        email: 'bot.scalper.99@tempmail.com',
-        role: 'customer',
-        walletAddress: '0x99af110293841029384910293849102938491102',
-        status: 'suspended',
-        createdAt: '28/04/2026',
-        lastLogin: '2 ngày trước',
-        avatarText: 'BT',
-        nftCount: 0,
-        eventsCreated: 0,
-        suspendReason: 'Hành vi sử dụng script bot tự động tạo đơn lặp liên tục và cố tình niêm yết bán lại vé vượt trần 120% trên chợ thứ cấp.',
-        notes: 'Đã bị khóa toàn bộ quyền giao dịch trên hệ thống.',
-    },
-    {
-        id: 'USR-010',
-        fullName: 'Ẩn danh Crypto Group',
-        email: 'contact@unknown-crypto.xyz',
-        role: 'organizer',
-        walletAddress: '0x0000000000000000000000000000000000009999',
-        status: 'suspended',
-        createdAt: '29/04/2026',
-        lastLogin: '4 ngày trước',
-        avatarText: 'AC',
-        nftCount: 0,
-        eventsCreated: 1,
-        suspendReason: 'Tổ chức sự kiện kêu gọi đầu tư trái phép không có giấy phép kinh doanh và địa điểm không có thật.',
-        notes: 'Tài khoản Organizer vi phạm nghiêm trọng chính sách nội dung.',
-    },
-];
+const INITIAL_USERS = [];
 
 const normalizeUser = (u) => ({
     ...u,
@@ -304,7 +153,7 @@ const UserManagementPage = () => {
         try {
             const res = await adminAPI.getUsers({ limit: 50 });
             const backendUsers = res.data?.data?.users;
-            if (Array.isArray(backendUsers) && backendUsers.length > 0) {
+            if (Array.isArray(backendUsers)) {
                 setUsers(backendUsers.map(normalizeUser));
             }
         } catch (err) {
@@ -713,7 +562,7 @@ const UserManagementPage = () => {
                                             TỔNG NGƯỜI DÙNG
                                         </Typography>
                                         <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {stats.totalUsers.toLocaleString('vi-VN')}
+                                            {(stats.totalUsers || 0).toLocaleString('vi-VN')}
                                         </Typography>
                                     </Box>
                                     <Box
@@ -747,7 +596,7 @@ const UserManagementPage = () => {
                                             VÍ METAMASK LIÊN KẾT
                                         </Typography>
                                         <Typography variant="h2" color="status.onchain" fontWeight={700} mt={0.5}>
-                                            {stats.totalWallets.toLocaleString('vi-VN')}
+                                            {(stats.totalWallets || 0).toLocaleString('vi-VN')}
                                         </Typography>
                                     </Box>
                                     <Box

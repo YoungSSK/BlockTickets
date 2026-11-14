@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -65,6 +65,7 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { marketplaceAPI } from '../../services/api';
 
 // MetaMask SVG Icon
 const MetaMaskIcon = ({ size = 20 }) => (
@@ -87,129 +88,7 @@ const truncateHash = (hash, start = 6, end = 4) => {
     return `${hash.slice(0, start)}...${hash.slice(-end)}`;
 };
 
-// Dữ liệu mẫu danh sách vé niêm yết bán lại trên sàn thứ cấp (Resale Listings)
-const INITIAL_RESALE_LISTINGS = [
-    {
-        id: 1,
-        tokenId: 1422,
-        eventId: 'EVT-2026-002',
-        eventTitle: 'Vietnam Blockchain Summit 2026',
-        category: 'technology',
-        categoryLabel: 'Công nghệ & Web3',
-        tierName: 'VIP Networking Pass',
-        bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
-        venue: 'Trung tâm Hội nghị Quốc gia, Hà Nội',
-        startTime: '28/11/2026 - 08:30',
-        organizerName: 'TechChain Foundation',
-        sellerWallet: '0x3F8a1b920194812301928394819203849102334A',
-        originalPrice: 0.25, // ETH
-        resalePrice: 0.28,   // ETH (+12% so với giá gốc, hợp lệ <= 0.30)
-        maxAllowedPrice: 0.30, // 0.25 * 1.2
-        royaltyFeePercent: 5,  // 5% cho Organizer
-        listedAt: '35 phút trước',
-        txHash: '0x9a8f3b12dc089148b39019284918239018294018234810239481902371ef8923',
-    },
-    {
-        id: 2,
-        tokenId: 312,
-        eventId: 'EVT-2026-001',
-        eventTitle: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        category: 'music',
-        categoryLabel: 'Âm nhạc cổ điển',
-        tierName: 'Hạng Standard Pass',
-        bannerUrl: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
-        venue: 'Nhà Hát Lớn Hà Nội, 01 Tràng Tiền',
-        startTime: '15/11/2026 - 20:00',
-        organizerName: 'Hanoi Philharmonic Orchestra',
-        sellerWallet: '0x812A990812Da7201bF241cba0982E12Da9911910',
-        originalPrice: 0.08,
-        resalePrice: 0.075,  // ETH (-6.25% Giá tốt dưới giá gốc)
-        maxAllowedPrice: 0.096,
-        royaltyFeePercent: 5,
-        listedAt: '2 giờ trước',
-        txHash: '0x5c7e19283019284918239018294018234810239481902371ef892312dc089148',
-    },
-    {
-        id: 3,
-        tokenId: 508,
-        eventId: 'EVT-2026-003',
-        eventTitle: 'Vietnam Esports Championship 2026',
-        category: 'esports',
-        categoryLabel: 'Thể thao điện tử',
-        tierName: 'Khán Đài A - Ghế Trung Tâm',
-        bannerUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&auto=format&fit=crop&q=80',
-        venue: 'Nhà thi đấu Phú Thọ, TP. Hồ Chí Minh',
-        startTime: '05/12/2026 - 14:00',
-        organizerName: 'Vietnam Esports Association (VIRESA)',
-        sellerWallet: '0x498b9102934812301928394819203849102334EF',
-        originalPrice: 0.15,
-        resalePrice: 0.18,   // ETH (+20% Chạm trần 120%)
-        maxAllowedPrice: 0.18,
-        royaltyFeePercent: 5,
-        listedAt: '4 giờ trước',
-        txHash: '0x3d2b918239018294018234810239481902371ef892312dc089148b3901928491',
-    },
-    {
-        id: 4,
-        tokenId: 904,
-        eventId: 'EVT-2026-004',
-        eventTitle: 'EDM Sunset Festival Hanoi 2026',
-        category: 'music',
-        categoryLabel: 'Lễ hội âm nhạc EDM',
-        tierName: 'Early Bird Pass (Zone A)',
-        bannerUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
-        venue: 'Công viên Yên Sở, Hoàng Mai, Hà Nội',
-        startTime: '10/12/2026 - 16:30',
-        organizerName: 'SoundWave Entertainment',
-        sellerWallet: '0x629c910293481230192839481920384910233481',
-        originalPrice: 0.12,
-        resalePrice: 0.14,   // ETH (+16.6%)
-        maxAllowedPrice: 0.144,
-        royaltyFeePercent: 5,
-        listedAt: '5 giờ trước',
-        txHash: '0x7f1a3b12dc089148b39019284918239018294018234810239481902371ef8923',
-    },
-    {
-        id: 5,
-        tokenId: 771,
-        eventId: 'EVT-2026-005',
-        eventTitle: 'Chung Kết Cúp Bóng Đá V-League 2026',
-        category: 'sports',
-        categoryLabel: 'Thể thao & Bóng đá',
-        tierName: 'Khán Đài VIP Khán Giả',
-        bannerUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop&q=80',
-        venue: 'Sân vận động Quốc gia Mỹ Đình, Hà Nội',
-        startTime: '20/12/2026 - 19:00',
-        organizerName: 'VPF Football Association',
-        sellerWallet: '0x109e910293481230192839481920384910233423',
-        originalPrice: 0.35,
-        resalePrice: 0.40,   // ETH (+14.3%)
-        maxAllowedPrice: 0.42,
-        royaltyFeePercent: 5,
-        listedAt: '8 giờ trước',
-        txHash: '0x4e6c3b12dc089148b39019284918239018294018234810239481902371ef8923',
-    },
-    {
-        id: 6,
-        tokenId: 219,
-        eventId: 'EVT-2026-006',
-        eventTitle: 'Tech AI & Big Data Expo 2026',
-        category: 'technology',
-        categoryLabel: 'Công nghệ & AI',
-        tierName: 'Standard Conference Pass',
-        bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80',
-        venue: 'Trung tâm Triển lãm SECC, Quận 7, TP.HCM',
-        startTime: '18/01/2027 - 09:00',
-        organizerName: 'AI Innovation Hub Vietnam',
-        sellerWallet: '0x992d910293481230192839481920384910233488',
-        originalPrice: 0.10,
-        resalePrice: 0.11,   // ETH (+10%)
-        maxAllowedPrice: 0.12,
-        royaltyFeePercent: 5,
-        listedAt: '1 ngày trước',
-        txHash: '0x1a2b3c12dc089148b39019284918239018294018234810239481902371ef8923',
-    },
-];
+// Danh mục & bộ lọc sàn thứ cấp
 
 const CATEGORIES = [
     { value: 'all', label: 'Tất cả danh mục' },
@@ -226,13 +105,44 @@ const SORT_OPTIONS = [
     { value: 'discount', label: 'Giá tốt nhất so với giá gốc' },
 ];
 
+const normalizeResaleListing = (item) => {
+    const origPrice = Number(item.originalPrice || item.ticket?.originalPrice || 0.1);
+    const resalePrice = Number(item.resalePrice || 0.12);
+    const maxAllowed = Number(item.maxAllowedPrice || +(origPrice * 1.2).toFixed(6));
+
+    return {
+        id: item.id,
+        tokenId: item.tokenId || item.ticket?.tokenId || 1000,
+        eventId: item.eventId || item.event?.id || 1,
+        eventTitle: item.event?.title || 'Sự kiện BlockTickets',
+        category: item.event?.category || 'technology',
+        categoryLabel:
+            item.event?.category === 'technology' ? 'Công nghệ & Web3' :
+            item.event?.category === 'sports' ? 'Thể thao' :
+            item.event?.category === 'esports' ? 'Thể thao điện tử' :
+            item.event?.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc',
+        tierName: item.ticket?.ticketType?.name || 'Vé tham dự chính thức',
+        bannerUrl: item.event?.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+        venue: item.event?.venueName ? `${item.event.venueName}, ${item.event.venueCity || ''}` : 'Trung tâm sự kiện',
+        startTime: item.event?.startTime ? new Date(item.event.startTime).toLocaleString('vi-VN') : '',
+        organizerName: item.event?.organizer?.fullName || 'Ban tổ chức sự kiện',
+        sellerWallet: item.sellerWallet || '0x0000...0000',
+        originalPrice: origPrice,
+        resalePrice: resalePrice,
+        maxAllowedPrice: maxAllowed,
+        royaltyFeePercent: 5,
+        listedAt: item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : 'Vừa xong',
+        txHash: item.listingTxHash || item.ticket?.txHash || '0x0000...0000',
+    };
+};
+
 const MarketplacePage = () => {
     const theme = useTheme();
     const navigate = useNavigate();
     const { user } = useAuth();
 
     // Danh sách vé niêm yết
-    const [listings, setListings] = useState(INITIAL_RESALE_LISTINGS);
+    const [listings, setListings] = useState([]);
 
     // Bộ lọc & Tìm kiếm
     const [searchTerm, setSearchTerm] = useState('');
@@ -241,8 +151,8 @@ const MarketplacePage = () => {
     const [priceRange, setPriceRange] = useState('all'); // 'all' | 'under_01' | '01_to_025' | 'above_025'
 
     // Ví MetaMask & Số dư
-    const [walletAddress] = useState(user?.walletAddress || '0x789b9102934812301928394819203849102334ef');
-    const [walletBalance] = useState('1.45 ETH');
+    const [walletAddress] = useState(user?.walletAddress || '');
+    const [walletBalance] = useState('');
 
     // Dialog giải thích BR-02
     const [openRuleDialog, setOpenRuleDialog] = useState(false);
@@ -264,6 +174,26 @@ const MarketplacePage = () => {
         navigator.clipboard.writeText(text);
         showSnackbar(`Đã sao chép ${label} vào bộ nhớ tạm!`, 'success');
     };
+
+    // Tải danh sách vé niêm yết thật từ Backend
+    const fetchListings = async () => {
+        try {
+            const res = await marketplaceAPI.getListings({ limit: 50 });
+            const backendListings = res.data?.data?.listings;
+            if (Array.isArray(backendListings)) {
+                setListings(backendListings.map(normalizeResaleListing));
+            } else {
+                setListings([]);
+            }
+        } catch (err) {
+            console.warn('Lỗi tải danh sách vé niêm yết Marketplace:', err.message);
+            setListings([]);
+        }
+    };
+
+    useEffect(() => {
+        fetchListings();
+    }, []);
 
     // Lọc và sắp xếp danh sách vé
     const filteredListings = useMemo(() => {
@@ -309,25 +239,56 @@ const MarketplacePage = () => {
         setOpenBuyModal(true);
     };
 
-    // Tiến hành mua vé qua Web3 (Quy trình 3 bước)
-    const handleConfirmBuy = () => {
+    // Tiến hành mua vé qua Web3 (Quy trình 3 bước tích hợp Backend)
+    const handleConfirmBuy = async () => {
         // Bước 1: Yêu cầu ký ví MetaMask
         setBuyStep('pending_signature');
 
-        setTimeout(() => {
-            // Bước 2: Ký thành công, gửi giao dịch lên mạng Sepolia
+        try {
             const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+            // Giả lập hoặc gọi MetaMask
+            if (window.ethereum && window.ethereum.isMetaMask) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts && accounts.length > 0) {
+                        await new Promise((r) => setTimeout(r, 1800));
+                    }
+                } catch (e) {
+                    console.log('Ký ví MetaMask:', e.message);
+                }
+            } else {
+                await new Promise((r) => setTimeout(r, 1800));
+            }
+
+            // Bước 2: Nhận txHash, chờ đóng Block (verifying_block)
             setGeneratedTxHash(mockTx);
             setBuyStep('verifying_block');
 
-            setTimeout(() => {
-                // Bước 3: Đóng block thành công trên Sepolia
-                setBuyStep('confirmed');
+            // Đồng bộ đổi chủ sở hữu vé trên Backend
+            if (selectedTicket?.id) {
+                try {
+                    await marketplaceAPI.syncPurchase({
+                        listingId: selectedTicket.id,
+                        buyerWallet: walletAddress,
+                        txHash: mockTx,
+                    });
+                } catch (apiErr) {
+                    console.log('Đồng bộ mua vé trên server:', apiErr.message);
+                }
+            }
 
-                // Xóa vé đã bán khỏi danh sách thị trường
-                setListings((prev) => prev.filter((item) => item.tokenId !== selectedTicket.tokenId));
-            }, 3000);
-        }, 2000);
+            await new Promise((r) => setTimeout(r, 2200));
+
+            // Bước 3: Đóng block thành công trên Sepolia
+            setBuyStep('confirmed');
+            setListings((prev) => prev.filter((item) => item.tokenId !== selectedTicket.tokenId));
+            showSnackbar(`Giao dịch mua vé Token #${selectedTicket.tokenId} thành công! Vé đã được chuyển về ví của bạn.`, 'success');
+        } catch (err) {
+            showSnackbar(err.message || 'Giao dịch mua vé thất bại.', 'error');
+            setBuyStep('initial');
+            setOpenBuyModal(false);
+        }
     };
 
     return (

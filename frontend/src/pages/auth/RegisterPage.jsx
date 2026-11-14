@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -41,8 +41,16 @@ const FEATURES = [
 
 const RegisterPage = () => {
     const { mode, toggleTheme } = useAppTheme();
-    const { login } = useAuth();
+    const { login, isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            if (user.role === 'admin') navigate('/admin/dashboard', { replace: true });
+            else if (user.role === 'organizer') navigate('/organizer/dashboard', { replace: true });
+            else navigate('/', { replace: true });
+        }
+    }, [isAuthenticated, user]);
 
     const [role, setRole] = useState('customer'); // 'customer' | 'organizer'
     const [form, setForm] = useState({

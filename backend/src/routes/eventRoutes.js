@@ -23,6 +23,7 @@ import {
   createTicketType,
   submitForReview,
   publishEvent,
+  getOrganizerStats,
 } from "../controllers/eventController.js";
 
 const router = express.Router();
@@ -32,9 +33,15 @@ router.get("/", validate(listEventsQuerySchema), getPublicEvents);
 
 // Organizer (đặt trước /:id)
 router.get(
+  "/organizer/stats",
+  protect,
+  authorize("organizer", "admin"),
+  getOrganizerStats,
+);
+router.get(
   "/organizer/my-events",
   protect,
-  authorize("organizer"),
+  authorize("organizer", "admin"),
   validate(myEventsQuerySchema),
   getMyEvents,
 );
@@ -43,7 +50,7 @@ router.get(
 router.get("/:id", optionalProtect, validate(eventIdParamSchema), getEventById);
 
 // Organizer thao tác sự kiện của mình
-router.use(protect, authorize("organizer"));
+router.use(protect, authorize("organizer", "admin"));
 router.post("/", validate(createEventSchema), createEvent);
 router.put("/:id", validate(updateEventSchema), updateEvent);
 router.post(
