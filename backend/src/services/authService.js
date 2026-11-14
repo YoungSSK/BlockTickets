@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { ethers } from "ethers";
 import User from "../models/User.js";
 import Session from "../models/Session.js";
+import sequelize from "../config/db.js";
 import { AppError } from "../utils/AppError.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
@@ -66,10 +67,26 @@ const generateTokensAndSession = async (user, meta = {}) => {
 
 export const registerUser = async ({ email, password, fullName, role }, meta) => {
   const normalizedEmail = email.trim().toLowerCase();
+  const trimmedFullName = fullName.trim();
 
+  // 1. Kiểm tra tính duy nhất của Email
   const existingUser = await User.findOne({ where: { email: normalizedEmail } });
   if (existingUser) {
     throw new AppError("Email này đã được sử dụng.", 400);
+  }
+
+  // 2. Kiểm tra tính duy nhất của Họ và tên / Tên tổ chức (Không cho phép tạo trùng Name)
+  const existingName = await User.findOne({
+    where: sequelize.where(
+      sequelize.fn("LOWER", sequelize.col("full_name")),
+      trimmedFullName.toLowerCase()
+    ),
+  });
+  if (existingName) {
+    throw new AppError(
+      "Họ và tên / Tên tổ chức này đã được sử dụng. Vui lòng chọn tên khác.",
+      400
+    );
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -79,7 +96,7 @@ export const registerUser = async ({ email, password, fullName, role }, meta) =>
   const newUser = await User.create({
     email: normalizedEmail,
     passwordHash,
-    fullName: fullName.trim(),
+    fullName: trimmedFullName,
     role: assignedRole,
   });
 
@@ -209,9 +226,14 @@ export const loginWithWallet = async (
 
   let user = walletUser;
   if (!user) {
+    let walletFullName = `Wallet User ${normalizedWallet.substring(0, 6)}`;
+    const existingName = await User.findOne({ where: { fullName: walletFullName } });
+    if (existingName) {
+      walletFullName = `Wallet User ${normalizedWallet.substring(2, 8)}`;
+    }
     user = await User.create({
       email: `${normalizedWallet}@wallet.blocktickets.local`,
-      fullName: `Wallet User ${normalizedWallet.substring(0, 6)}`,
+      fullName: walletFullName,
       walletAddress: normalizedWallet,
       role: "customer",
       nonce: null,

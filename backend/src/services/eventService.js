@@ -161,18 +161,28 @@ export const createEvent = async (organizerId, payload) => {
   });
 
   if (Array.isArray(ticketTypes) && ticketTypes.length > 0) {
-    const eventStart = new Date(event.startTime);
+    // Ngăn chặn tạo trùng tên hạng vé trong cùng một sự kiện
+    const seenNames = new Set();
+    const eventEnd = event.endTime ? new Date(event.endTime) : new Date(event.startTime);
+
     for (const tier of ticketTypes) {
+      const tierName = tier.name.trim();
+      const lowerName = tierName.toLowerCase();
+      if (seenNames.has(lowerName)) {
+        continue; // Bỏ qua nếu có hạng vé trùng tên gửi kèm
+      }
+      seenNames.add(lowerName);
+
       let saleStartTime = tier.saleStartTime ? new Date(tier.saleStartTime) : new Date();
-      let saleEndTime = tier.saleEndTime ? new Date(tier.saleEndTime) : new Date(eventStart);
-      if (saleEndTime > eventStart) saleEndTime = new Date(eventStart);
+      let saleEndTime = tier.saleEndTime ? new Date(tier.saleEndTime) : new Date(event.startTime);
+      if (saleEndTime > eventEnd) saleEndTime = new Date(eventEnd);
       if (saleEndTime <= saleStartTime) {
         saleStartTime = new Date(saleEndTime.getTime() - 24 * 60 * 60 * 1000);
       }
 
       await TicketType.create({
-        name: tier.name.trim(),
-        description: tier.description || `${tier.name} - Vé sự kiện NFT`,
+        name: tierName,
+        description: tier.description || `${tierName} - Vé sự kiện NFT`,
         originalPrice: Number(tier.originalPrice),
         currency: tier.currency || "ETH",
         maxSupply: Number(tier.maxSupply),
@@ -184,7 +194,9 @@ export const createEvent = async (organizerId, payload) => {
     }
   }
 
-  return event;
+  return Event.findByPk(event.id, {
+    include: [{ model: TicketType, as: "ticketTypes" }],
+  });
 };
 
 // 5. Organizer: Cập nhật sự kiện (chỉ khi draft hoặc rejected)
@@ -232,12 +244,23 @@ export const addTicketTypeToEvent = async (eventId, organizerId, payload, userRo
     );
   }
 
-  const eventStart = new Date(event.startTime);
-  let saleStartTime = payload.saleStartTime ? new Date(payload.saleStartTime) : new Date();
-  let saleEndTime = payload.saleEndTime ? new Date(payload.saleEndTime) : new Date(eventStart);
+  const trimmedName = payload.name.trim();
+  const existingTier = await TicketType.findOne({
+    where: {
+      eventId: event.id,
+      name: trimmedName,
+    },
+  });
+  if (existingTier) {
+    throw new AppError(`Hạng vé "${trimmedName}" đã tồn tại trong sự kiện này.`, 400);
+  }
 
-  if (saleEndTime > eventStart) {
-    saleEndTime = new Date(eventStart);
+  const eventEnd = event.endTime ? new Date(event.endTime) : new Date(event.startTime);
+  let saleStartTime = payload.saleStartTime ? new Date(payload.saleStartTime) : new Date();
+  let saleEndTime = payload.saleEndTime ? new Date(payload.saleEndTime) : new Date(event.startTime);
+
+  if (saleEndTime > eventEnd) {
+    saleEndTime = new Date(eventEnd);
   }
 
   if (saleEndTime <= saleStartTime) {
@@ -333,6 +356,7 @@ export const getOrganizerStats = async (organizerId) => {
     }
   }
 
+  let recentSettlements = [];
   if (eventIds.length > 0) {
     checkedInCount = await Ticket.count({
       where: {
@@ -340,6 +364,29 @@ export const getOrganizerStats = async (organizerId) => {
         isUsed: true,
       },
     });
+
+    const recentTickets = await Ticket.findAll({
+      where: { eventId: { [Op.in]: eventIds } },
+      include: [
+        { model: Event, as: "event", attributes: ["id", "title"] },
+        { model: TicketType, as: "ticketType", attributes: ["id", "name"] },
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: 20,
+    });
+
+    recentSettlements = recentTickets.map((t) => ({
+      id: t.id,
+      type: "primary_sale",
+      typeLabel: "Bán vé sơ cấp",
+      eventTitle: t.event?.title || "Sự kiện",
+      ticketTypeName: t.ticketType?.name,
+      tokenId: t.tokenId,
+      amountEth: Number(t.originalPrice),
+      txHash: t.txHash,
+      time: t.createdAt,
+      status: "confirmed",
+    }));
   }
 
   const activeEventsCount = events.filter((e) =>
@@ -357,5 +404,6 @@ export const getOrganizerStats = async (organizerId) => {
     totalRevenueEth: +totalRevenueEth.toFixed(4),
     totalRevenueUsd: Math.round(totalRevenueEth * 3150),
     checkedInCount,
+    recentSettlements,
   };
 };

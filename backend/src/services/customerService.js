@@ -42,6 +42,24 @@ export const createOrder = async (
     );
   }
 
+  // Kiểm tra thời gian mở bán vé và thời gian kết thúc sự kiện
+  const now = new Date();
+  if (ticketType.saleStartTime && now < new Date(ticketType.saleStartTime)) {
+    throw new AppError(
+      `Hạng vé "${ticketType.name}" chưa đến thời điểm mở bán (bắt đầu từ: ${new Date(ticketType.saleStartTime).toLocaleString("vi-VN")}).`,
+      400,
+    );
+  }
+  if (ticketType.saleEndTime && now > new Date(ticketType.saleEndTime)) {
+    throw new AppError(
+      `Hạng vé "${ticketType.name}" đã kết thúc thời gian mở bán.`,
+      400,
+    );
+  }
+  if (event.endTime && now > new Date(event.endTime)) {
+    throw new AppError("Sự kiện đã kết thúc, không thể mua vé.", 400);
+  }
+
   const resolvedBuyerWallet = (
     buyerWallet ||
     user?.walletAddress ||
@@ -88,8 +106,10 @@ export const verifyAndConfirmOrder = async (orderId, { txHash }, user) => {
     });
     if (!order) throw new AppError("Không tìm thấy đơn hàng.", 404);
     if (order.status === "confirmed") {
+      const whereTicket = { eventId: order.eventId, ownerWallet: order.buyerWallet };
+      if (order.txHash) whereTicket.txHash = order.txHash;
       const existingTickets = await Ticket.findAll({
-        where: { eventId: order.eventId, ownerWallet: order.buyerWallet },
+        where: whereTicket,
         order: [["createdAt", "DESC"]],
         limit: order.quantity,
         transaction: t,
@@ -181,7 +201,7 @@ export const getMyTickets = async (user, walletQuery) => {
           "startTime",
           "endTime",
           "status",
-          "contractAddress",
+          "onChainEventId",
         ],
       },
       {
@@ -197,7 +217,14 @@ export const getMyTickets = async (user, walletQuery) => {
     order: [["createdAt", "DESC"]],
   });
 
-  return tickets;
+  const contractAddress = process.env.EVENT_TICKET_ADDRESS || "0x8156C7DAC5F1650090c032A9AA52120793e2f62E";
+  return tickets.map((t) => {
+    const json = typeof t.toJSON === "function" ? t.toJSON() : t;
+    if (json.event) {
+      json.event.contractAddress = contractAddress;
+    }
+    return json;
+  });
 };
 
 // 5. Chi tiết 1 vé NFT

@@ -1,4 +1,6 @@
+import { Op } from "sequelize";
 import User from "../models/User.js";
+import sequelize from "../config/db.js";
 import { AppError } from "../utils/AppError.js";
 import {
   serializeUser,
@@ -8,7 +10,32 @@ import {
 export const getUserProfile = (user) => serializeUser(user);
 
 export const updateUserProfile = async (user, { fullName, avatarUrl }) => {
-  if (fullName !== undefined) user.fullName = fullName;
+  if (fullName !== undefined) {
+    const trimmedFullName = fullName.trim();
+    if (!trimmedFullName || trimmedFullName.length < 2) {
+      throw new AppError("Họ tên phải có ít nhất 2 ký tự.", 400);
+    }
+    if (trimmedFullName.toLowerCase() !== user.fullName.toLowerCase()) {
+      const existingName = await User.findOne({
+        where: {
+          [Op.and]: [
+            sequelize.where(
+              sequelize.fn("LOWER", sequelize.col("full_name")),
+              trimmedFullName.toLowerCase()
+            ),
+            { id: { [Op.ne]: user.id } },
+          ],
+        },
+      });
+      if (existingName) {
+        throw new AppError(
+          "Họ và tên / Tên tổ chức này đã được sử dụng. Vui lòng chọn tên khác.",
+          400
+        );
+      }
+    }
+    user.fullName = trimmedFullName;
+  }
   if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
 
   await user.save();

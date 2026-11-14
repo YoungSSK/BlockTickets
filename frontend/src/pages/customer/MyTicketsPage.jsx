@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     Box,
     Container,
@@ -54,6 +54,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import { useAuth } from '../../context/AuthContext';
 import { ticketAPI } from '../../services/api';
 import { ethers } from 'ethers';
 import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
@@ -104,6 +105,7 @@ const normalizeTicket = (t) => {
 
 const MyTicketsPage = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     // Data state
     const [tickets, setTickets] = useState([]);
@@ -139,10 +141,20 @@ const MyTicketsPage = () => {
     };
 
     // Tải danh sách vé NFT thật từ Backend
-    const fetchTickets = async () => {
+    const fetchTickets = useCallback(async () => {
         setIsRefreshing(true);
         try {
-            const res = await ticketAPI.getMyTickets();
+            let activeWallet = user?.walletAddress || '';
+            if (window.ethereum) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts && accounts[0]) {
+                        activeWallet = accounts[0];
+                    }
+                } catch (_) {}
+            }
+
+            const res = await ticketAPI.getMyTickets(activeWallet ? { wallet: activeWallet } : undefined);
             const backendTickets = res.data?.data?.tickets;
             if (Array.isArray(backendTickets)) {
                 setTickets(backendTickets.map(normalizeTicket));
@@ -155,11 +167,23 @@ const MyTicketsPage = () => {
         } finally {
             setIsRefreshing(false);
         }
-    };
+    }, [user?.walletAddress]);
 
     useEffect(() => {
         fetchTickets();
-    }, []);
+
+        if (window.ethereum) {
+            const handleAccounts = () => {
+                fetchTickets();
+            };
+            window.ethereum.on('accountsChanged', handleAccounts);
+            return () => {
+                if (window.ethereum.removeListener) {
+                    window.ethereum.removeListener('accountsChanged', handleAccounts);
+                }
+            };
+        }
+    }, [fetchTickets]);
 
     // Sao chép clipboard
     const handleCopy = (text, label = 'mã') => {

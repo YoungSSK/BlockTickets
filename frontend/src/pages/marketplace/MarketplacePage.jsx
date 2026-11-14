@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     Box,
     Container,
@@ -154,8 +154,95 @@ const MarketplacePage = () => {
     const [priceRange, setPriceRange] = useState('all'); // 'all' | 'under_01' | '01_to_025' | 'above_025'
 
     // Ví MetaMask & Số dư
-    const [walletAddress] = useState(user?.walletAddress || '');
-    const [walletBalance] = useState('');
+    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '');
+    const [walletBalance, setWalletBalance] = useState('');
+
+    const fetchWalletBalance = useCallback(async (address) => {
+        if (!address) {
+            setWalletBalance('');
+            return;
+        }
+        try {
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const balanceBigInt = await browserProvider.getBalance(address);
+                const ethStr = ethers.formatEther(balanceBigInt);
+                const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                setWalletBalance(`${ethNum} ETH`);
+            } else {
+                try {
+                    const rpcProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
+                    const balanceBigInt = await rpcProvider.getBalance(address);
+                    const ethStr = ethers.formatEther(balanceBigInt);
+                    const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
+                    setWalletBalance(`${ethNum} ETH`);
+                } catch {
+                    setWalletBalance('');
+                }
+            }
+        } catch (err) {
+            console.error('Lỗi khi lấy số dư ví Marketplace:', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+        const checkWallet = async () => {
+            if (window.ethereum) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    if (accounts && accounts[0]) {
+                        if (isMounted) {
+                            setWalletAddress(accounts[0]);
+                            await fetchWalletBalance(accounts[0]);
+                        }
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Lỗi kiểm tra eth_accounts Marketplace:', err);
+                }
+            }
+            if (user?.walletAddress) {
+                setWalletAddress(user.walletAddress);
+                fetchWalletBalance(user.walletAddress);
+            }
+        };
+
+        checkWallet();
+        return () => {
+            isMounted = false;
+        };
+    }, [user, fetchWalletBalance]);
+
+    useEffect(() => {
+        if (!window.ethereum) return;
+
+        const handleAccountsChanged = async (accounts) => {
+            if (accounts && accounts.length > 0) {
+                setWalletAddress(accounts[0]);
+                await fetchWalletBalance(accounts[0]);
+            } else {
+                setWalletAddress('');
+                setWalletBalance('');
+            }
+        };
+
+        const handleChainChanged = () => {
+            if (walletAddress) {
+                fetchWalletBalance(walletAddress);
+            }
+        };
+
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+
+        return () => {
+            if (window.ethereum?.removeListener) {
+                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+                window.ethereum.removeListener('chainChanged', handleChainChanged);
+            }
+        };
+    }, [walletAddress, fetchWalletBalance]);
 
     // Dialog giải thích BR-02
     const [openRuleDialog, setOpenRuleDialog] = useState(false);

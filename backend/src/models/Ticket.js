@@ -51,7 +51,6 @@ const Ticket = sequelize.define(
     txHash: {
       type: DataTypes.STRING(66),
       allowNull: false,
-      unique: true,
       field: "tx_hash", // Mã băm giao dịch mint vé on-chain Sepolia
     },
     isUsed: {

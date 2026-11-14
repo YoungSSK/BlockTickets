@@ -71,6 +71,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { adminAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import DashboardLayout from '../../layouts/DashboardLayout';
 
 // Helper rút gọn địa chỉ ví và mã băm
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -356,113 +357,43 @@ const EventApprovalPage = () => {
         }
     };
 
-    return (
-        <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 8 }}>
-            {/* ═══════════════════════════════════════════════════════════════════
-                1. TOP HEADER / APP BAR
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Box
-                sx={{
-                    bgcolor: 'background.paper',
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                    py: 2,
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 1100,
-                    backdropFilter: 'blur(8px)',
-                }}
-            >
-                <Container maxWidth="xl">
-                    <Stack
-                        direction={{ xs: 'column', md: 'row' }}
-                        alignItems={{ xs: 'flex-start', md: 'center' }}
-                        justifyContent="space-between"
-                        spacing={2}
+    const topActions = (
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Tooltip title="Làm mới hàng đợi phê duyệt sự kiện">
+                <span>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        startIcon={
+                            <Refresh
+                                sx={{
+                                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                                    '@keyframes spin': {
+                                        '0%': { transform: 'rotate(0deg)' },
+                                        '100%': { transform: 'rotate(360deg)' },
+                                    },
+                                }}
+                            />
+                        }
+                        sx={{ height: 38, borderRadius: '8px' }}
                     >
-                        {/* Tiêu đề & Nút quay lại */}
-                        <Box>
-                            <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
-                                <Button
-                                    size="small"
-                                    startIcon={<ArrowBack />}
-                                    onClick={() => navigate('/admin/dashboard')}
-                                    sx={{ color: 'text.secondary', px: 0, '&:hover': { bgcolor: 'transparent', color: 'primary.main' } }}
-                                >
-                                    Bảng điều khiển Quản trị
-                                </Button>
-                            </Stack>
-                            <Stack direction="row" alignItems="center" spacing={1.5}>
-                                <Typography variant="h2" color="text.primary">
-                                    Hàng Đợi Phê Duyệt Sự Kiện
-                                </Typography>
-                                <Chip
-                                    label={`${stats.pendingCount} cần xử lý`}
-                                    size="small"
-                                    sx={{
-                                        bgcolor: 'status.pendingBg',
-                                        color: 'status.pending',
-                                        fontWeight: 700,
-                                        fontSize: '0.75rem',
-                                        height: 24,
-                                    }}
-                                />
-                            </Stack>
-                            <Typography variant="body2" color="text.secondary">
-                                Thẩm định nội dung, địa điểm, bản quyền và hạn mức nguồn cung trước khi cấp phép phát hành vé NFT on-chain
-                            </Typography>
-                        </Box>
+                        Làm mới
+                    </Button>
+                </span>
+            </Tooltip>
+        </Stack>
+    );
 
-                        {/* Top Actions: Refresh & Theme toggle */}
-                        <Stack direction="row" alignItems="center" spacing={1.5}>
-                            <Tooltip title="Làm mới hàng đợi từ MongoDB Atlas">
-                                <span>
-                                    <Button
-                                        variant="outlined"
-                                        size="medium"
-                                        onClick={handleRefresh}
-                                        disabled={isRefreshing}
-                                        startIcon={
-                                            <Refresh
-                                                sx={{
-                                                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-                                                    '@keyframes spin': {
-                                                        '0%': { transform: 'rotate(0deg)' },
-                                                        '100%': { transform: 'rotate(360deg)' },
-                                                    },
-                                                }}
-                                            />
-                                        }
-                                        sx={{ height: 40 }}
-                                    >
-                                        Làm mới
-                                    </Button>
-                                </span>
-                            </Tooltip>
-
-                            <Tooltip title={mode === 'light' ? 'Chuyển Dark Mode' : 'Chuyển Light Mode'}>
-                                <IconButton
-                                    aria-label="Chuyển đổi giao diện sáng tối"
-                                    onClick={toggleTheme}
-                                    sx={{
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: '8px',
-                                        width: 40,
-                                        height: 40,
-                                        color: 'text.secondary',
-                                        '&:hover': { bgcolor: 'action.hover' },
-                                    }}
-                                >
-                                    {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
-                                </IconButton>
-                            </Tooltip>
-                        </Stack>
-                    </Stack>
-                </Container>
-            </Box>
-
-            <Container maxWidth="xl" sx={{ mt: 4 }}>
+    return (
+        <DashboardLayout
+            role="admin"
+            title="Duyệt Sự Kiện"
+            subtitle="Thẩm định nội dung, địa điểm, bản quyền và hạn mức nguồn cung vé NFT"
+            topActions={topActions}
+        >
+            <Box sx={{ width: '100%' }}>
                 {/* ═══════════════════════════════════════════════════════════════════
                     2. THẺ THỐNG KÊ NHANH HÀNG ĐỢI (QUICK STATS CARDS)
                 ═══════════════════════════════════════════════════════════════════ */}
@@ -1103,7 +1034,7 @@ const EventApprovalPage = () => {
                         </TableContainer>
                     </Card>
                 )}
-            </Container>
+            </Box>
 
             {/* ═══════════════════════════════════════════════════════════════════
                 6. MODAL CHI TIẾT SỰ KIỆN TOÀN DIỆN (EVENT DETAIL MODAL - SECTION 6.4)
@@ -1438,7 +1369,7 @@ const EventApprovalPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </DashboardLayout>
     );
 };
 

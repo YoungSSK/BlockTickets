@@ -66,7 +66,7 @@ import {
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
-import Navbar from '../../components/Navbar';
+import DashboardLayout from '../../layouts/DashboardLayout';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -406,12 +406,12 @@ const CheckInScannerPage = () => {
     };
 
     return (
-        <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <Navbar />
-
-            {/* VÙNG NỘI DUNG CHÍNH (TỐI ƯU CẢ MOBILE & DESKTOP THEO MỤC 8.1) */}
-            <Box component="main" sx={{ flexGrow: 1, py: { xs: 2, md: 4 } }}>
-                <Container maxWidth="lg">
+        <DashboardLayout
+            role="organizer"
+            title="Soát Vé Tại Cổng Sự Kiện"
+            subtitle="Quét mã QR HMAC động, đối soát vé trực tiếp và ghi nhận vào hệ thống"
+        >
+            <Box sx={{ width: '100%' }}>
                     {/* THANH ĐIỀU HƯỚNG VÀ TRẠNG THÁI CA TRỰC */}
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
@@ -939,8 +939,7 @@ const CheckInScannerPage = () => {
                             </Card>
                         </Grid>
                     </Grid>
-                </Container>
-            </Box>
+                </Box>
 
             {/* MODAL NHẬP MÃ VÉ THỦ CÔNG KHI CAMERA KHÔNG QUÉT ĐƯỢC */}
             <Dialog
@@ -1111,8 +1110,6 @@ const CheckInScannerPage = () => {
                 </List>
             </Drawer>
 
-            <Footer />
-
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={3000}
@@ -1128,7 +1125,7 @@ const CheckInScannerPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </DashboardLayout>
     );
 };
 

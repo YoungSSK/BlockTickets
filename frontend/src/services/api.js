@@ -214,5 +214,16 @@ export const checkInAPI = {
     getStats: (eventId) => api.get(`/check-in/stats/${eventId}`),
 };
 
+export const userAPI = {
+    // Lấy thông tin hồ sơ người dùng
+    getProfile: () => api.get('/users/profile'),
+
+    // Cập nhật thông tin hồ sơ
+    updateProfile: (data) => api.put('/users/profile', data),
+
+    // Liên kết ví MetaMask với tài khoản hiện tại
+    linkWallet: (data) => api.post('/users/link-wallet', data),
+};
+
 export default api;
 

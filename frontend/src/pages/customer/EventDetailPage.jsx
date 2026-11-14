@@ -51,6 +51,7 @@ import {
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { eventAPI } from '../../services/api';
+import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
 
 // Helper rút gọn địa chỉ ví
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -78,8 +79,8 @@ const EVENTS_DATABASE = {
         startTime: '28/11/2026 - 08:30',
         endTime: '29/11/2026 - 17:30',
         countdownDays: 24,
-        contractAddress: '0x71C948261901823901928394819203849102A319',
-        marketplaceAddress: '0x48D11894aB01029384910293849102938491B281',
+        contractAddress: EVENT_TICKET_ADDRESS,
+        marketplaceAddress: TICKET_MARKETPLACE_ADDRESS,
         network: 'Ethereum Sepolia Testnet (ChainId 11155111)',
         tokenStandard: 'ERC-721 (Non-Fungible Token)',
         organizer: {
@@ -189,8 +190,8 @@ Sự kiện diễn ra trong 2 ngày với hơn 30 phiên tham luận chuyên sâ
         startTime: '15/11/2026 - 20:00',
         endTime: '15/11/2026 - 22:30',
         countdownDays: 12,
-        contractAddress: '0x71C948261901823901928394819203849102A319',
-        marketplaceAddress: '0x48D11894aB01029384910293849102938491B281',
+        contractAddress: EVENT_TICKET_ADDRESS,
+        marketplaceAddress: TICKET_MARKETPLACE_ADDRESS,
         network: 'Ethereum Sepolia Testnet (ChainId 11155111)',
         tokenStandard: 'ERC-721 (Non-Fungible Token)',
         organizer: {
@@ -274,9 +275,20 @@ const EventDetailPage = () => {
                 const res = await eventAPI.getEventDetail(id);
                 const backendEvent = res.data?.data?.event;
                 if (backendEvent) {
-                    const ticketTypes = Array.isArray(backendEvent.ticketTypes)
-                        ? backendEvent.ticketTypes.map((tt) => ({
+                    const rawTicketTypes = Array.isArray(backendEvent.ticketTypes) ? backendEvent.ticketTypes : [];
+                    // Loại bỏ dữ liệu trùng lặp nếu có
+                    const uniqueTicketTypes = [];
+                    const seenIds = new Set();
+                    for (const tt of rawTicketTypes) {
+                        if (tt && tt.id && !seenIds.has(tt.id)) {
+                            seenIds.add(tt.id);
+                            uniqueTicketTypes.push(tt);
+                        }
+                    }
+
+                    const ticketTypes = uniqueTicketTypes.map((tt, index) => ({
                             id: tt.id,
+                            onChainTierId: tt.onChainTierId || (index + 1),
                             name: tt.name,
                             badge: tt.name.toUpperCase().includes('VIP') ? 'VIP' : 'Phổ thông',
                             originalPrice: Number(tt.originalPrice || 0),
@@ -284,10 +296,11 @@ const EventDetailPage = () => {
                             currency: tt.currency || 'ETH',
                             maxSupply: Number(tt.maxSupply || 100),
                             currentSupply: Number(tt.currentSupply || 0),
+                            saleStartTime: tt.saleStartTime,
+                            saleEndTime: tt.saleEndTime,
                             description: tt.description || 'Hạng vé chính thức của sự kiện.',
                             perks: ['Vé NFT độc bản', 'QR Check-in động', 'Bảo hiểm trần giá 120%'],
-                        }))
-                        : [];
+                        }));
 
                     const normalized = {
                         ...backendEvent,
@@ -323,8 +336,8 @@ const EventDetailPage = () => {
                             if (hours > 0) return `Còn ${hours} giờ`;
                             return 'Sắp bắt đầu';
                         })(),
-                        contractAddress: backendEvent.contractAddress || '0x71C948261901823901928394819203849102A319',
-                        marketplaceAddress: '0x48D11894aB01029384910293849102938491B281',
+                        contractAddress: backendEvent.contractAddress || EVENT_TICKET_ADDRESS,
+                        marketplaceAddress: TICKET_MARKETPLACE_ADDRESS,
                         network: 'Ethereum Sepolia Testnet (ChainId 11155111)',
                         tokenStandard: 'ERC-721 (Non-Fungible Token)',
                         organizer: {
@@ -372,6 +385,29 @@ const EventDetailPage = () => {
     const ethToUsdRate = 3140;
     const subtotalUsd = Math.round(subtotalEth * ethToUsdRate);
 
+    // Kiểm tra trạng thái mở bán của hạng vé đang chọn
+    const saleStatus = useMemo(() => {
+        if (!activeTier) return { isBuyDisabled: true, buttonText: 'Chọn hạng vé' };
+        const now = new Date();
+        const isSoldOut = activeTier.maxSupply > 0 && activeTier.currentSupply >= activeTier.maxSupply;
+        if (isSoldOut) return { isBuyDisabled: true, buttonText: 'Hạng vé đã hết' };
+
+        if (event?.endTime && now > new Date(event.endTime)) {
+            return { isBuyDisabled: true, buttonText: 'Sự kiện đã kết thúc' };
+        }
+
+        if (activeTier.saleStartTime && now < new Date(activeTier.saleStartTime)) {
+            const startStr = new Date(activeTier.saleStartTime).toLocaleString('vi-VN');
+            return { isBuyDisabled: true, buttonText: `Mở bán từ ${startStr}` };
+        }
+
+        if (activeTier.saleEndTime && now > new Date(activeTier.saleEndTime)) {
+            return { isBuyDisabled: true, buttonText: 'Đã kết thúc đợt mở bán' };
+        }
+
+        return { isBuyDisabled: false, buttonText: 'Mua Vé NFT Ngay' };
+    }, [activeTier, event]);
+
     // Sao chép clipboard
     const handleCopy = (text, label = 'mã') => {
         if (!text) return;
@@ -390,8 +426,10 @@ const EventDetailPage = () => {
         if (!activeTier) return;
         navigate('/checkout', {
             state: {
+                quantity,
                 eventData: {
                     id: event.id,
+                    onChainEventId: event.onChainEventId,
                     title: event.title,
                     organizer: event.organizer.name,
                     organizerWallet: event.organizer.wallet,
@@ -400,8 +438,10 @@ const EventDetailPage = () => {
                     venue: `${event.venue.name}, ${event.venue.address}`,
                     startTime: event.startTime,
                     bannerUrl: event.bannerUrl,
+                    quantity,
                     selectedTier: {
                         id: activeTier.id,
+                        onChainTierId: activeTier.onChainTierId,
                         name: activeTier.name,
                         originalPrice: activeTier.originalPrice,
                         maxResalePrice: activeTier.maxResalePrice,
@@ -823,6 +863,11 @@ const EventDetailPage = () => {
                                                             value={soldPercentage}
                                                             sx={{ height: 6, borderRadius: 3 }}
                                                         />
+                                                        {tier.saleStartTime && tier.saleEndTime && (
+                                                            <Typography variant="caption" color="text.secondary" display="block" mt={0.75}>
+                                                                Mở bán: {new Date(tier.saleStartTime).toLocaleDateString('vi-VN')} – {new Date(tier.saleEndTime).toLocaleDateString('vi-VN')}
+                                                            </Typography>
+                                                        )}
                                                     </Box>
 
                                                     {/* Quyền lợi chi tiết */}
@@ -1059,7 +1104,8 @@ const EventDetailPage = () => {
                                     {/* Nút hành động Mua Vé Ngay */}
                                     <Button
                                         variant="contained"
-                                        color="primary"
+                                        color={saleStatus.isBuyDisabled ? 'inherit' : 'primary'}
+                                        disabled={saleStatus.isBuyDisabled}
                                         fullWidth
                                         size="large"
                                         onClick={handleProceedToCheckout}
@@ -1071,7 +1117,7 @@ const EventDetailPage = () => {
                                             mb: 2,
                                         }}
                                     >
-                                        Mua Vé NFT Ngay
+                                        {saleStatus.buttonText}
                                     </Button>
 
                                     <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>

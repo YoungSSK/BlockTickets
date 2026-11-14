@@ -57,7 +57,7 @@ import {
     VerifiedUser,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import Navbar from '../../components/Navbar';
+import DashboardLayout from '../../layouts/DashboardLayout';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -175,16 +175,30 @@ const CreateEventPage = () => {
         });
     };
 
+    // Helper định dạng ngày giờ cho input type="datetime-local" (YYYY-MM-DDTHH:mm)
+    const toDatetimeLocal = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '';
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
     // Thêm hạng vé mới
     const handleAddTier = () => {
+        const now = new Date();
+        const eventStart = eventData.startTime ? new Date(eventData.startTime) : null;
+        const defaultStart = toDatetimeLocal(now);
+        const defaultEnd = eventStart && eventStart > now ? toDatetimeLocal(eventStart) : toDatetimeLocal(new Date(now.getTime() + 7 * 24 * 3600 * 1000));
+
         const newTier = {
             id: Date.now(),
             name: `Hạng vé mới #${ticketTiers.length + 1}`,
             description: 'Mô tả quyền lợi hạng vé...',
-            originalPrice: 0.1,
+            originalPrice: 0.05,
             maxSupply: 100,
-            saleStartTime: '2026-11-15T00:00',
-            saleEndTime: '2026-12-14T23:59',
+            saleStartTime: defaultStart,
+            saleEndTime: defaultEnd,
             perks: 'Quyền lợi vé tiêu chuẩn',
         };
         setTicketTiers((prev) => [...prev, newTier]);
@@ -225,6 +239,7 @@ const CreateEventPage = () => {
                 showSnackbar('Cần ít nhất một hạng vé!', 'error');
                 return false;
             }
+            const eventEnd = eventData.endTime ? new Date(eventData.endTime) : null;
             ticketTiers.forEach((tier, index) => {
                 if (!tier.name.trim()) newErrors[`tier_${index}_name`] = 'Thiếu tên hạng vé';
                 if (!tier.originalPrice || Number(tier.originalPrice) <= 0) {
@@ -232,6 +247,16 @@ const CreateEventPage = () => {
                 }
                 if (!tier.maxSupply || Number(tier.maxSupply) <= 0) {
                     newErrors[`tier_${index}_supply`] = 'Số lượng phát hành trần phải lớn hơn 0';
+                }
+                if (!tier.saleStartTime) {
+                    newErrors[`tier_${index}_saleStart`] = 'Vui lòng chọn thời gian bắt đầu mở bán vé';
+                }
+                if (!tier.saleEndTime) {
+                    newErrors[`tier_${index}_saleEnd`] = 'Vui lòng chọn thời gian kết thúc bán vé';
+                } else if (tier.saleStartTime && new Date(tier.saleEndTime) <= new Date(tier.saleStartTime)) {
+                    newErrors[`tier_${index}_saleEnd`] = 'Thời gian kết thúc bán vé phải sau thời gian mở bán';
+                } else if (eventEnd && new Date(tier.saleEndTime) > eventEnd) {
+                    newErrors[`tier_${index}_saleEnd`] = 'Thời gian kết thúc bán vé không được sau khi sự kiện kết thúc';
                 }
             });
         }
@@ -243,6 +268,22 @@ const CreateEventPage = () => {
     // Chuyển sang bước kế tiếp
     const handleNext = () => {
         if (validateStep(activeStep)) {
+            // Khi từ bước 1 sang bước 2, nếu hạng vé đầu tiên chưa có ngày mở/đóng bán thì tự điền gợi ý
+            if (activeStep === 1 && ticketTiers.length > 0 && !ticketTiers[0].saleStartTime) {
+                const now = new Date();
+                const eventStart = eventData.startTime ? new Date(eventData.startTime) : null;
+                const defaultStart = toDatetimeLocal(now);
+                const defaultEnd = eventStart && eventStart > now ? toDatetimeLocal(eventStart) : toDatetimeLocal(new Date(now.getTime() + 7 * 24 * 3600 * 1000));
+                setTicketTiers((prev) => {
+                    const updated = [...prev];
+                    updated[0] = {
+                        ...updated[0],
+                        saleStartTime: defaultStart,
+                        saleEndTime: defaultEnd,
+                    };
+                    return updated;
+                });
+            }
             setActiveStep((prev) => prev + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
@@ -314,15 +355,6 @@ const CreateEventPage = () => {
                 throw new Error('Không nhận được mã sự kiện từ máy chủ.');
             }
 
-            // Đảm bảo tạo đầy đủ các hạng vé (nếu backend chưa tạo kèm trong createEvent)
-            for (const tier of preparedTicketTiers) {
-                try {
-                    await organizerAPI.addTicketType(createdId, tier);
-                } catch (tierErr) {
-                    console.log('Ticket type notification:', tierErr.message);
-                }
-            }
-
             // Nếu không phải draft thì gửi duyệt luôn
             if (!isDraft) {
                 await organizerAPI.submitReview(createdId);
@@ -347,21 +379,12 @@ const CreateEventPage = () => {
     };
 
     return (
-        <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <Navbar />
-
-            <Box component="main" sx={{ flexGrow: 1, py: { xs: 3, md: 5 } }}>
-                <Container maxWidth="lg">
-                    {/* BREADCRUMB */}
-                    <Breadcrumbs
-                        aria-label="breadcrumb"
-                        sx={{ mb: 2, '& a': { textDecoration: 'none', color: 'text.secondary', '&:hover': { color: 'primary.main' } } }}
-                    >
-                        <Link component={RouterLink} to="/organizer/dashboard">Bảng điều khiển</Link>
-                        <Typography color="text.primary" fontWeight={600}>
-                            Tạo sự kiện mới
-                        </Typography>
-                    </Breadcrumbs>
+        <DashboardLayout
+            role="organizer"
+            title="Tạo Sự Kiện Mới"
+            subtitle="Khởi tạo sự kiện, cấu hình địa điểm và thiết lập các hạng vé NFT"
+        >
+            <Box sx={{ width: '100%' }}>
 
                     {/* HEADER BANNER */}
                     <Box
@@ -826,6 +849,36 @@ const CreateEventPage = () => {
                                                         />
                                                     </Grid>
 
+                                                    {/* Thời gian bắt đầu mở bán vé */}
+                                                    <Grid item xs={12} sm={6}>
+                                                        <TextField
+                                                            fullWidth
+                                                            size="small"
+                                                            type="datetime-local"
+                                                            label="Thời gian bắt đầu mở bán vé *"
+                                                            value={tier.saleStartTime || ''}
+                                                            onChange={(e) => handleTierChange(index, 'saleStartTime', e.target.value)}
+                                                            error={Boolean(errors[`tier_${index}_saleStart`])}
+                                                            helperText={errors[`tier_${index}_saleStart`] || 'Thời điểm bắt đầu cho phép mua vé'}
+                                                            InputLabelProps={{ shrink: true }}
+                                                        />
+                                                    </Grid>
+
+                                                    {/* Thời gian kết thúc bán vé */}
+                                                    <Grid item xs={12} sm={6}>
+                                                        <TextField
+                                                            fullWidth
+                                                            size="small"
+                                                            type="datetime-local"
+                                                            label="Thời gian kết thúc bán vé *"
+                                                            value={tier.saleEndTime || ''}
+                                                            onChange={(e) => handleTierChange(index, 'saleEndTime', e.target.value)}
+                                                            error={Boolean(errors[`tier_${index}_saleEnd`])}
+                                                            helperText={errors[`tier_${index}_saleEnd`] || 'Hạn chót mua vé (không được sau giờ sự kiện kết thúc)'}
+                                                            InputLabelProps={{ shrink: true }}
+                                                        />
+                                                    </Grid>
+
                                                     {/* Tóm tắt tính toán trần giá 120% */}
                                                     <Grid item xs={12}>
                                                         <Box
@@ -1100,8 +1153,7 @@ const CreateEventPage = () => {
                             </Stack>
                         </Box>
                     </Card>
-                </Container>
-            </Box>
+                </Box>
 
             {/* MODAL THÔNG BÁO GỬI PHÊ DUYỆT THÀNH CÔNG */}
             <Dialog
@@ -1205,8 +1257,6 @@ const CreateEventPage = () => {
                 </DialogActions>
             </Dialog>
 
-            <Footer />
-
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={4000}
@@ -1222,7 +1272,7 @@ const CreateEventPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </DashboardLayout>
     );
 };
 

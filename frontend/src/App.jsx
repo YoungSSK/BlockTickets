@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -17,16 +18,30 @@ import CreateEventPage from './pages/organizer/CreateEventPage';
 import OrganizerDashboardPage from './pages/organizer/OrganizerDashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 
+/**
+ * Tuyến đường phục vụ Khách vãng lai (Guest) và Khách hàng (Customer):
+ * - Khách vãng lai và Customer được phép xem trang chủ
+ * - Nếu là Admin hoặc Organizer đăng nhập, tự động chuyển về Dashboard quản trị tương ứng
+ */
+const CustomerOrGuestRoute = ({ children }) => {
+    const { isAuthenticated, user } = useAuth();
+    if (isAuthenticated) {
+        if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
+        if (user?.role === 'organizer') return <Navigate to="/organizer/dashboard" replace />;
+    }
+    return children;
+};
+
 const App = () => {
     return (
         <Routes>
-            {/* Tuyến đường trang chủ (Customer Homepage) - Chỉ dành riêng cho phân hệ Khách hàng (Customer) */}
-            <Route path="/" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
-            <Route path="/home" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
-            <Route path="/homepage" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
-            <Route path="/customer" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
-            <Route path="/customer/home" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
-            <Route path="/customer/homepage" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
+            {/* Tuyến đường trang chủ (Homepage) - Mở công khai cho khách vãng lai & khách hàng, chuyển hướng Admin/Organizer về Dashboard */}
+            <Route path="/" element={<CustomerOrGuestRoute><HomePage /></CustomerOrGuestRoute>} />
+            <Route path="/home" element={<CustomerOrGuestRoute><HomePage /></CustomerOrGuestRoute>} />
+            <Route path="/homepage" element={<CustomerOrGuestRoute><HomePage /></CustomerOrGuestRoute>} />
+            <Route path="/customer" element={<CustomerOrGuestRoute><HomePage /></CustomerOrGuestRoute>} />
+            <Route path="/customer/home" element={<CustomerOrGuestRoute><HomePage /></CustomerOrGuestRoute>} />
+            <Route path="/customer/homepage" element={<CustomerOrGuestRoute><HomePage /></CustomerOrGuestRoute>} />
 
             {/* Phân hệ xác thực */}
             <Route path="/login" element={<LoginPage />} />
@@ -41,10 +56,10 @@ const App = () => {
             <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />
             <Route path="/admin/user-management" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />
 
-            {/* Phân hệ Khách hàng (Customer): Khám phá sự kiện, Xem chi tiết, Đặt vé & Kho vé NFT */}
-            <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
-            <Route path="/explore" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
-            <Route path="/customer/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+            {/* Phân hệ Khách hàng (Customer): Khám phá sự kiện công khai cho cả khách vãng lai; Đặt vé & Kho vé yêu cầu đăng nhập */}
+            <Route path="/events" element={<EventsPage />} />
+            <Route path="/explore" element={<EventsPage />} />
+            <Route path="/customer/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailPage />} />
             <Route path="/event/:id" element={<EventDetailPage />} />
             <Route path="/customer/events/:id" element={<EventDetailPage />} />
