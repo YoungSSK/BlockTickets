@@ -55,6 +55,10 @@ import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { ticketAPI } from '../../services/api';
+import { ethers } from 'ethers';
+import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
+import EventTicketABI from '../../constants/abi/EventTicket.json';
+import TicketMarketplaceABI from '../../constants/abi/TicketMarketplace.json';
 
 // Helper rút gọn địa chỉ ví & hash
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -235,8 +239,35 @@ const MyTicketsPage = () => {
         }
 
         try {
+            let listingTxHash = null;
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const signer = await browserProvider.getSigner();
+
+                const ticketContract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
+                const marketplaceContract = new ethers.Contract(TICKET_MARKETPLACE_ADDRESS, TicketMarketplaceABI, signer);
+
+                const tokenId = BigInt(resaleTicket.tokenId);
+                const priceWei = ethers.parseEther(price.toFixed(6));
+
+                // 1. Kiểm tra và cấp quyền chuyển nhượng cho Marketplace nếu chưa cấp
+                const approvedAddress = await ticketContract.getApproved(tokenId);
+                if (approvedAddress.toLowerCase() !== TICKET_MARKETPLACE_ADDRESS.toLowerCase()) {
+                    showSnackbar('Đang yêu cầu MetaMask phê duyệt (Approve) quyền chuyển nhượng vé...', 'info');
+                    const approveTx = await ticketContract.approve(TICKET_MARKETPLACE_ADDRESS, tokenId);
+                    await approveTx.wait();
+                }
+
+                // 2. Niêm yết vé lên Marketplace on-chain
+                showSnackbar('Đang niêm yết vé lên Marketplace Sepolia...', 'info');
+                const listTx = await marketplaceContract.listTicket(tokenId, priceWei);
+                await listTx.wait();
+                listingTxHash = listTx.hash;
+            }
+
+            // 3. Đồng bộ trạng thái niêm yết lên Backend
             if (resaleTicket.id) {
-                await ticketAPI.listForResale(resaleTicket.id, { resalePrice: price });
+                await ticketAPI.listForResale(resaleTicket.id, { resalePrice: price, listingTxHash });
             }
             setTickets((prev) =>
                 prev.map((t) =>
@@ -247,29 +278,56 @@ const MyTicketsPage = () => {
             );
             showSnackbar(`Đã niêm yết vé Token #${resaleTicket.tokenId} lên Chợ thứ cấp với giá ${price} ETH thành công!`, 'success');
         } catch (err) {
-            setTickets((prev) =>
-                prev.map((t) =>
-                    t.tokenId === resaleTicket.tokenId
-                        ? { ...t, status: 'resale', isListedForResale: true, resalePrice: price }
-                        : t
-                )
-            );
-            showSnackbar(err.message || `Đã niêm yết vé Token #${resaleTicket.tokenId} lên Chợ thứ cấp.`, 'info');
+            console.error('Lỗi niêm yết vé:', err);
+            const msg = err.reason || err.info?.error?.message || err.message;
+            if (err.code === 4001 || err.info?.error?.code === 4001) {
+                showSnackbar('Bạn đã từ chối giao dịch trên MetaMask.', 'warning');
+            } else {
+                showSnackbar(msg || `Không thể niêm yết vé Token #${resaleTicket.tokenId}.`, 'error');
+            }
         } finally {
             setResaleModalOpen(false);
         }
     };
 
     // Hủy niêm yết khỏi chợ
-    const handleCancelResale = (ticket) => {
-        setTickets((prev) =>
-            prev.map((t) =>
-                t.tokenId === ticket.tokenId
-                    ? { ...t, status: 'valid', isListedForResale: false, resalePrice: null }
-                    : t
-            )
-        );
-        showSnackbar(`Đã hủy rao bán vé Token #${ticket.tokenId}. Vé đã được chuyển về trạng thái sẵn sàng sử dụng.`, 'info');
+    const handleCancelResale = async (ticket) => {
+        try {
+            if (window.ethereum) {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const signer = await browserProvider.getSigner();
+                const marketplaceContract = new ethers.Contract(TICKET_MARKETPLACE_ADDRESS, TicketMarketplaceABI, signer);
+
+                showSnackbar('Đang gửi giao dịch hủy niêm yết trên Smart Contract Sepolia...', 'info');
+                const cancelTx = await marketplaceContract.cancelListing(BigInt(ticket.tokenId));
+                await cancelTx.wait();
+            }
+
+            if (ticket.id) {
+                try {
+                    await ticketAPI.cancelResale(ticket.id);
+                } catch (e) {
+                    console.log('Hủy niêm yết API:', e.message);
+                }
+            }
+
+            setTickets((prev) =>
+                prev.map((t) =>
+                    t.tokenId === ticket.tokenId
+                        ? { ...t, status: 'valid', isListedForResale: false, resalePrice: null }
+                        : t
+                )
+            );
+            showSnackbar(`Đã hủy rao bán vé Token #${ticket.tokenId}. Vé đã được chuyển về trạng thái sẵn sàng sử dụng.`, 'info');
+        } catch (err) {
+            console.error('Lỗi hủy rao bán:', err);
+            const msg = err.reason || err.info?.error?.message || err.message;
+            if (err.code === 4001 || err.info?.error?.code === 4001) {
+                showSnackbar('Bạn đã từ chối giao dịch trên MetaMask.', 'warning');
+            } else {
+                showSnackbar(msg || 'Hủy rao bán thất bại.', 'error');
+            }
+        }
     };
 
     // Thống kê nhanh kho vé

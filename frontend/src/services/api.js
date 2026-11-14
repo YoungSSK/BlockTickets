@@ -158,6 +158,9 @@ export const ticketAPI = {
 
     // Niêm yết vé bán lại trên sàn thứ cấp (trần giá 120%)
     listForResale: (id, resaleData) => api.post(`/tickets/${id}/resale`, resaleData),
+
+    // Hủy niêm yết vé bán lại
+    cancelResale: (id) => api.delete(`/tickets/${id}/resale`),
 };
 
 export const marketplaceAPI = {

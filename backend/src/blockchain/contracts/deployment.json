@@ -1,0 +1,10 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x02436bF765DB9354f4d21935159F853Eef13b78b",
+  "deployedAt": "2026-11-14T07:20:01.266Z",
+  "contracts": {
+    "EventTicket": "0x8156C7DAC5F1650090c032A9AA52120793e2f62E",
+    "TicketMarketplace": "0x80D278d81CA0755Ec34a29109d75080833e7450A"
+  }
+}

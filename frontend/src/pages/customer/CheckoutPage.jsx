@@ -56,6 +56,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { orderAPI } from '../../services/api';
+import { ethers } from 'ethers';
+import { EVENT_TICKET_ADDRESS } from '../../constants/contracts';
+import EventTicketABI from '../../constants/abi/EventTicket.json';
 
 // MetaMask SVG Icon
 const MetaMaskIcon = ({ size = 20 }) => (
@@ -209,49 +212,67 @@ const CheckoutPage = () => {
                 console.log('Tạo đơn trên API (sẽ fallback nếu chạy offline):', createErr.message);
             }
 
-            // Gọi MetaMask hoặc sinh giao dịch on-chain
-            if (window.ethereum && window.ethereum.isMetaMask) {
+            // Gọi MetaMask hoặc sinh giao dịch on-chain thật
+            if (window.ethereum) {
                 try {
-                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                    if (accounts && accounts.length > 0) {
-                        const randomHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+                    const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                    const signer = await browserProvider.getSigner();
 
-                        // Chờ người dùng xác nhận trên MetaMask
-                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                    // Khởi tạo contract EventTicket với ví người dùng đã kết nối
+                    const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
 
-                        // Bước 2: Ký xong -> Nhận txHash, chờ đóng Block (verifying_block)
-                        setTxHash(randomHash);
-                        setTxStatus('verifying_block');
+                    // Tính tổng tiền ETH cần thanh toán
+                    const subtotal = Number(tier?.originalPrice || 0) * quantity;
+                    const totalCostWei = ethers.parseEther(subtotal.toFixed(6));
 
-                        // Gửi xác nhận txHash lên Backend để phát hành vé NFT
-                        let confirmedTokenIds = null;
-                        if (backendOrderId) {
-                            try {
-                                const verifyRes = await orderAPI.verifyOrderTx(backendOrderId, { txHash: randomHash });
-                                const tickets = verifyRes.data?.data?.tickets;
-                                if (Array.isArray(tickets) && tickets.length > 0) {
-                                    confirmedTokenIds = tickets.map((t) => t.tokenId);
-                                }
-                            } catch (verifyErr) {
-                                console.log('Xác thực đơn hàng:', verifyErr.message);
+                    // Xác định onChainEventId và onChainTierId
+                    const eventOnChainId = BigInt(eventData?.onChainEventId || 1);
+                    const tierOnChainId = BigInt(tier?.onChainTierId || tier?.id || 1);
+
+                    // Mở popup MetaMask cho người dùng ký giao dịch mua vé
+                    const tx = await contract.buyTicket(eventOnChainId, tierOnChainId, quantity, {
+                        value: totalCostWei,
+                    });
+
+                    // Bước 2: Ký xong -> Nhận txHash thật, chờ thợ đào đóng Block Sepolia
+                    setTxHash(tx.hash);
+                    setTxStatus('verifying_block');
+
+                    await tx.wait(); // Đợi giao dịch hoàn tất trên mạng blockchain
+
+                    // Gửi xác nhận txHash thật lên Backend để đối soát và cấp vé vào MySQL
+                    let confirmedTokenIds = null;
+                    if (backendOrderId) {
+                        try {
+                            const verifyRes = await orderAPI.verifyOrderTx(backendOrderId, { txHash: tx.hash });
+                            const tickets = verifyRes.data?.data?.tickets;
+                            if (Array.isArray(tickets) && tickets.length > 0) {
+                                confirmedTokenIds = tickets.map((t) => t.tokenId);
                             }
+                        } catch (verifyErr) {
+                            console.log('Xác thực đơn hàng backend:', verifyErr.message);
                         }
-
-                        // Chờ hiệu ứng xác nhận block
-                        await new Promise((resolve) => setTimeout(resolve, 2500));
-
-                        // Bước 3: Hoàn tất
-                        const tokenIds = confirmedTokenIds || Array.from({ length: quantity }, (_, i) => 1420 + i + Math.floor(Math.random() * 80));
-                        setMintedTokenIds(tokenIds);
-                        setTxStatus('confirmed');
-                        showSnackbar('Giao dịch thành công! Vé NFT đã được lưu vào Kho vé của bạn.', 'success');
-                        return;
                     }
+
+                    // Bước 3: Hoàn tất
+                    const tokenIds = confirmedTokenIds || Array.from({ length: quantity }, (_, i) => 1420 + i);
+                    setMintedTokenIds(tokenIds);
+                    setTxStatus('confirmed');
+                    showSnackbar('Giao dịch thành công! Vé NFT đã được lưu vĩnh viễn trên Sepolia.', 'success');
+                    return;
                 } catch (walletErr) {
-                    if (walletErr.code === 4001) {
+                    if (walletErr.code === 4001 || walletErr.info?.error?.code === 4001) {
                         throw new Error('Người dùng đã từ chối ký giao dịch trên ví MetaMask.');
                     }
-                    throw walletErr;
+                    console.warn('Lỗi gọi contract on-chain:', walletErr);
+                    const errorMsg = walletErr.reason || walletErr.info?.error?.message || walletErr.message;
+                    if (errorMsg?.includes('Event does not exist')) {
+                        throw new Error('Sự kiện này chưa được tạo on-chain trên Smart Contract mới deploy. Vui lòng tạo sự kiện mới từ tài khoản Organizer.');
+                    }
+                    if (errorMsg?.includes('insufficient funds')) {
+                        throw new Error('Số dư Sepolia ETH trong ví của bạn không đủ để thanh toán vé và phí gas.');
+                    }
+                    throw new Error(errorMsg || 'Giao dịch trên Smart Contract thất bại.');
                 }
             }
 

@@ -72,6 +72,9 @@ import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { organizerAPI } from '../../services/api';
+import { ethers } from 'ethers';
+import { EVENT_TICKET_ADDRESS } from '../../constants/contracts';
+import EventTicketABI from '../../constants/abi/EventTicket.json';
 
 // Helper: Rút gọn địa chỉ ví và mã băm
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -204,7 +207,58 @@ const OrganizerDashboardPage = () => {
     // Xử lý công bố sự kiện đã được duyệt
     const handlePublishEvent = async (eventId) => {
         try {
-            await organizerAPI.publishEvent(eventId);
+            let onChainEventId = null;
+            if (window.ethereum) {
+                try {
+                    const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                    const signer = await browserProvider.getSigner();
+                    const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
+
+                    const targetEvt = events.find((e) => e.id === eventId);
+                    if (targetEvt && !targetEvt.onChainEventId) {
+                        showSnackbar('Đang khởi tạo sự kiện trên Smart Contract Sepolia...', 'info');
+                        const totalCap = targetEvt.ticketTypes?.reduce((acc, t) => acc + (t.capacity || 100), 0) || 500;
+                        const endTimestamp = Math.floor(new Date(targetEvt.endTime || Date.now() + 86400000 * 30).getTime() / 1000);
+                        const tx = await contract.createEvent(targetEvt.bannerUrl || 'ipfs://event', totalCap, endTimestamp);
+                        const receipt = await tx.wait();
+
+                        // Đọc EventCreated log để lấy eventId
+                        const iface = new ethers.Interface(EventTicketABI);
+                        for (const log of receipt.logs) {
+                            try {
+                                const parsed = iface.parseLog(log);
+                                if (parsed && parsed.name === 'EventCreated') {
+                                    onChainEventId = Number(parsed.args.eventId);
+                                    break;
+                                }
+                            } catch (_) {}
+                        }
+
+                        // Thêm ticket tiers lên contract
+                        if (onChainEventId && targetEvt.ticketTypes && targetEvt.ticketTypes.length > 0) {
+                            for (const tier of targetEvt.ticketTypes) {
+                                try {
+                                    const priceWei = ethers.parseEther(Number(tier.price || 0.01).toFixed(6));
+                                    const tierTx = await contract.addTicketTier(
+                                        onChainEventId,
+                                        tier.name || 'Standard',
+                                        priceWei,
+                                        tier.capacity || 100,
+                                        tier.maxPerWallet || 10
+                                    );
+                                    await tierTx.wait();
+                                } catch (tierErr) {
+                                    console.warn('Lỗi thêm tier on-chain:', tierErr);
+                                }
+                            }
+                        }
+                    }
+                } catch (onChainErr) {
+                    console.warn('Bỏ qua tạo on-chain nếu người dùng từ chối:', onChainErr);
+                }
+            }
+
+            await organizerAPI.publishEvent(eventId, onChainEventId ? { onChainEventId } : {});
             showSnackbar('Đã công khai mở bán sự kiện thành công!', 'success');
             loadOrganizerData();
         } catch (err) {
