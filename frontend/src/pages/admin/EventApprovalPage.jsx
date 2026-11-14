@@ -586,7 +586,7 @@ const EventApprovalPage = () => {
                                             NGUỒN CUNG VÉ ĐĂNG KÝ
                                         </Typography>
                                         <Typography variant="h2" color="primary.main" fontWeight={700} mt={0.5}>
-                                            {stats.totalTickets.toLocaleString('vi-VN')}
+                                            {(stats.totalTickets || 0).toLocaleString('vi-VN')}
                                         </Typography>
                                     </Box>
                                     <Box
@@ -1252,7 +1252,7 @@ const EventApprovalPage = () => {
                                                             {tier.maxResalePrice} ETH
                                                         </Typography>
                                                     </TableCell>
-                                                    <TableCell>{tier.maxSupply.toLocaleString('vi-VN')} vé</TableCell>
+                                                    <TableCell>{(tier.maxSupply || 0).toLocaleString('vi-VN')} vé</TableCell>
                                                     <TableCell>{tier.description}</TableCell>
                                                 </TableRow>
                                             ))}

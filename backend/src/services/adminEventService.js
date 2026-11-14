@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { sequelize, Event, TicketType, User, Order, AuditLog } from "../models/index.js";
+import { sequelize, Event, TicketType, Ticket, User, Order, AuditLog } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
 import { recordAuditLog } from "./auditService.js";
 
@@ -148,33 +148,37 @@ export const getAdminMetrics = async () => {
   const [
     totalUsers,
     connectedWallets,
+    totalOrganizers,
     totalEvents,
     pendingEventsCount,
     activeEventsCount,
     endedEventsCount,
     ticketStats,
     orderStats,
+    checkedInCount,
   ] = await Promise.all([
     User.count(),
     User.count({ where: { walletAddress: { [Op.ne]: null } } }),
+    User.count({ where: { role: "organizer" } }),
     Event.count(),
     Event.count({ where: { status: "pending" } }),
     Event.count({ where: { status: ["approved", "published"] } }),
     Event.count({ where: { status: "ended" } }),
     TicketType.findAll({
       attributes: [
-        [sequelize.fn("SUM", sequelize.col("minted_amount")), "totalMinted"],
+        [sequelize.fn("SUM", sequelize.col("current_supply")), "totalMinted"],
         [sequelize.fn("SUM", sequelize.col("max_supply")), "totalMaxSupply"],
       ],
       raw: true,
     }),
     Order.findAll({
       attributes: [
-        [sequelize.fn("SUM", sequelize.col("total_amount_eth")), "totalRevenueEth"],
+        [sequelize.fn("SUM", sequelize.col("total_price")), "totalRevenueEth"],
       ],
-      where: { status: "completed" },
+      where: { status: "confirmed" },
       raw: true,
     }),
+    Ticket.count({ where: { isUsed: true } }).catch(() => 0),
   ]);
 
   const totalTicketsMinted = Number(ticketStats[0]?.totalMinted || 0);
@@ -188,14 +192,15 @@ export const getAdminMetrics = async () => {
     revenueGrowth: "+18.4%",
     resaleRoyaltyEth: +(totalRevenueEth * 0.05).toFixed(3),
     totalTicketsMinted,
-    totalTicketsMaxSupply: Math.max(totalTicketsMaxSupply, 10000),
-    checkedInCount: 0,
+    totalTicketsMaxSupply: Math.max(totalTicketsMaxSupply, 1000),
+    checkedInCount: checkedInCount || 0,
     totalEvents,
     pendingEventsCount,
     activeEventsCount,
     endedEventsCount,
     totalUsers,
     connectedWallets,
+    totalOrganizers: totalOrganizers || 0,
     complianceScore: 100,
   };
 };

@@ -562,7 +562,7 @@ const UserManagementPage = () => {
                                             TỔNG NGƯỜI DÙNG
                                         </Typography>
                                         <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {stats.totalUsers.toLocaleString('vi-VN')}
+                                            {(stats.totalUsers || 0).toLocaleString('vi-VN')}
                                         </Typography>
                                     </Box>
                                     <Box
@@ -596,7 +596,7 @@ const UserManagementPage = () => {
                                             VÍ METAMASK LIÊN KẾT
                                         </Typography>
                                         <Typography variant="h2" color="status.onchain" fontWeight={700} mt={0.5}>
-                                            {stats.totalWallets.toLocaleString('vi-VN')}
+                                            {(stats.totalWallets || 0).toLocaleString('vi-VN')}
                                         </Typography>
                                     </Box>
                                     <Box

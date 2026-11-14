@@ -101,30 +101,49 @@ const AUDIT_LOGS = [];
 
 const CATEGORIES_DATA = [];
 
-const normalizePendingEvent = (evt) => ({
-    ...evt,
-    id: evt.id,
-    title: evt.title,
-    organizer: evt.organizer?.fullName || evt.organizer?.name || 'Nhà tổ chức',
-    organizerWallet: evt.organizer?.walletAddress || evt.organizer?.wallet || '0x0000...0000',
-    category: evt.category || 'music',
-    categoryLabel:
-        evt.category === 'technology' ? 'Công nghệ' :
-        evt.category === 'sports' ? 'Thể thao' :
-        evt.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc',
-    startTime: evt.startTime ? new Date(evt.startTime).toLocaleString('vi-VN') : '',
-    ticketCount: Array.isArray(evt.ticketTypes)
-        ? evt.ticketTypes.reduce((s, t) => s + Number(t.maxSupply || 0), 0)
-        : 0,
-    priceRange: Array.isArray(evt.ticketTypes) && evt.ticketTypes.length > 0
-        ? `${Math.min(...evt.ticketTypes.map((t) => Number(t.originalPrice || 0)))} - ${Math.max(...evt.ticketTypes.map((t) => Number(t.originalPrice || 0)))} ETH`
-        : '0.05 ETH',
-    ticketTypes: Array.isArray(evt.ticketTypes) ? evt.ticketTypes : [],
-    submittedAt: evt.createdAt ? new Date(evt.createdAt).toLocaleDateString('vi-VN') : 'Mới cập nhật',
-    venue: evt.venueName || evt.venue || 'Việt Nam',
-    description: evt.description || '',
-    bannerUrl: evt.bannerUrl || 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
-});
+const normalizePendingEvent = (evt) => {
+    const ticketTypes = Array.isArray(evt.ticketTypes) ? evt.ticketTypes : [];
+    const maxSupply = ticketTypes.length > 0
+        ? ticketTypes.reduce((s, t) => s + Number(t.maxSupply || 0), 0)
+        : Number(evt.maxSupply || 0);
+
+    const prices = ticketTypes.map((t) => Number(t.originalPrice || 0)).filter((p) => p > 0);
+    const ticketPriceRange = prices.length > 0
+        ? (prices.length === 1 ? `${prices[0]} ETH` : `${Math.min(...prices)} - ${Math.max(...prices)} ETH`)
+        : (evt.originalPrice ? `${evt.originalPrice} ETH` : '0.05 ETH');
+
+    let formattedStartTime = '';
+    if (evt.startTime) {
+        try {
+            formattedStartTime = new Date(evt.startTime).toLocaleString('vi-VN');
+        } catch {
+            formattedStartTime = String(evt.startTime);
+        }
+    }
+
+    return {
+        ...evt,
+        id: evt.id,
+        title: evt.title || 'Sự kiện chưa đặt tên',
+        organizer: evt.organizer?.fullName || evt.organizer?.name || 'Nhà tổ chức',
+        organizerWallet: evt.organizer?.walletAddress || evt.organizer?.wallet || '0x0000...0000',
+        category: evt.category || 'music',
+        categoryLabel:
+            evt.category === 'technology' ? 'Công nghệ' :
+            evt.category === 'sports' ? 'Thể thao' :
+            evt.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc',
+        startTime: formattedStartTime,
+        maxSupply: maxSupply || 0,
+        ticketCount: maxSupply || 0,
+        ticketPriceRange,
+        priceRange: ticketPriceRange,
+        ticketTypes,
+        submittedAt: evt.createdAt ? new Date(evt.createdAt).toLocaleDateString('vi-VN') : 'Mới cập nhật',
+        venue: evt.venueName || evt.venue || 'Việt Nam',
+        description: evt.description || '',
+        bannerUrl: evt.bannerUrl || 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
+    };
+};
 
 const AdminDashboardPage = () => {
     const { mode, toggleTheme } = useAppTheme();
@@ -588,7 +607,7 @@ const AdminDashboardPage = () => {
                                             TỔNG DOANH THU HỆ THỐNG
                                         </Typography>
                                         <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {metrics.totalRevenueEth.toLocaleString('vi-VN')} ETH
+                                            {(metrics.totalRevenueEth || 0).toLocaleString('vi-VN')} ETH
                                         </Typography>
                                     </Box>
                                     <Box
@@ -607,11 +626,11 @@ const AdminDashboardPage = () => {
                                     </Box>
                                 </Stack>
                                 <Typography variant="caption" color="text.secondary" display="block">
-                                    Ước tính: ~${metrics.totalRevenueUsd.toLocaleString('en-US')} USD
+                                    Ước tính: ~${(metrics.totalRevenueUsd || 0).toLocaleString('en-US')} USD
                                 </Typography>
                                 <Stack direction="row" alignItems="center" spacing={1} mt={1.5}>
                                     <Chip
-                                        label={metrics.revenueGrowth}
+                                        label={metrics.revenueGrowth || '+0%'}
                                         size="small"
                                         sx={{
                                             bgcolor: 'status.successBg',
@@ -621,7 +640,7 @@ const AdminDashboardPage = () => {
                                         }}
                                     />
                                     <Typography variant="caption" color="text.secondary">
-                                        Phí chợ thứ cấp: <strong>{metrics.resaleRoyaltyEth} ETH</strong>
+                                        Phí chợ thứ cấp: <strong>{metrics.resaleRoyaltyEth || 0} ETH</strong>
                                     </Typography>
                                 </Stack>
                             </CardContent>
@@ -638,9 +657,9 @@ const AdminDashboardPage = () => {
                                             VÉ NFT ĐÃ PHÁT HÀNH
                                         </Typography>
                                         <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {metrics.totalTicketsMinted.toLocaleString('vi-VN')}
+                                            {(metrics.totalTicketsMinted || 0).toLocaleString('vi-VN')}
                                             <Typography component="span" variant="body2" color="text.secondary">
-                                                / {metrics.totalTicketsMaxSupply.toLocaleString('vi-VN')}
+                                                / {(metrics.totalTicketsMaxSupply || 0).toLocaleString('vi-VN')}
                                             </Typography>
                                         </Typography>
                                     </Box>
@@ -663,17 +682,21 @@ const AdminDashboardPage = () => {
                                     <Stack direction="row" justifyContent="space-between" mb={0.5}>
                                         <Typography variant="caption" color="text.secondary">Tỷ lệ bán hết (Sell-out)</Typography>
                                         <Typography variant="caption" color="text.primary" fontWeight={600}>
-                                            {((metrics.totalTicketsMinted / metrics.totalTicketsMaxSupply) * 100).toFixed(1)}%
+                                            {metrics.totalTicketsMaxSupply > 0
+                                                ? ((metrics.totalTicketsMinted / metrics.totalTicketsMaxSupply) * 100).toFixed(1)
+                                                : '0.0'}%
                                         </Typography>
                                     </Stack>
                                     <LinearProgress
                                         variant="determinate"
-                                        value={(metrics.totalTicketsMinted / metrics.totalTicketsMaxSupply) * 100}
+                                        value={metrics.totalTicketsMaxSupply > 0
+                                            ? Math.min(100, (metrics.totalTicketsMinted / metrics.totalTicketsMaxSupply) * 100)
+                                            : 0}
                                         sx={{ height: 6, borderRadius: 3 }}
                                     />
                                 </Box>
                                 <Typography variant="caption" color="text.secondary">
-                                    Đã check-in tại cổng: <strong>{metrics.checkedInCount.toLocaleString('vi-VN')} vé</strong>
+                                    Đã check-in tại cổng: <strong>{(metrics.checkedInCount || 0).toLocaleString('vi-VN')} vé</strong>
                                 </Typography>
                             </CardContent>
                         </Card>
@@ -689,7 +712,7 @@ const AdminDashboardPage = () => {
                                             TỔNG SỰ KIỆN HỆ THỐNG
                                         </Typography>
                                         <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {metrics.totalEvents} Sự kiện
+                                            {metrics.totalEvents || 0} Sự kiện
                                         </Typography>
                                     </Box>
                                     <Box
@@ -710,7 +733,7 @@ const AdminDashboardPage = () => {
                                 <Stack direction="row" spacing={1} alignItems="center" mb={1}>
                                     <Chip
                                         icon={<HourglassEmpty sx={{ fontSize: '14px !important', color: 'status.pending' }} />}
-                                        label={`${metrics.pendingEventsCount} chờ phê duyệt`}
+                                        label={`${metrics.pendingEventsCount || 0} chờ phê duyệt`}
                                         size="small"
                                         sx={{
                                             bgcolor: 'status.pendingBg',
@@ -730,7 +753,7 @@ const AdminDashboardPage = () => {
                                     </Button>
                                 </Stack>
                                 <Typography variant="caption" color="text.secondary">
-                                    {metrics.activeEventsCount} đang mở bán • {metrics.endedEventsCount} đã hoàn tất
+                                    {metrics.activeEventsCount || 0} đang mở bán • {metrics.endedEventsCount || 0} đã hoàn tất
                                 </Typography>
                             </CardContent>
                         </Card>
@@ -746,7 +769,7 @@ const AdminDashboardPage = () => {
                                             NGƯỜI DÙNG & VÍ METAMASK
                                         </Typography>
                                         <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {metrics.totalUsers.toLocaleString('vi-VN')}
+                                            {(metrics.totalUsers || 0).toLocaleString('vi-VN')}
                                         </Typography>
                                     </Box>
                                     <Box
@@ -768,19 +791,23 @@ const AdminDashboardPage = () => {
                                     <Stack direction="row" justifyContent="space-between" mb={0.5}>
                                         <Typography variant="caption" color="text.secondary">Ví đã liên kết Web3</Typography>
                                         <Typography variant="caption" color="text.primary" fontWeight={600}>
-                                            {((metrics.connectedWallets / metrics.totalUsers) * 100).toFixed(1)}%
+                                            {metrics.totalUsers > 0
+                                                ? ((metrics.connectedWallets / metrics.totalUsers) * 100).toFixed(1)
+                                                : '0.0'}%
                                         </Typography>
                                     </Stack>
                                     <LinearProgress
                                         variant="determinate"
                                         color="secondary"
-                                        value={(metrics.connectedWallets / metrics.totalUsers) * 100}
+                                        value={metrics.totalUsers > 0
+                                            ? Math.min(100, (metrics.connectedWallets / metrics.totalUsers) * 100)
+                                            : 0}
                                         sx={{ height: 6, borderRadius: 3 }}
                                     />
                                 </Box>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
                                     <Typography variant="caption" color="text.secondary">
-                                        {metrics.connectedWallets.toLocaleString('vi-VN')} ví hoạt động • 155 Organizer
+                                        {(metrics.connectedWallets || 0).toLocaleString('vi-VN')} ví hoạt động • {metrics.totalOrganizers || 0} Organizer
                                     </Typography>
                                     <Button
                                         size="small"
@@ -968,18 +995,18 @@ const AdminDashboardPage = () => {
                                                         </TableCell>
                                                         <TableCell>
                                                             <Typography variant="body2" color="primary.main" fontWeight={600}>
-                                                                {event.ticketPriceRange}
+                                                                {event.ticketPriceRange || event.priceRange || '0.05 ETH'}
                                                             </Typography>
                                                             <Typography variant="caption" color="text.secondary">
-                                                                Nguồn cung: {event.maxSupply.toLocaleString('vi-VN')} vé
+                                                                Nguồn cung: {(event.maxSupply || event.ticketCount || 0).toLocaleString('vi-VN')} vé
                                                             </Typography>
                                                         </TableCell>
                                                         <TableCell>
                                                             <Typography variant="body2" color="text.primary">
-                                                                {event.startTime.split(' - ')[0]}
+                                                                {(event.startTime || '').split(' - ')[0] || event.startTime || 'Chưa xác định'}
                                                             </Typography>
                                                             <Typography variant="caption" color="text.secondary">
-                                                                {event.submittedAt}
+                                                                {event.submittedAt || ''}
                                                             </Typography>
                                                         </TableCell>
                                                         <TableCell align="right">
@@ -1421,10 +1448,10 @@ const AdminDashboardPage = () => {
                                                 </TableCell>
                                                 <TableCell>
                                                     <Typography variant="body2" color="primary.main" fontWeight={600}>
-                                                        {event.ticketPriceRange}
+                                                        {event.ticketPriceRange || event.priceRange || '0.05 ETH'}
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        Tối đa: {event.maxSupply.toLocaleString('vi-VN')} vé
+                                                        Tối đa: {(event.maxSupply || event.ticketCount || 0).toLocaleString('vi-VN')} vé
                                                     </Typography>
                                                 </TableCell>
                                                 <TableCell>
@@ -1768,10 +1795,10 @@ const AdminDashboardPage = () => {
                                     <Box sx={{ p: 2, bgcolor: 'background.subtle', borderRadius: '8px' }}>
                                         <Typography variant="caption" color="text.secondary">ĐỊNH GIÁ & NGUỒN CUNG</Typography>
                                         <Typography variant="subtitle2" color="primary.main" fontWeight={700} mt={0.5}>
-                                            {selectedEvent.ticketPriceRange}
+                                            {selectedEvent.ticketPriceRange || selectedEvent.priceRange || '0.05 ETH'}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary">
-                                            Giới hạn tối đa (maxSupply): {selectedEvent.maxSupply.toLocaleString('vi-VN')} vé NFT
+                                            Giới hạn tối đa (maxSupply): {(selectedEvent.maxSupply || selectedEvent.ticketCount || 0).toLocaleString('vi-VN')} vé NFT
                                         </Typography>
                                     </Box>
                                 </Grid>
