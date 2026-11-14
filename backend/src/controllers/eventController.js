@@ -81,6 +81,7 @@ export const createTicketType = async (req, res, next) => {
       req.validated.params.id,
       req.user.id,
       req.body,
+      req.user?.role,
     );
     return res.status(201).json({
       success: true,
@@ -97,6 +98,7 @@ export const submitForReview = async (req, res, next) => {
     const event = await eventService.submitEventForReview(
       req.validated.params.id,
       req.user.id,
+      req.user?.role,
     );
     return res.status(200).json({
       success: true,
