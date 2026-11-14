@@ -271,7 +271,6 @@ const OrganizerDashboardPage = () => {
                         aria-label="breadcrumb"
                         sx={{ mb: 2.5, '& a': { textDecoration: 'none', color: 'text.secondary', '&:hover': { color: 'primary.main' } } }}
                     >
-                        <Link component={RouterLink} to="/">Trang chủ</Link>
                         <Typography color="text.primary" fontWeight={600}>
                             Bảng điều khiển Nhà tổ chức (Organizer)
                         </Typography>

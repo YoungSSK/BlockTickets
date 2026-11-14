@@ -122,7 +122,7 @@ const EventsPage = () => {
         setLoading(true);
         setErrorMsg('');
         try {
-            const res = await eventAPI.getEvents({ limit: 100 });
+            const res = await eventAPI.getEvents({ limit: 50 });
             const backendEvents = res.data?.data?.events;
             if (Array.isArray(backendEvents)) {
                 setEvents(backendEvents.map(normalizeEvent));

@@ -20,13 +20,13 @@ import NotFoundPage from './pages/NotFoundPage';
 const App = () => {
     return (
         <Routes>
-            {/* Tuyến đường trang chủ (Customer Homepage) - YÊU CẦU ĐĂNG NHẬP */}
-            <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
-            <Route path="/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
-            <Route path="/homepage" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
-            <Route path="/customer" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
-            <Route path="/customer/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
-            <Route path="/customer/homepage" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+            {/* Tuyến đường trang chủ (Customer Homepage) - Chỉ dành riêng cho phân hệ Khách hàng (Customer) */}
+            <Route path="/" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
+            <Route path="/home" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
+            <Route path="/homepage" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
+            <Route path="/customer" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
+            <Route path="/customer/home" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
+            <Route path="/customer/homepage" element={<ProtectedRoute allowedRoles={['customer']}><HomePage /></ProtectedRoute>} />
 
             {/* Phân hệ xác thực */}
             <Route path="/login" element={<LoginPage />} />
