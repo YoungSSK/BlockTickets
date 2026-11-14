@@ -68,10 +68,14 @@ api.interceptors.response.use(
         }
 
         // Trả về error object có sẵn message tiếng Việt từ backend
-        const message =
-            error.response?.data?.message ||
-            error.response?.data?.error ||
-            'Đã xảy ra lỗi khi kết nối đến máy chủ. Vui lòng thử lại sau.';
+        const validationErrors = error.response?.data?.errors;
+        let message = error.response?.data?.message || error.response?.data?.error;
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+            message = validationErrors.map((e) => e.message).join('; ');
+        }
+        if (!message) {
+            message = 'Đã xảy ra lỗi khi kết nối đến máy chủ. Vui lòng thử lại sau.';
+        }
         return Promise.reject({ ...error, message });
     }
 );
