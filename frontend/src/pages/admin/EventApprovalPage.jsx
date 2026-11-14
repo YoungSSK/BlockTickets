@@ -80,208 +80,7 @@ const truncateHash = (hash, start = 6, end = 4) => {
 };
 
 // Dữ liệu mẫu các sự kiện đăng ký phê duyệt
-const INITIAL_EVENTS = [
-    {
-        id: 'EVT-2026-001',
-        title: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        description: 'Đêm hòa nhạc cổ điển quốc tế với sự tham gia của dàn nhạc giao hưởng danh tiếng và nghệ sĩ dương cầm khách mời hàng đầu châu Âu. Đêm diễn hứa hẹn mang đến những kiệt tác âm nhạc bất hủ của Beethoven, Mozart và Chopin.',
-        category: 'music',
-        categoryLabel: 'Âm nhạc',
-        bannerUrl: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
-        venue: {
-            name: 'Nhà Hát Lớn Hà Nội',
-            address: '01 Tràng Tiền, Phường Phan Chu Trinh',
-            city: 'Hà Nội',
-        },
-        startTime: '15/11/2026 - 20:00',
-        endTime: '15/11/2026 - 22:30',
-        submittedAt: '25 phút trước',
-        status: 'pending',
-        rejectionReason: '',
-        organizer: {
-            name: 'Hanoi Symphony Orchestra',
-            email: 'contact@hanoisymphony.vn',
-            wallet: '0x3A2198Ccfa31E4082218901Dfb8293aa7e9B1102',
-            previousEventsCount: 8,
-            trustScore: '98%',
-        },
-        ticketTypes: [
-            { id: 'TT-01', name: 'Hạng Standard', originalPrice: 0.08, maxSupply: 500, maxResalePrice: 0.096, description: 'Ghế ngồi tầng 2, tầm nhìn bao quát toàn sân khấu.' },
-            { id: 'TT-02', name: 'Hạng VIP Premiere', originalPrice: 0.25, maxSupply: 300, maxResalePrice: 0.30, description: 'Ghế ngồi tầng 1 trung tâm, tặng kèm tiệc cocktail giải lao.' },
-        ],
-    },
-    {
-        id: 'EVT-2026-002',
-        title: 'Vietnam Blockchain Summit 2026',
-        description: 'Hội nghị thượng đỉnh công nghệ Blockchain, Web3, Smart Contract & Tokenization lớn nhất năm 2026 tại Việt Nam. Quy tụ hơn 50 diễn giả là các nhà sáng lập, quỹ đầu tư mạo hiểm và kỹ sư hạ tầng toàn cầu.',
-        category: 'technology',
-        categoryLabel: 'Công nghệ',
-        bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
-        venue: {
-            name: 'Trung tâm Hội nghị Quốc gia',
-            address: 'Đại lộ Thăng Long, Mễ Trì',
-            city: 'Hà Nội',
-        },
-        startTime: '28/11/2026 - 08:30',
-        endTime: '29/11/2026 - 17:30',
-        submittedAt: '2 giờ trước',
-        status: 'pending',
-        rejectionReason: '',
-        organizer: {
-            name: 'TechChain Foundation',
-            email: 'events@techchain.io',
-            wallet: '0x8F4211A990812Da7201bF241cba0982E12Da9911',
-            previousEventsCount: 12,
-            trustScore: '99%',
-        },
-        ticketTypes: [
-            { id: 'TT-03', name: 'Standard Pass', originalPrice: 0.15, maxSupply: 1000, maxResalePrice: 0.18, description: 'Tham dự 2 ngày hội thảo chính, tiệc trà teabreak.' },
-            { id: 'TT-04', name: 'VIP Networking Pass', originalPrice: 0.50, maxSupply: 500, maxResalePrice: 0.60, description: 'Quyền vào phòng VIP Lounge, dạ tiệc tối kết nối diễn giả.' },
-        ],
-    },
-    {
-        id: 'EVT-2026-003',
-        title: 'Giải Marathon Quốc Tế Vịnh Hạ Long 2026',
-        description: 'Giải chạy việt dã quốc tế bên bờ di sản thiên nhiên thế giới Vịnh Hạ Long. Hệ thống tính điểm chip tự động và huy chương NFT kỷ niệm độc quyền phát hành trên mạng Sepolia cho tất cả người về đích.',
-        category: 'sports',
-        categoryLabel: 'Thể thao',
-        bannerUrl: 'https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?w=800&auto=format&fit=crop&q=80',
-        venue: {
-            name: 'Khu du lịch Bãi Cháy',
-            address: 'Đường Hạ Long, Phường Bãi Cháy',
-            city: 'Quảng Ninh',
-        },
-        startTime: '05/12/2026 - 05:00',
-        endTime: '05/12/2026 - 12:00',
-        submittedAt: '5 giờ trước',
-        status: 'pending',
-        rejectionReason: '',
-        organizer: {
-            name: 'Halong Running Club',
-            email: 'marathon@halongrunning.org',
-            wallet: '0x11B988Cc009941aB28394Fa019283738C0882190',
-            previousEventsCount: 5,
-            trustScore: '95%',
-        },
-        ticketTypes: [
-            { id: 'TT-05', name: 'Cự ly 21km (Half Marathon)', originalPrice: 0.05, maxSupply: 2000, maxResalePrice: 0.06, description: 'Áo chạy race-kit, số BIB gắn chip timing, medal NFT.' },
-            { id: 'TT-06', name: 'Cự ly 42km (Full Marathon)', originalPrice: 0.08, maxSupply: 1000, maxResalePrice: 0.096, description: 'Áo finisher, gói hỗ trợ y tế thể thao chuyên biệt.' },
-        ],
-    },
-    {
-        id: 'EVT-2026-004',
-        title: 'Workshop Chuyên Sâu Smart Contract Security & DeFi',
-        description: 'Khóa học thực chiến 1 ngày hướng dẫn kiểm toán bảo mật hợp đồng thông minh Solidity, các kỹ thuật phòng thủ re-entrancy, bảo vệ oracle giá và phòng ngừa flash loan attack.',
-        category: 'workshop',
-        categoryLabel: 'Hội thảo',
-        bannerUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80',
-        venue: {
-            name: 'Tòa nhà FPT Tower',
-            address: 'Số 10 Phạm Văn Bạch, Cầu Giấy',
-            city: 'Hà Nội',
-        },
-        startTime: '10/12/2026 - 14:00',
-        endTime: '10/12/2026 - 18:00',
-        submittedAt: '1 ngày trước',
-        status: 'pending',
-        rejectionReason: '',
-        organizer: {
-            name: 'Web3 Builders Guild',
-            email: 'guild@web3builders.dev',
-            wallet: '0x7E1922Ab00192Fa93847291823901923AA559812',
-            previousEventsCount: 3,
-            trustScore: '92%',
-        },
-        ticketTypes: [
-            { id: 'TT-07', name: 'Vé Đào Tạo Trực Tiếp', originalPrice: 0.03, maxSupply: 200, maxResalePrice: 0.036, description: 'Tài liệu độc quyền, truy cập phòng lab mô phỏng tấn công.' },
-        ],
-    },
-    {
-        id: 'EVT-2026-005',
-        title: 'Lễ Hội Âm Nhạc Điện Tử EDM Sonic Wave 2026',
-        description: 'Đại nhạc hội âm thanh ánh sáng ngoài trời với Top 100 DJ quốc tế cùng hệ thống soát vé QR động tốc độ cao tại cổng kiểm soát. Không gian trải nghiệm visual 3D hoành tráng.',
-        category: 'music',
-        categoryLabel: 'Âm nhạc',
-        bannerUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
-        venue: {
-            name: 'Công viên Yên Sở',
-            address: 'Km 1.8 Pháp Vân, Phường Yên Sở, Hoàng Mai',
-            city: 'Hà Nội',
-        },
-        startTime: '20/12/2026 - 16:00',
-        endTime: '21/12/2026 - 00:30',
-        submittedAt: '1 ngày trước',
-        status: 'pending',
-        rejectionReason: '',
-        organizer: {
-            name: 'Sonic Events Asia',
-            email: 'hello@sonicevents.asia',
-            wallet: '0x992B4871923485aa8394827189283921EE108371',
-            previousEventsCount: 15,
-            trustScore: '97%',
-        },
-        ticketTypes: [
-            { id: 'TT-08', name: 'GA Early Bird', originalPrice: 0.12, maxSupply: 3000, maxResalePrice: 0.144, description: 'Khu vực đứng tự do trước sân khấu phụ.' },
-            { id: 'TT-09', name: 'VIP Front Stage', originalPrice: 0.35, maxSupply: 2000, maxResalePrice: 0.42, description: 'Lối đi riêng tại cổng, vị trí sát sân khấu chính.' },
-        ],
-    },
-    {
-        id: 'EVT-2026-006',
-        title: 'Triển Lãm Nghệ Thuật Số NFT Digital Art Hanoi',
-        description: 'Triển lãm trưng bày hơn 120 tác phẩm nghệ thuật kỹ thuật số độc bản từ các nghệ sĩ thị giác nổi tiếng Đông Nam Á.',
-        category: 'technology',
-        categoryLabel: 'Công nghệ',
-        bannerUrl: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=800&auto=format&fit=crop&q=80',
-        venue: {
-            name: 'Trung tâm Nghệ thuật Đương đại VCCA',
-            address: 'B1 - R3, Vincom Mega Mall Royal City, Thanh Xuân',
-            city: 'Hà Nội',
-        },
-        startTime: '01/11/2026 - 09:00',
-        endTime: '07/11/2026 - 21:00',
-        submittedAt: '3 ngày trước',
-        status: 'approved',
-        rejectionReason: '',
-        organizer: {
-            name: 'VCCA Visual Labs',
-            email: 'art@vccalabs.vn',
-            wallet: '0x66AB0192837491029384910293849102938491AA',
-            previousEventsCount: 6,
-            trustScore: '99%',
-        },
-        ticketTypes: [
-            { id: 'TT-10', name: 'Vé Tham Quan Ngày', originalPrice: 0.02, maxSupply: 1200, maxResalePrice: 0.024, description: 'Vé vào cửa không giới hạn giờ trong ngày.' },
-        ],
-    },
-    {
-        id: 'EVT-2026-007',
-        title: 'Crypto Trading Masterclass (Không giấy phép)',
-        description: 'Khóa học hướng dẫn đòn bẩy futures và giao dịch token chưa qua kiểm duyệt.',
-        category: 'workshop',
-        categoryLabel: 'Hội thảo',
-        bannerUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&auto=format&fit=crop&q=80',
-        venue: {
-            name: 'Khách sạn bí mật',
-            address: 'Chưa xác định',
-            city: 'Hà Nội',
-        },
-        startTime: '02/11/2026 - 19:00',
-        endTime: '02/11/2026 - 22:00',
-        submittedAt: '4 ngày trước',
-        status: 'rejected',
-        rejectionReason: 'Nội dung kêu gọi đầu tư rủi ro, không xuất trình được giấy phép kinh doanh và địa điểm tổ chức không rõ ràng theo quy định pháp luật.',
-        organizer: {
-            name: 'Ẩn danh Crypto Group',
-            email: 'contact@unknown-crypto.xyz',
-            wallet: '0x0000000000000000000000000000000000009999',
-            previousEventsCount: 0,
-            trustScore: '20%',
-        },
-        ticketTypes: [
-            { id: 'TT-11', name: 'Vé Tham Gia', originalPrice: 0.50, maxSupply: 50, maxResalePrice: 0.60, description: 'Cam kết lợi nhuận.' },
-        ],
-    },
-];
+const INITIAL_EVENTS = [];
 
 // Gợi ý lý do từ chối thường gặp
 const QUICK_REJECTION_REASONS = [
@@ -373,12 +172,11 @@ const EventApprovalPage = () => {
         try {
             const res = await adminAPI.getAllEvents({ limit: 50 });
             const backendEvents = res.data?.data?.events;
-            if (Array.isArray(backendEvents) && backendEvents.length > 0) {
+            if (Array.isArray(backendEvents)) {
                 const normalized = backendEvents.map(normalizeEvent);
                 setEvents(normalized);
             }
         } catch (err) {
-            // Giữ lại INITIAL_EVENTS nếu chưa có dữ liệu hoặc token hết hạn
             console.log('Chưa kết nối API Backend hoặc chưa đăng nhập Admin:', err.message);
         } finally {
             setIsRefreshing(false);
@@ -788,7 +586,7 @@ const EventApprovalPage = () => {
                                             NGUỒN CUNG VÉ ĐĂNG KÝ
                                         </Typography>
                                         <Typography variant="h2" color="primary.main" fontWeight={700} mt={0.5}>
-                                            {stats.totalTickets.toLocaleString('vi-VN')}
+                                            {(stats.totalTickets || 0).toLocaleString('vi-VN')}
                                         </Typography>
                                     </Box>
                                     <Box
@@ -1454,7 +1252,7 @@ const EventApprovalPage = () => {
                                                             {tier.maxResalePrice} ETH
                                                         </Typography>
                                                     </TableCell>
-                                                    <TableCell>{tier.maxSupply.toLocaleString('vi-VN')} vé</TableCell>
+                                                    <TableCell>{(tier.maxSupply || 0).toLocaleString('vi-VN')} vé</TableCell>
                                                     <TableCell>{tier.description}</TableCell>
                                                 </TableRow>
                                             ))}

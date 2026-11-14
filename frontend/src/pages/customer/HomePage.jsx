@@ -48,106 +48,6 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { eventAPI } from '../../services/api';
 
-// Dữ liệu các sự kiện trên hệ thống BlockTickets
-const FEATURED_EVENTS = [
-    {
-        id: 'EVT-2026-002',
-        title: 'Vietnam Blockchain Summit 2026',
-        category: 'technology',
-        categoryLabel: 'Công nghệ & Web3',
-        bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
-        venue: 'Trung tâm Hội nghị Quốc gia, Hà Nội',
-        city: 'Hà Nội',
-        startTime: '28/11/2026 - 08:30',
-        minPrice: 0.08,
-        maxPrice: 0.25,
-        remainingTickets: 545,
-        maxSupply: 1700,
-        organizer: 'TechChain Foundation',
-        featured: true,
-    },
-    {
-        id: 'EVT-2026-001',
-        title: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        category: 'music',
-        categoryLabel: 'Âm nhạc cổ điển',
-        bannerUrl: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80',
-        venue: 'Nhà Hát Lớn Hà Nội, Hoàn Kiếm',
-        city: 'Hà Nội',
-        startTime: '15/11/2026 - 20:00',
-        minPrice: 0.08,
-        maxPrice: 0.25,
-        remainingTickets: 245,
-        maxSupply: 800,
-        organizer: 'Hanoi Symphony Orchestra',
-        featured: true,
-    },
-    {
-        id: 'EVT-2026-003',
-        title: 'Giải Marathon Quốc Tế Vịnh Hạ Long 2026',
-        category: 'sports',
-        categoryLabel: 'Thể thao',
-        bannerUrl: 'https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?w=800&auto=format&fit=crop&q=80',
-        venue: 'Bờ biển Bãi Cháy, TP. Hạ Long',
-        city: 'Quảng Ninh',
-        startTime: '05/12/2026 - 05:00',
-        minPrice: 0.05,
-        maxPrice: 0.08,
-        remainingTickets: 890,
-        maxSupply: 3000,
-        organizer: 'Halong Running Club',
-        featured: false,
-    },
-    {
-        id: 'EVT-2026-005',
-        title: 'Lễ Hội Âm Nhạc Điện Tử EDM Sonic Wave 2026',
-        category: 'music',
-        categoryLabel: 'Âm nhạc EDM',
-        bannerUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
-        venue: 'Công viên Yên Sở, Hoàng Mai, Hà Nội',
-        city: 'Hà Nội',
-        startTime: '20/12/2026 - 16:00',
-        minPrice: 0.12,
-        maxPrice: 0.35,
-        remainingTickets: 1420,
-        maxSupply: 5000,
-        organizer: 'Sonic Events Asia',
-        featured: true,
-    },
-    {
-        id: 'EVT-2026-004',
-        title: 'Workshop Smart Contract Security & DeFi',
-        category: 'workshop',
-        categoryLabel: 'Hội thảo đào tạo',
-        bannerUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80',
-        venue: 'Tòa nhà FPT Tower, Cầu Giấy, Hà Nội',
-        city: 'Hà Nội',
-        startTime: '10/12/2026 - 14:00',
-        minPrice: 0.03,
-        maxPrice: 0.03,
-        remainingTickets: 45,
-        maxSupply: 200,
-        organizer: 'Web3 Builders Guild',
-        featured: false,
-    },
-    {
-        id: 'EVT-2026-006',
-        title: 'Triển Lãm Nghệ Thuật Số NFT Digital Art Hanoi',
-        category: 'technology',
-        categoryLabel: 'Triển lãm số',
-        bannerUrl: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=800&auto=format&fit=crop&q=80',
-        venue: 'Trung tâm Nghệ thuật Đương đại VCCA, Thanh Xuân',
-        city: 'Hà Nội',
-        startTime: '18/12/2026 - 09:00',
-        minPrice: 0.02,
-        maxPrice: 0.02,
-        remainingTickets: 420,
-        maxSupply: 1200,
-        organizer: 'VCCA Visual Labs',
-        featured: false,
-    },
-];
-
 // 4 Trụ cột giá trị cốt lõi của BlockTickets
 const VALUE_PROPOSITIONS = [
     {
@@ -211,7 +111,8 @@ const HomePage = () => {
     const navigate = useNavigate();
 
     // State danh sách sự kiện & bộ lọc
-    const [events, setEvents] = useState(FEATURED_EVENTS);
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCity, setSelectedCity] = useState('all');
     const [selectedCategoryTab, setSelectedCategoryTab] = useState('all');
@@ -234,18 +135,32 @@ const HomePage = () => {
     // Tải danh sách sự kiện đã duyệt/công khai từ Backend
     useEffect(() => {
         const fetchEvents = async () => {
+            setLoading(true);
             try {
-                const res = await eventAPI.getEvents({ limit: 20 });
+                const res = await eventAPI.getEvents({ limit: 50 });
                 const backendEvents = res.data?.data?.events;
-                if (Array.isArray(backendEvents) && backendEvents.length > 0) {
+                if (Array.isArray(backendEvents)) {
                     setEvents(backendEvents.map(normalizeHomeEvent));
+                } else {
+                    setEvents([]);
                 }
             } catch (err) {
-                console.log('Chưa kết nối API sự kiện:', err.message);
+                console.error('Lỗi khi tải sự kiện:', err.message);
+                setEvents([]);
+            } finally {
+                setLoading(false);
             }
         };
         fetchEvents();
     }, []);
+
+    // Chuyển hướng sang trang Khám phá sự kiện kèm tham số tìm kiếm
+    const handleSearchSubmit = () => {
+        const params = new URLSearchParams();
+        if (searchQuery.trim()) params.set('search', searchQuery.trim());
+        if (selectedCity && selectedCity !== 'all') params.set('city', selectedCity);
+        navigate(`/events?${params.toString()}`);
+    };
 
     // Cuộn tới danh sách sự kiện
     const handleScrollToEvents = () => {
@@ -385,7 +300,8 @@ const HomePage = () => {
                                 variant="contained"
                                 color="primary"
                                 size="large"
-                                onClick={handleScrollToEvents}
+                                component={RouterLink}
+                                to="/events"
                                 endIcon={<ArrowForward />}
                                 sx={{
                                     height: 50,
@@ -397,22 +313,24 @@ const HomePage = () => {
                             >
                                 Khám Phá Sự Kiện Ngay
                             </Button>
-                            <Button
-                                variant="outlined"
-                                color="primary"
-                                size="large"
-                                component={RouterLink}
-                                to="/events/EVT-2026-002"
-                                sx={{
-                                    height: 50,
-                                    px: 3.5,
-                                    fontSize: '1rem',
-                                    fontWeight: 600,
-                                    borderRadius: '8px',
-                                }}
-                            >
-                                Xem Sự Kiện Mẫu (Summit 2026)
-                            </Button>
+                            {events.length > 0 && (
+                                <Button
+                                    variant="outlined"
+                                    color="primary"
+                                    size="large"
+                                    component={RouterLink}
+                                    to={`/events/${events[0].id}`}
+                                    sx={{
+                                        height: 50,
+                                        px: 3.5,
+                                        fontSize: '1rem',
+                                        fontWeight: 600,
+                                        borderRadius: '8px',
+                                    }}
+                                >
+                                    Xem Sự Kiện ({events[0].title})
+                                </Button>
+                            )}
                         </Stack>
 
                         {/* Thanh tìm kiếm nổi (Floating Search Bar) */}
@@ -464,7 +382,7 @@ const HomePage = () => {
                                         fullWidth
                                         variant="contained"
                                         color="primary"
-                                        onClick={handleScrollToEvents}
+                                        onClick={handleSearchSubmit}
                                         sx={{ height: 40, fontWeight: 700, borderRadius: '8px' }}
                                     >
                                         Tìm Kiếm Vé
@@ -713,6 +631,22 @@ const HomePage = () => {
                                 </Grid>
                             ))}
                         </Grid>
+                    )}
+
+                    {filteredEvents.length > 0 && (
+                        <Box textAlign="center" mt={5}>
+                            <Button
+                                variant="outlined"
+                                color="primary"
+                                size="large"
+                                component={RouterLink}
+                                to="/events"
+                                endIcon={<ArrowForward />}
+                                sx={{ borderRadius: '8px', fontWeight: 600, px: 4 }}
+                            >
+                                Khám Phá Toàn Bộ Danh Sách Sự Kiện
+                            </Button>
+                        </Box>
                     )}
                 </Container>
             </Box>

@@ -8,6 +8,7 @@ import {
   Order,
   Ticket,
   ResaleListing,
+  CheckInLog,
 } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
 import * as blockchainService from "./blockchainService.js";
@@ -325,4 +326,245 @@ export const listTicketForResale = async (
   }
 
   return { ticket, listing };
+};
+// 9. Lấy danh sách vé đang rao bán trên Marketplace (BE-08)
+export const getMarketplaceListings = async ({
+  eventId,
+  page = 1,
+  limit = 12,
+}) => {
+  const parsedPage = Math.max(1, Number(page) || 1);
+  const parsedLimit = Math.max(1, Math.min(50, Number(limit) || 12));
+  const offset = (parsedPage - 1) * parsedLimit;
+  const where = { status: "active" };
+  if (eventId) {
+    where.eventId = Number(eventId);
+  }
+  const { count, rows } = await ResaleListing.findAndCountAll({
+    where,
+    include: [
+      {
+        model: Event,
+        as: "event",
+        attributes: [
+          "id",
+          "title",
+          "category",
+          "bannerUrl",
+          "venueName",
+          "venueCity",
+          "startTime",
+          "endTime",
+          "status",
+        ],
+      },
+      {
+        model: Ticket,
+        as: "ticket",
+        include: [
+          {
+            model: TicketType,
+            as: "ticketType",
+            attributes: ["id", "name", "originalPrice", "currency"],
+          },
+        ],
+      },
+    ],
+    order: [["createdAt", "DESC"]],
+    limit: parsedLimit,
+    offset,
+  });
+  return {
+    listings: rows,
+    pagination: {
+      total: count,
+      page: parsedPage,
+      totalPages: Math.ceil(count / parsedLimit),
+      limit: parsedLimit,
+    },
+  };
+};
+// 10. Hủy niêm yết vé bán lại trên Marketplace (BE-08)
+export const cancelResaleListing = async (ticketId, user) => {
+  const listing = await ResaleListing.findOne({
+    where: { ticketId: Number(ticketId), status: "active" },
+    include: [{ model: Ticket, as: "ticket" }],
+  });
+  if (!listing) {
+    throw new AppError("Không tìm thấy bài niêm yết vé đang mở.", 404);
+  }
+  const callerWallet = (user?.walletAddress || "").toLowerCase();
+  if (callerWallet && listing.sellerWallet.toLowerCase() !== callerWallet) {
+    throw new AppError("Bạn không phải chủ sở hữu của lượt niêm yết này.", 403);
+  }
+  listing.status = "cancelled";
+  await listing.save();
+  if (listing.ticket) {
+    listing.ticket.isListedForResale = false;
+    await listing.ticket.save();
+  }
+  return listing;
+};
+// 11. Mua lại vé từ Marketplace và chuyển nhượng sang ví người mua mới (BE-08)
+export const buyResaleTicket = async (
+  ticketId,
+  { buyerWallet, txHash },
+  user,
+) => {
+  return sequelize.transaction(async (t) => {
+    const listing = await ResaleListing.findOne({
+      where: { ticketId: Number(ticketId), status: "active" },
+      include: [
+        { model: Ticket, as: "ticket" },
+        { model: Event, as: "event" },
+      ],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!listing) {
+      throw new AppError(
+        "Lượt niêm yết này không còn tồn tại hoặc đã được bán.",
+        404,
+      );
+    }
+    const resolvedBuyer = (
+      buyerWallet ||
+      user?.walletAddress ||
+      ""
+    ).toLowerCase();
+    if (!resolvedBuyer) {
+      throw new AppError("Vui lòng cung cấp địa chỉ ví người mua lại.", 400);
+    }
+    if (listing.sellerWallet.toLowerCase() === resolvedBuyer) {
+      throw new AppError(
+        "Người bán không thể tự mua lại vé của chính mình.",
+        400,
+      );
+    }
+    const ticket = listing.ticket;
+    if (!ticket || ticket.isUsed) {
+      throw new AppError(
+        "Vé này đã được soát vé tại cổng, không thể chuyển giao.",
+        400,
+      );
+    }
+    // Cập nhật trạng thái niêm yết
+    listing.status = "sold";
+    listing.buyerWallet = resolvedBuyer;
+    listing.soldTxHash =
+      txHash || `0x${crypto.randomBytes(32).toString("hex")}`;
+    listing.soldAt = new Date();
+    await listing.save({ transaction: t });
+    // Chuyển quyền sở hữu vé sang ví người mua mới
+    ticket.ownerWallet = resolvedBuyer;
+    ticket.isListedForResale = false;
+    ticket.txHash = listing.soldTxHash;
+    await ticket.save({ transaction: t });
+    return { ticket, listing };
+  });
+};
+// 12. Xác thực và Soát vé Check-in tại cổng bằng mã QR động (BE-09)
+export const checkInTicket = async (
+  { qrPayload, ticketId, tokenId },
+  staffUser,
+) => {
+  let targetTicketId = ticketId;
+  let targetTokenId = tokenId;
+  let validUntil;
+  let providedHmac;
+  // Nếu truyền dạng chuỗi QR Payload từ Scanner
+  if (qrPayload) {
+    try {
+      const parsed =
+        typeof qrPayload === "string" ? JSON.parse(qrPayload) : qrPayload;
+      targetTicketId = parsed.ticketId;
+      targetTokenId = parsed.tokenId;
+      validUntil = parsed.validUntil;
+      providedHmac = parsed.hmac;
+    } catch {
+      throw new AppError("Định dạng mã QR không hợp lệ.", 400);
+    }
+    // 1. Kiểm tra thời hạn mã QR (chống chụp màn hình gửi cho người khác, xoay vòng 60s)
+    if (!validUntil || Date.now() > Number(validUntil)) {
+      throw new AppError(
+        "Mã QR đã hết hạn hiệu lực. Vui lòng làm mới mã trên màn hình của khách.",
+        400,
+      );
+    }
+    // 2. Xác thực chữ ký HMAC bảo mật
+    const secretKey =
+      process.env.JWT_ACCESS_SECRET || "blocktickets-dynamic-qr-secret";
+    const rawData = `ticket:${targetTicketId}|token:${targetTokenId}|exp:${validUntil}`;
+    const expectedHmac = crypto
+      .createHmac("sha256", secretKey)
+      .update(rawData)
+      .digest("hex");
+    if (providedHmac !== expectedHmac) {
+      // Ghi log lỗi bảo mật vào CheckInLog
+      await CheckInLog.create({
+        tokenId: targetTokenId || 0,
+        eventId: 0,
+        scannedBy: staffUser?.id || 1,
+        status: "invalid_signature",
+        qrNonce: providedHmac || "unknown",
+      }).catch(() => {});
+      throw new AppError(
+        "Mã QR không hợp lệ hoặc đã bị giả mạo chữ ký (HMAC Mismatch).",
+        400,
+      );
+    }
+  }
+  // 3. Tìm bản ghi vé trong cơ sở dữ liệu
+  const ticket = await Ticket.findByPk(targetTicketId, {
+    include: [
+      { model: Event, as: "event" },
+      { model: TicketType, as: "ticketType" },
+    ],
+  });
+  if (!ticket) {
+    throw new AppError("Không tìm thấy thông tin vé trong hệ thống.", 404);
+  }
+  // 4. Kiểm tra sự kiện
+  if (ticket.event?.status === "cancelled") {
+    throw new AppError("Sự kiện này đã bị hủy bỏ, không thể soát vé.", 400);
+  }
+  // 5. Kiểm tra vé đã từng check-in chưa (Chống quét lặp)
+  if (ticket.isUsed) {
+    await CheckInLog.create({
+      tokenId: ticket.tokenId,
+      eventId: ticket.eventId,
+      scannedBy: staffUser?.id || 1,
+      status: "already_used",
+      qrNonce: providedHmac || `ticket-${ticket.id}`,
+    });
+    throw new AppError(
+      `Vé này ĐÃ ĐƯỢC CHECK-IN lúc ${new Date(ticket.usedAt).toLocaleString("vi-VN")}. Nghi vấn quét trùng lặp!`,
+      409,
+    );
+  }
+  // 6. Đánh dấu vé đã check-in thành công
+  ticket.isUsed = true;
+  ticket.usedAt = new Date();
+  await ticket.save();
+  // Ghi nhật ký soát vé thành công
+  const log = await CheckInLog.create({
+    tokenId: ticket.tokenId,
+    eventId: ticket.eventId,
+    scannedBy: staffUser?.id || 1,
+    status: "success",
+    qrNonce: providedHmac || `nonce-${Date.now()}`,
+  });
+  return {
+    success: true,
+    message: "Soát vé thành công! Mời khách vào khán phòng.",
+    ticket: {
+      id: ticket.id,
+      tokenId: ticket.tokenId,
+      eventName: ticket.event?.title,
+      tierName: ticket.ticketType?.name,
+      ownerWallet: ticket.ownerWallet,
+      usedAt: ticket.usedAt,
+    },
+    logId: log.id,
+  };
 };

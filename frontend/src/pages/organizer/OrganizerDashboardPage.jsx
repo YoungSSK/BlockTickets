@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -71,6 +71,7 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { organizerAPI } from '../../services/api';
 
 // Helper: Rút gọn địa chỉ ví và mã băm
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -80,142 +81,24 @@ const truncateHash = (hash, start = 6, end = 4) => {
 };
 
 // Dữ liệu mẫu các chỉ số kinh tế của Ban Tổ Chức
-const INITIAL_ORGANIZER_METRICS = {
-    totalRevenueEth: 48.75,
-    totalRevenueUsd: 159500,
-    resaleRoyaltyEth: 1.42,
-    withdrawableBalanceEth: 12.50,
-    totalTicketsSold: 965,
-    totalTicketsMaxSupply: 1200,
-    totalCheckedInCount: 773,
-    activeEventsCount: 2,
-    pendingEventsCount: 1,
-    endedEventsCount: 1,
+const EMPTY_ORGANIZER_METRICS = {
+    totalRevenueEth: 0,
+    totalRevenueUsd: 0,
+    resaleRoyaltyEth: 0,
+    withdrawableBalanceEth: 0,
+    totalTicketsSold: 0,
+    totalTicketsMaxSupply: 0,
+    totalCheckedInCount: 0,
+    activeEventsCount: 0,
+    pendingEventsCount: 0,
+    endedEventsCount: 0,
 };
 
-// Danh sách các sự kiện do Organizer quản lý
-const INITIAL_MY_EVENTS = [
-    {
-        id: 'EVT-2026-002',
-        title: 'Vietnam Blockchain Summit 2026',
-        category: 'technology',
-        categoryLabel: 'Công nghệ & Web3',
-        status: 'published',
-        statusText: 'Đang Mở Bán',
-        venue: 'Trung tâm Hội nghị Quốc gia, Hà Nội',
-        date: '28/11/2026',
-        startTime: '08:30',
-        ticketsSold: 412,
-        maxSupply: 500,
-        checkedIn: 382,
-        primaryRevenueEth: 28.50,
-        royaltyEarnedEth: 0.85,
-        totalRevenueEth: 29.35,
-        contractAddress: '0x71C948261901823901928394819203849102A319',
-    },
-    {
-        id: 'EVT-2026-001',
-        title: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        category: 'music',
-        categoryLabel: 'Âm nhạc cổ điển',
-        status: 'published',
-        statusText: 'Đang Mở Bán',
-        venue: 'Nhà Hát Lớn Hà Nội, 01 Tràng Tiền',
-        date: '15/11/2026',
-        startTime: '20:00',
-        ticketsSold: 285,
-        maxSupply: 300,
-        checkedIn: 195,
-        primaryRevenueEth: 15.20,
-        royaltyEarnedEth: 0.38,
-        totalRevenueEth: 15.58,
-        contractAddress: '0x882A990812Da7201bF241cba0982E12Da9911812',
-    },
-    {
-        id: 'EVT-2026-007',
-        title: 'Web3 Developer Bootcamp & Hackathon 2026',
-        category: 'technology',
-        categoryLabel: 'Công nghệ & AI',
-        status: 'pending',
-        statusText: 'Chờ Admin Duyệt',
-        venue: 'Đại học Bách Khoa Hà Nội, Hai Bà Trưng',
-        date: '22/12/2026',
-        startTime: '09:00',
-        ticketsSold: 0,
-        maxSupply: 200,
-        checkedIn: 0,
-        primaryRevenueEth: 0.00,
-        royaltyEarnedEth: 0.00,
-        totalRevenueEth: 0.00,
-        contractAddress: null,
-    },
-    {
-        id: 'EVT-2025-089',
-        title: 'Tech Startup Pitching Day 2025',
-        category: 'workshop',
-        categoryLabel: 'Hội thảo đầu tư',
-        status: 'ended',
-        statusText: 'Đã Kết Thúc',
-        venue: 'Khách sạn Lotte Hà Nội, 54 Liễu Giai',
-        date: '10/10/2025',
-        startTime: '13:30',
-        ticketsSold: 200,
-        maxSupply: 200,
-        checkedIn: 196,
-        primaryRevenueEth: 5.05,
-        royaltyEarnedEth: 0.19,
-        totalRevenueEth: 5.24,
-        contractAddress: '0x123A990812Da7201bF241cba0982E12Da9911999',
-    },
-];
+const INITIAL_ORGANIZER_METRICS = EMPTY_ORGANIZER_METRICS;
 
-// Nhật ký tài chính & bản quyền gần nhất
-const INITIAL_FINANCIAL_LOGS = [
-    {
-        id: 'TXN-9021',
-        type: 'royalty',
-        typeLabel: 'Bản quyền 5% Chợ thứ cấp',
-        eventTitle: 'Vietnam Blockchain Summit 2026',
-        tokenId: 1422,
-        amountEth: 0.014,
-        txHash: '0x8a9f3b12dc089148b39019284918239018294018234810239481902371ef8923',
-        time: '35 phút trước',
-        status: 'completed',
-    },
-    {
-        id: 'TXN-9020',
-        type: 'primary_sale',
-        typeLabel: 'Khách mua vé NFT mới',
-        eventTitle: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        tokenId: 286,
-        amountEth: 0.08,
-        txHash: '0x5c7e19283019284918239018294018234810239481902371ef892312dc089148',
-        time: '2 giờ trước',
-        status: 'completed',
-    },
-    {
-        id: 'TXN-9019',
-        type: 'royalty',
-        typeLabel: 'Bản quyền 5% Chợ thứ cấp',
-        eventTitle: 'Vietnam Blockchain Summit 2026',
-        tokenId: 312,
-        amountEth: 0.0037,
-        txHash: '0x3d2b918239018294018234810239481902371ef892312dc089148b3901928491',
-        time: '4 giờ trước',
-        status: 'completed',
-    },
-    {
-        id: 'TXN-9018',
-        type: 'withdrawal',
-        typeLabel: 'Rút doanh thu về ví cá nhân',
-        eventTitle: 'Hệ thống Smart Contract TicketMarketplace',
-        tokenId: null,
-        amountEth: -10.00,
-        txHash: '0x7f1a3b12dc089148b39019284918239018294018234810239481902371ef8923',
-        time: '1 ngày trước',
-        status: 'completed',
-    },
-];
+const INITIAL_MY_EVENTS = [];
+
+const INITIAL_FINANCIAL_LOGS = [];
 
 const OrganizerDashboardPage = () => {
     const theme = useTheme();
@@ -238,6 +121,7 @@ const OrganizerDashboardPage = () => {
 
     // Snackbar thông báo
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+    const [loading, setLoading] = useState(false);
 
     const showSnackbar = (message, severity = 'info') => {
         setSnackbar({ open: true, message, severity });
@@ -246,6 +130,97 @@ const OrganizerDashboardPage = () => {
     const handleCopy = (text, label) => {
         navigator.clipboard.writeText(text);
         showSnackbar(`Đã sao chép ${label} vào bộ nhớ tạm!`, 'success');
+    };
+
+    // Tải dữ liệu thật từ Backend API
+    const loadOrganizerData = async () => {
+        setLoading(true);
+        try {
+            const [statsRes, eventsRes] = await Promise.allSettled([
+                organizerAPI.getStats(),
+                organizerAPI.getMyEvents({ page: 1, limit: 50 }),
+            ]);
+
+            if (statsRes.status === 'fulfilled' && statsRes.value?.data?.data?.stats) {
+                const s = statsRes.value.data.data.stats;
+                setMetrics({
+                    totalRevenueEth: Number(s.totalRevenueEth) || 0,
+                    totalRevenueUsd: Number(s.totalRevenueUsd) || 0,
+                    resaleRoyaltyEth: +(Number(s.totalRevenueEth || 0) * 0.05).toFixed(3),
+                    withdrawableBalanceEth: Number(s.totalRevenueEth) || 0,
+                    totalTicketsSold: Number(s.totalTicketsMinted) || 0,
+                    totalTicketsMaxSupply: Number(s.totalTicketsMaxSupply) || Number(s.totalTicketsMinted) || 0,
+                    totalCheckedInCount: Number(s.checkedInCount) || 0,
+                    activeEventsCount: Number(s.activeEventsCount) || 0,
+                    pendingEventsCount: Number(s.pendingEventsCount) || 0,
+                    draftEventsCount: Number(s.draftEventsCount) || 0,
+                    endedEventsCount: Number(s.endedEventsCount) || 0,
+                });
+            }
+
+            if (eventsRes.status === 'fulfilled') {
+                const rawEvents = Array.isArray(eventsRes.value?.data?.data?.events)
+                    ? eventsRes.value.data.data.events
+                    : [];
+                const dbEvents = rawEvents.map((e) => {
+                    const ticketsSold = e.ticketTypes?.reduce((sum, tt) => sum + (tt.currentSupply || tt.mintedAmount || 0), 0) || 0;
+                    const maxSupply = e.ticketTypes?.reduce((sum, tt) => sum + (tt.maxSupply || 0), 0) || 0;
+                    const revEth = e.ticketTypes?.reduce((sum, tt) => sum + (tt.currentSupply || 0) * (Number(tt.originalPrice) || 0), 0) || 0;
+
+                    let statusText = 'ĐANG MỞ BÁN';
+                    if (e.status === 'approved') statusText = 'ĐÃ DUYỆT';
+                    else if (e.status === 'pending') statusText = 'CHỜ DUYỆT';
+                    else if (e.status === 'draft') statusText = 'BẢN NHÁP';
+                    else if (e.status === 'ended') statusText = 'ĐÃ KẾT THÚC';
+
+                    return {
+                        id: e.id,
+                        title: e.title,
+                        venue: e.venueName || e.venueCity || 'Hà Nội',
+                        date: e.startTime ? new Date(e.startTime).toLocaleDateString('vi-VN') : '',
+                        startTime: e.startTime ? new Date(e.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '',
+                        status: e.status,
+                        statusText,
+                        ticketsSold,
+                        maxSupply,
+                        checkedIn: 0,
+                        totalRevenueEth: revEth,
+                        royaltyEarnedEth: +(revEth * 0.05).toFixed(3),
+                    };
+                });
+                setEvents(dbEvents);
+            }
+        } catch (err) {
+            console.warn('Lỗi khi tải dữ liệu Ban tổ chức từ server:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadOrganizerData();
+    }, []);
+
+    // Xử lý công bố sự kiện đã được duyệt
+    const handlePublishEvent = async (eventId) => {
+        try {
+            await organizerAPI.publishEvent(eventId);
+            showSnackbar('Đã công khai mở bán sự kiện thành công!', 'success');
+            loadOrganizerData();
+        } catch (err) {
+            showSnackbar(err.message || 'Lỗi khi công bố sự kiện', 'error');
+        }
+    };
+
+    // Xử lý gửi sự kiện nháp lên Admin phê duyệt
+    const handleSubmitReview = async (eventId) => {
+        try {
+            await organizerAPI.submitReview(eventId);
+            showSnackbar('Đã gửi sự kiện lên ban quản trị phê duyệt!', 'success');
+            loadOrganizerData();
+        } catch (err) {
+            showSnackbar(err.message || 'Lỗi khi gửi duyệt sự kiện', 'error');
+        }
     };
 
     // Lọc danh sách sự kiện
@@ -390,13 +365,14 @@ const OrganizerDashboardPage = () => {
                                             </Typography>
                                             <Stack direction="row" spacing={1} alignItems="center">
                                                 <Typography variant="body2" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
-                                                    {user?.walletAddress || '0x8F4211A990812Da7201bF241cba0982E12Da9911'}
+                                                    {user?.walletAddress || 'Chưa liên kết ví'}
                                                 </Typography>
                                                 <Tooltip title="Sao chép ví">
                                                     <IconButton
                                                         size="small"
                                                         aria-label="Sao chép địa chỉ ví ban tổ chức"
-                                                        onClick={() => handleCopy(user?.walletAddress || '0x8F4211A990812Da7201bF241cba0982E12Da9911', 'địa chỉ ví')}
+                                                        onClick={() => handleCopy(user?.walletAddress || '', 'địa chỉ ví')}
+                                                        disabled={!user?.walletAddress}
                                                     >
                                                         <ContentCopy sx={{ fontSize: 13 }} />
                                                     </IconButton>
@@ -723,7 +699,31 @@ const OrganizerDashboardPage = () => {
 
                                                     {/* Thao tác */}
                                                     <TableCell align="right">
-                                                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                                        <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                                                            {evt.status === 'approved' && (
+                                                                <Button
+                                                                    size="small"
+                                                                    variant="contained"
+                                                                    color="success"
+                                                                    onClick={() => handlePublishEvent(evt.id)}
+                                                                    sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, fontWeight: 700, borderRadius: '6px' }}
+                                                                >
+                                                                    Mở Bán
+                                                                </Button>
+                                                            )}
+
+                                                            {evt.status === 'draft' && (
+                                                                <Button
+                                                                    size="small"
+                                                                    variant="outlined"
+                                                                    color="primary"
+                                                                    onClick={() => handleSubmitReview(evt.id)}
+                                                                    sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, fontWeight: 700, borderRadius: '6px' }}
+                                                                >
+                                                                    Gửi Duyệt
+                                                                </Button>
+                                                            )}
+
                                                             {evt.status === 'published' && (
                                                                 <Tooltip title="Mở máy quét soát vé tại cổng">
                                                                     <IconButton
@@ -795,7 +795,14 @@ const OrganizerDashboardPage = () => {
                         </Stack>
 
                         <Stack spacing={1.5}>
-                            {financialLogs.map((log) => (
+                            {financialLogs.length === 0 ? (
+                                <Box sx={{ py: 4, textAlign: 'center' }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Chưa có phát sinh giao dịch tài chính hoặc phân phối bản quyền nào.
+                                    </Typography>
+                                </Box>
+                            ) : (
+                                financialLogs.map((log) => (
                                 <Paper
                                     key={log.id}
                                     elevation={0}
@@ -867,7 +874,8 @@ const OrganizerDashboardPage = () => {
                                         </Typography>
                                     </Box>
                                 </Paper>
-                            ))}
+                            ))
+                        )}
                         </Stack>
                     </Paper>
                 </Container>
@@ -959,7 +967,7 @@ const OrganizerDashboardPage = () => {
                                     Ví đích nhận thanh toán:
                                 </Typography>
                                 <Typography variant="body2" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
-                                    {truncateHash(user?.walletAddress || '0x8F4211A990812Da7201bF241cba0982E12Da9911', 10, 8)}
+                                    {user?.walletAddress ? truncateHash(user.walletAddress, 10, 8) : 'Chưa liên kết ví Web3'}
                                 </Typography>
                             </Box>
 

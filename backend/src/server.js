@@ -12,6 +12,8 @@ import eventRoutes from "./routes/eventRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import ticketRoutes from "./routes/ticketRoutes.js";
+import marketplaceRoutes from "./routes/marketplaceRoutes.js";
+import checkInRoutes from "./routes/checkInRoutes.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
@@ -63,6 +65,8 @@ app.use("/api/events", eventRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/marketplace", marketplaceRoutes);
+app.use("/api/check-in", checkInRoutes);
 // Middleware
 app.use(notFound);
 app.use(errorHandler);

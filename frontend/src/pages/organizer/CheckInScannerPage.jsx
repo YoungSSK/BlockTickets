@@ -70,6 +70,7 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { checkInAPI, eventAPI } from '../../services/api';
 
 // Helper phát âm thanh phản hồi Web Audio API
 const playFeedbackSound = (type = 'success') => {
@@ -105,34 +106,6 @@ const playFeedbackSound = (type = 'success') => {
     }
 };
 
-// Dữ liệu sự kiện mẫu để nhân viên chọn
-const EVENTS_LIST = [
-    {
-        id: 'EVT-2026-002',
-        title: 'Vietnam Blockchain Summit 2026',
-        venue: 'Trung tâm Hội nghị Quốc gia, Hà Nội',
-        date: '28/11/2026',
-        totalTickets: 500,
-        checkedInCount: 382,
-    },
-    {
-        id: 'EVT-2026-001',
-        title: 'Hòa Nhạc Giao Hưởng Mùa Thu 2026',
-        venue: 'Nhà Hát Lớn Hà Nội, 01 Tràng Tiền',
-        date: '15/11/2026',
-        totalTickets: 300,
-        checkedInCount: 195,
-    },
-    {
-        id: 'EVT-2026-003',
-        title: 'Vietnam Esports Championship 2026',
-        venue: 'Nhà thi đấu Phú Thọ, TP. Hồ Chí Minh',
-        date: '05/12/2026',
-        totalTickets: 1200,
-        checkedInCount: 740,
-    },
-];
-
 const GATES_LIST = [
     'Cổng VIP - Sảnh Chính Tầng 1 (Lối Fast-Track)',
     'Cổng A - Khán Đài Phổ Thông Tầng 1',
@@ -140,53 +113,14 @@ const GATES_LIST = [
     'Cổng Kỹ Thuật & Khách Mời VIP',
 ];
 
-// Dữ liệu cơ sở vé mẫu để kiểm chứng soát vé
-const KNOWN_TICKETS_DATABASE = {
-    1422: {
-        tokenId: 1422,
-        eventId: 'EVT-2026-002',
-        attendeeName: 'Nguyễn Tuấn An',
-        walletAddress: '0x789b9102934812301928394819203849102334ef',
-        tierName: 'VIP Networking Pass',
-        gateAllowed: 'Cổng VIP - Sảnh Chính Tầng 1 (Lối Fast-Track)',
-        seatNumber: 'Ghế VIP-08 (Hàng 1)',
-        isUsed: false,
-        usedAt: null,
-        usedByStaff: null,
-    },
-    312: {
-        tokenId: 312,
-        eventId: 'EVT-2026-001', // Thuộc sự kiện Hòa nhạc
-        attendeeName: 'Lê Hoàng Nam',
-        walletAddress: '0x812A990812Da7201bF241cba0982E12Da9911910',
-        tierName: 'Hạng Standard Pass',
-        gateAllowed: 'Cổng B - Khán Đài Tầng 2 & Ban Công',
-        seatNumber: 'Ghế B-14',
-        isUsed: false,
-        usedAt: null,
-        usedByStaff: null,
-    },
-    508: {
-        tokenId: 508,
-        eventId: 'EVT-2026-002',
-        attendeeName: 'Phạm Minh Đức',
-        walletAddress: '0x498b9102934812301928394819203849102334EF',
-        tierName: 'VIP Networking Pass',
-        gateAllowed: 'Cổng VIP - Sảnh Chính Tầng 1 (Lối Fast-Track)',
-        seatNumber: 'Ghế VIP-12',
-        isUsed: true, // Đã check-in trước đó
-        usedAt: '16:45:20 - 09/11/2026',
-        usedByStaff: 'Trần Văn Bình (STF-08)',
-    },
-};
-
 const CheckInScannerPage = () => {
     const theme = useTheme();
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    // Cấu hình sự kiện và cổng soát vé hiện tại
-    const [selectedEventId, setSelectedEventId] = useState('EVT-2026-002');
+    // Danh sách sự kiện & Cấu hình soát vé
+    const [eventsList, setEventsList] = useState([]);
+    const [selectedEventId, setSelectedEventId] = useState('');
     const [selectedGate, setSelectedGate] = useState(GATES_LIST[0]);
 
     // Trạng thái Camera Scanner
@@ -207,44 +141,13 @@ const CheckInScannerPage = () => {
 
     // Ngăn kéo lịch sử soát vé (Recent Activity Log)
     const [openHistoryDrawer, setOpenHistoryDrawer] = useState(false);
-    const [checkInLogs, setCheckInLogs] = useState([
-        {
-            id: 'LOG-1092',
-            tokenId: 881,
-            attendeeName: 'Trần Bảo Ngọc',
-            tierName: 'Standard Pass',
-            status: 'success',
-            statusText: 'HỢP LỆ',
-            gate: 'Cổng VIP - Sảnh Chính Tầng 1 (Lối Fast-Track)',
-            time: '17:15:22',
-        },
-        {
-            id: 'LOG-1091',
-            tokenId: 508,
-            attendeeName: 'Phạm Minh Đức',
-            tierName: 'VIP Pass',
-            status: 'already_used',
-            statusText: 'VÉ ĐÃ DÙNG',
-            gate: 'Cổng VIP - Sảnh Chính Tầng 1 (Lối Fast-Track)',
-            time: '17:12:05',
-        },
-        {
-            id: 'LOG-1090',
-            tokenId: 994,
-            attendeeName: 'Hoàng Quốc Việt',
-            tierName: 'VIP Pass',
-            status: 'success',
-            statusText: 'HỢP LỆ',
-            gate: 'Cổng VIP - Sảnh Chính Tầng 1 (Lối Fast-Track)',
-            time: '17:08:44',
-        },
-    ]);
+    const [checkInLogs, setCheckInLogs] = useState([]);
 
     // Thống kê ca trực
     const [shiftStats, setShiftStats] = useState({
-        totalScanned: 42,
-        successCount: 39,
-        rejectedCount: 3,
+        totalScanned: 0,
+        successCount: 0,
+        rejectedCount: 0,
     });
 
     // Snackbar thông báo
@@ -254,120 +157,175 @@ const CheckInScannerPage = () => {
         setSnackbar({ open: true, message, severity });
     };
 
-    const currentEvent = EVENTS_LIST.find((e) => e.id === selectedEventId) || EVENTS_LIST[0];
+    // Tải danh sách sự kiện từ Backend
+    useEffect(() => {
+        const fetchEvents = async () => {
+            try {
+                const res = await eventAPI.getEvents({ limit: 50 });
+                const rawEvents = res.data?.data?.events;
+                if (Array.isArray(rawEvents) && rawEvents.length > 0) {
+                    const liveEvents = rawEvents.map((e) => ({
+                        id: e.id,
+                        title: e.title,
+                        venue: e.venueName || e.venueCity || 'Địa điểm tổ chức',
+                        date: e.startTime ? new Date(e.startTime).toLocaleDateString('vi-VN') : '',
+                        totalTickets: e.ticketTypes?.reduce((s, tt) => s + (Number(tt.maxSupply) || 0), 0) || 0,
+                        checkedInCount: 0,
+                    }));
+                    setEventsList(liveEvents);
+                    setSelectedEventId(liveEvents[0].id);
+                } else {
+                    setEventsList([]);
+                    setSelectedEventId('');
+                }
+            } catch (err) {
+                console.warn('Lỗi khi tải danh sách sự kiện cho máy quét:', err);
+                setEventsList([]);
+                setSelectedEventId('');
+            }
+        };
+        fetchEvents();
+    }, []);
+
+    // Tải số liệu thống kê check-in theo sự kiện đang chọn
+    useEffect(() => {
+        const fetchCheckInStats = async () => {
+            try {
+                const res = await checkInAPI.getStats(selectedEventId);
+                if (res.data?.data) {
+                    const s = res.data.data;
+                    setShiftStats((prev) => ({
+                        ...prev,
+                        totalScanned: (s.usedCount || 0) + prev.rejectedCount,
+                        successCount: s.usedCount || 0,
+                    }));
+                }
+            } catch {
+                // ignore
+            }
+        };
+        if (selectedEventId) fetchCheckInStats();
+    }, [selectedEventId]);
+
+    const currentEvent = eventsList.find((e) => e.id === selectedEventId) || eventsList[0] || null;
 
     // Xử lý xác thực mã vé khi quét
-    const processTicketPayload = (payloadString) => {
+    const processTicketPayload = async (payloadString) => {
         if (isVerifying) return;
         setIsVerifying(true);
 
-        let parsedTokenId = null;
-        let isExpiredHmac = false;
-
         try {
-            // Thử phân tích JSON (nếu là payload HMAC động từ MyTicketsPage)
-            const data = JSON.parse(payloadString);
-            parsedTokenId = data.tokenId;
-
-            // Kiểm tra thời hạn 30s của mã QR HMAC
-            if (data.timestamp && Date.now() - data.timestamp > 35000) {
-                isExpiredHmac = true;
-            }
-        } catch {
-            // Nếu là chuỗi số đơn thuần hoặc Token ID nhập tay
-            parsedTokenId = parseInt(payloadString.replace(/\D/g, ''), 10);
-        }
-
-        setTimeout(() => {
-            setIsVerifying(false);
-
-            if (isExpiredHmac) {
-                if (soundEnabled) playFeedbackSound('error');
-                setScanResult({
-                    status: 'expired_hmac',
-                    title: 'MÃ QR ĐÃ HẾT HẠN (HMAC > 30s)',
-                    message: 'Mã QR đã quá hạn 30 giây bảo mật. Yêu cầu khách mở lại ứng dụng để tự tạo mã QR mới.',
-                    tokenId: parsedTokenId,
-                    time: new Date().toLocaleTimeString('vi-VN'),
-                });
-                setShiftStats((prev) => ({ ...prev, totalScanned: prev.totalScanned + 1, rejectedCount: prev.rejectedCount + 1 }));
-                return;
-            }
-
-            const ticket = KNOWN_TICKETS_DATABASE[parsedTokenId];
-
-            if (!ticket) {
-                // Vé không tồn tại trên hệ thống
-                if (soundEnabled) playFeedbackSound('error');
-                setScanResult({
-                    status: 'invalid_ticket',
-                    title: 'VÉ KHÔNG TỒN TẠI',
-                    message: `Mã vé hoặc Token #${parsedTokenId || payloadString} không tồn tại trên Smart Contract hoặc cơ sở dữ liệu.`,
-                    tokenId: parsedTokenId || 'N/A',
-                    time: new Date().toLocaleTimeString('vi-VN'),
-                });
-                setShiftStats((prev) => ({ ...prev, totalScanned: prev.totalScanned + 1, rejectedCount: prev.rejectedCount + 1 }));
-                return;
-            }
-
-            // Kiểm tra sự kiện
-            if (ticket.eventId !== selectedEventId) {
-                if (soundEnabled) playFeedbackSound('error');
-                const wrongEvent = EVENTS_LIST.find((e) => e.id === ticket.eventId);
-                setScanResult({
-                    status: 'wrong_event',
-                    title: 'SAI SỰ KIỆN TỔ CHỨC',
-                    message: `Vé này thuộc sự kiện "${wrongEvent?.title || ticket.eventId}", không áp dụng cho sự kiện hiện tại!`,
-                    ticket,
-                    tokenId: ticket.tokenId,
-                    time: new Date().toLocaleTimeString('vi-VN'),
-                });
-                setShiftStats((prev) => ({ ...prev, totalScanned: prev.totalScanned + 1, rejectedCount: prev.rejectedCount + 1 }));
-                return;
-            }
-
-            // Kiểm tra đã check-in hay chưa (BR-05)
-            if (ticket.isUsed) {
-                if (soundEnabled) playFeedbackSound('error');
-                setScanResult({
-                    status: 'already_used',
-                    title: 'VÉ ĐÃ ĐƯỢC CHECK-IN!',
-                    message: `Vé này đã được quét thành công lúc ${ticket.usedAt} bởi nhân viên ${ticket.usedByStaff}. Tuyệt đối không cho phép sử dụng lại!`,
-                    ticket,
-                    tokenId: ticket.tokenId,
-                    time: new Date().toLocaleTimeString('vi-VN'),
-                });
-                setShiftStats((prev) => ({ ...prev, totalScanned: prev.totalScanned + 1, rejectedCount: prev.rejectedCount + 1 }));
-
-                // Ghi vào nhật ký
-                addCheckInLog(ticket, 'already_used', 'VÉ ĐÃ DÙNG');
-                return;
-            }
-
-            // CHECK-IN THÀNH CÔNG (HỢP LỆ)
-            if (soundEnabled) playFeedbackSound('success');
-            ticket.isUsed = true;
-            ticket.usedAt = new Date().toLocaleTimeString('vi-VN') + ' - ' + new Date().toLocaleDateString('vi-VN');
-            ticket.usedByStaff = user?.name || 'Trần Văn Bình (STF-08)';
-
-            setScanResult({
-                status: 'success',
-                title: 'VÉ HỢP LỆ • MỜI VÀO CỔNG',
-                message: 'Thông tin hợp lệ, quyền sở hữu NFT đã được xác nhận nguyên tử on-chain.',
-                ticket,
-                tokenId: ticket.tokenId,
-                time: new Date().toLocaleTimeString('vi-VN'),
+            // 1. Thử gọi API Check-in trực tiếp từ Backend
+            const res = await checkInAPI.verifyTicket({
+                qrData: payloadString,
+                eventId: selectedEventId,
             });
 
+            const data = res.data?.data;
+            if (data) {
+                if (data.valid) {
+                    // Vé hợp lệ trên database -> Ghi nhận check-in
+                    const confirmRes = await checkInAPI.confirmCheckIn({
+                        ticketId: data.ticket?.id,
+                        eventId: selectedEventId,
+                        gate: selectedGate,
+                        staffNote: `Soát bởi ${user?.fullName || user?.name || 'Nhân viên cổng'}`,
+                    });
+
+                    if (soundEnabled) playFeedbackSound('success');
+                    const confirmedTicket = confirmRes.data?.data?.ticket || data.ticket;
+
+                    setScanResult({
+                        status: 'success',
+                        title: 'VÉ HỢP LỆ • MỜI VÀO CỔNG',
+                        message: 'Thông tin hợp lệ, vé NFT đã được ghi nhận check-in thành công.',
+                        ticket: {
+                            tokenId: confirmedTicket?.tokenId || confirmedTicket?.id,
+                            attendeeName: confirmedTicket?.owner?.fullName || confirmedTicket?.owner?.walletAddress || 'Khách tham dự',
+                            walletAddress: confirmedTicket?.owner?.walletAddress || confirmedTicket?.ownerAddress,
+                            tierName: data.ticketType?.name || confirmedTicket?.ticketType?.name || 'Standard Pass',
+                            gateAllowed: selectedGate,
+                            seatNumber: confirmedTicket?.seatNumber || 'Ghế Tự Do',
+                        },
+                        tokenId: confirmedTicket?.tokenId || confirmedTicket?.id,
+                        time: new Date().toLocaleTimeString('vi-VN'),
+                    });
+
+                    setShiftStats((prev) => ({
+                        ...prev,
+                        totalScanned: prev.totalScanned + 1,
+                        successCount: prev.successCount + 1,
+                    }));
+
+                    addCheckInLog({
+                        tokenId: confirmedTicket?.tokenId || confirmedTicket?.id,
+                        attendeeName: confirmedTicket?.owner?.fullName || 'Khách tham dự',
+                        tierName: data.ticketType?.name || confirmedTicket?.ticketType?.name || 'Standard Pass',
+                    }, 'success', 'HỢP LỆ');
+
+                    setIsVerifying(false);
+                    return;
+                } else {
+                    // Backend trả về vé không hợp lệ (hết hạn HMAC, đã dùng, sai sự kiện,...)
+                    if (soundEnabled) playFeedbackSound('error');
+
+                    const statusMap = {
+                        expired: { status: 'expired_hmac', title: 'MÃ QR ĐÃ HẾT HẠN (HMAC > 60s)' },
+                        already_used: { status: 'already_used', title: 'VÉ ĐÃ ĐƯỢC CHECK-IN!' },
+                        wrong_event: { status: 'wrong_event', title: 'SAI SỰ KIỆN TỔ CHỨC' },
+                        invalid_ticket: { status: 'invalid_ticket', title: 'VÉ KHÔNG TỒN TẠI' },
+                    };
+
+                    const matched = statusMap[data.status] || {
+                        status: 'invalid_ticket',
+                        title: 'VÉ KHÔNG HỢP LỆ',
+                    };
+
+                    setScanResult({
+                        status: matched.status,
+                        title: matched.title,
+                        message: data.message || 'Mã vé không hợp lệ.',
+                        ticket: data.ticket,
+                        tokenId: data.ticket?.tokenId || data.ticket?.id || 'N/A',
+                        time: new Date().toLocaleTimeString('vi-VN'),
+                    });
+
+                    setShiftStats((prev) => ({
+                        ...prev,
+                        totalScanned: prev.totalScanned + 1,
+                        rejectedCount: prev.rejectedCount + 1,
+                    }));
+
+                    if (data.ticket) {
+                        addCheckInLog({
+                            tokenId: data.ticket?.tokenId || data.ticket?.id,
+                            attendeeName: data.ticket?.owner?.fullName || 'Khách tham dự',
+                            tierName: data.ticket?.ticketType?.name || 'Standard Pass',
+                        }, matched.status, matched.title);
+                    }
+
+                    setIsVerifying(false);
+                    return;
+                }
+            }
+        } catch (apiError) {
+            console.warn('Lỗi khi gọi API Check-in:', apiError);
+            if (soundEnabled) playFeedbackSound('error');
+            const errMsg = apiError.response?.data?.message || apiError.message || 'Không thể xác thực vé với máy chủ.';
+            setScanResult({
+                status: 'invalid_ticket',
+                title: 'LỖI XÁC THỰC VÉ',
+                message: errMsg,
+                tokenId: 'N/A',
+                time: new Date().toLocaleTimeString('vi-VN'),
+            });
             setShiftStats((prev) => ({
                 ...prev,
                 totalScanned: prev.totalScanned + 1,
-                successCount: prev.successCount + 1,
+                rejectedCount: prev.rejectedCount + 1,
             }));
-
-            // Ghi nhật ký thành công
-            addCheckInLog(ticket, 'success', 'HỢP LỆ');
-        }, 350);
+            setIsVerifying(false);
+        }
     };
 
     const addCheckInLog = (ticket, status, statusText) => {
@@ -445,49 +403,6 @@ const CheckInScannerPage = () => {
         setOpenManualModal(false);
         processTicketPayload(manualTokenInput.trim());
         setManualTokenInput('');
-    };
-
-    // Thử nghiệm nhanh các kịch bản
-    const handleQuickSimulate = (mockType) => {
-        if (mockType === 'valid') {
-            processTicketPayload(
-                JSON.stringify({
-                    tokenId: 1422,
-                    contract: '0x71C948261901823901928394819203849102A319',
-                    nonce: 'mock-valid',
-                    timestamp: Date.now(),
-                })
-            );
-        } else if (mockType === 'already_used') {
-            processTicketPayload(
-                JSON.stringify({
-                    tokenId: 508,
-                    contract: '0x71C948261901823901928394819203849102A319',
-                    nonce: 'mock-used',
-                    timestamp: Date.now(),
-                })
-            );
-        } else if (mockType === 'wrong_event') {
-            processTicketPayload(
-                JSON.stringify({
-                    tokenId: 312,
-                    contract: '0x71C948261901823901928394819203849102A319',
-                    nonce: 'mock-wrong-event',
-                    timestamp: Date.now(),
-                })
-            );
-        } else if (mockType === 'expired_hmac') {
-            processTicketPayload(
-                JSON.stringify({
-                    tokenId: 1422,
-                    contract: '0x71C948261901823901928394819203849102A319',
-                    nonce: 'mock-expired',
-                    timestamp: Date.now() - 45000, // Quá 45 giây
-                })
-            );
-        } else {
-            processTicketPayload('TOKEN-999999-FAKE');
-        }
     };
 
     return (
@@ -576,11 +491,15 @@ const CheckInScannerPage = () => {
                                             setScanResult(null);
                                         }}
                                     >
-                                        {EVENTS_LIST.map((evt) => (
-                                            <MenuItem key={evt.id} value={evt.id}>
-                                                <strong>{evt.title}</strong> — {evt.venue}
-                                            </MenuItem>
-                                        ))}
+                                        {eventsList.length === 0 ? (
+                                            <MenuItem value="" disabled>Chưa có sự kiện nào</MenuItem>
+                                        ) : (
+                                            eventsList.map((evt) => (
+                                                <MenuItem key={evt.id} value={evt.id}>
+                                                    <strong>{evt.title}</strong> — {evt.venue}
+                                                </MenuItem>
+                                            ))
+                                        )}
                                     </Select>
                                 </FormControl>
                             </Grid>
@@ -780,80 +699,6 @@ const CheckInScannerPage = () => {
                                     )}
                                 </Box>
 
-                                {/* PHẦN THỬ NGHIỆM KỊCH BẢN CHECK-IN (DEMO & TESTING CONTROLS) */}
-                                <CardContent sx={{ p: 2.5, bgcolor: 'background.paper' }}>
-                                    <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" mb={1.5}>
-                                        THỬ NGHIỆM NHANH KỊCH BẢN SOÁT VÉ (QUICK SIMULATOR):
-                                    </Typography>
-                                    <Grid container spacing={1}>
-                                        <Grid item xs={6} sm={2.4}>
-                                            <Button
-                                                fullWidth
-                                                size="small"
-                                                variant="outlined"
-                                                color="success"
-                                                onClick={() => handleQuickSimulate('valid')}
-                                                sx={{ borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, py: 0.8 }}
-                                            >
-                                                ✓ Vé Hợp Lệ (#1422)
-                                            </Button>
-                                        </Grid>
-                                        <Grid item xs={6} sm={2.4}>
-                                            <Button
-                                                fullWidth
-                                                size="small"
-                                                variant="outlined"
-                                                sx={{
-                                                    borderRadius: '6px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 600,
-                                                    py: 0.8,
-                                                    color: theme.palette.status?.checkedIn || '#8B5CF6',
-                                                    borderColor: theme.palette.status?.checkedIn || '#8B5CF6',
-                                                }}
-                                                onClick={() => handleQuickSimulate('already_used')}
-                                            >
-                                                ⚠ Đã Dùng (#508)
-                                            </Button>
-                                        </Grid>
-                                        <Grid item xs={6} sm={2.4}>
-                                            <Button
-                                                fullWidth
-                                                size="small"
-                                                variant="outlined"
-                                                color="warning"
-                                                onClick={() => handleQuickSimulate('wrong_event')}
-                                                sx={{ borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, py: 0.8 }}
-                                            >
-                                                ✕ Sai Sự Kiện (#312)
-                                            </Button>
-                                        </Grid>
-                                        <Grid item xs={6} sm={2.4}>
-                                            <Button
-                                                fullWidth
-                                                size="small"
-                                                variant="outlined"
-                                                color="error"
-                                                onClick={() => handleQuickSimulate('expired_hmac')}
-                                                sx={{ borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, py: 0.8 }}
-                                            >
-                                                ⏳ QR Hết Hạn (&gt;30s)
-                                            </Button>
-                                        </Grid>
-                                        <Grid item xs={12} sm={2.4}>
-                                            <Button
-                                                fullWidth
-                                                size="small"
-                                                variant="outlined"
-                                                color="error"
-                                                onClick={() => handleQuickSimulate('invalid')}
-                                                sx={{ borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, py: 0.8 }}
-                                            >
-                                                ✕ Vé Giả Mạo
-                                            </Button>
-                                        </Grid>
-                                    </Grid>
-                                </CardContent>
                             </Card>
                         </Grid>
 
@@ -1209,7 +1054,7 @@ const CheckInScannerPage = () => {
                 </Stack>
 
                 <Typography variant="caption" color="text.secondary" display="block" mb={2}>
-                    Ca trực: <strong>{currentEvent.title}</strong>
+                    Ca trực: <strong>{currentEvent?.title || "Chưa chọn sự kiện"}</strong>
                 </Typography>
 
                 <List sx={{ p: 0 }}>
