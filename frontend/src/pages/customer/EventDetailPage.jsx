@@ -50,6 +50,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { eventAPI } from '../../services/api';
 import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
 
@@ -241,6 +242,7 @@ Sự kiện diễn ra trong 2 ngày với hơn 30 phiên tham luận chuyên sâ
 
 const EventDetailPage = () => {
     const { mode, toggleTheme } = useAppTheme();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const { id } = useParams();
 
@@ -405,8 +407,13 @@ const EventDetailPage = () => {
             return { isBuyDisabled: true, buttonText: 'Đã kết thúc đợt mở bán' };
         }
 
+        // Chặn không cho tài khoản Ban tổ chức mua vé
+        if (user && (user.role === 'organizer' || user.id === event?.organizerId)) {
+            return { isBuyDisabled: true, buttonText: 'Tài khoản BTC không thể tự mua vé' };
+        }
+
         return { isBuyDisabled: false, buttonText: 'Mua Vé NFT Ngay' };
-    }, [activeTier, event]);
+    }, [activeTier, event, user]);
 
     // Sao chép clipboard
     const handleCopy = (text, label = 'mã') => {
@@ -423,7 +430,7 @@ const EventDetailPage = () => {
 
     // Chuyển sang trang thanh toán CheckoutPage
     const handleProceedToCheckout = () => {
-        if (!activeTier) return;
+        if (!activeTier || saleStatus.isBuyDisabled) return;
         navigate('/checkout', {
             state: {
                 quantity,
@@ -1119,6 +1126,12 @@ const EventDetailPage = () => {
                                     >
                                         {saleStatus.buttonText}
                                     </Button>
+
+                                    {user && (user.role === 'organizer' || user.id === event?.organizerId) && (
+                                        <Alert severity="warning" sx={{ mb: 2, fontSize: '0.78rem', borderRadius: '8px' }}>
+                                            Bạn đang đăng nhập với vai trò Ban tổ chức. Chức năng mua vé bị vô hiệu hóa để bảo vệ tính toàn vẹn doanh thu. Vui lòng truy cập <RouterLink to="/organizer" style={{ color: 'inherit', fontWeight: 700 }}>Trang Quản Trị</RouterLink> để xem chi tiết sự kiện.
+                                        </Alert>
+                                    )}
 
                                     <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
                                         <Shield sx={{ fontSize: 16, color: 'status.success' }} />

@@ -193,6 +193,12 @@ export const organizerAPI = {
     // Cập nhật sự kiện
     updateEvent: (id, data) => api.put(`/events/${id}`, data),
 
+    // Hủy sự kiện
+    cancelEvent: (id, reason) => api.patch(`/events/${id}/cancel`, { reason }),
+
+    // Xóa vĩnh viễn sự kiện (nếu chưa phát sinh vé bán ra)
+    deleteEvent: (id) => api.delete(`/events/${id}`),
+
     // Thêm hạng vé cho sự kiện
     addTicketType: (eventId, data) => api.post(`/events/${eventId}/ticket-types`, data),
 

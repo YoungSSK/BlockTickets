@@ -75,6 +75,39 @@ export const updateEvent = async (req, res, next) => {
   }
 };
 
+export const cancelEvent = async (req, res, next) => {
+  try {
+    const event = await eventService.cancelEventByOrganizer(
+      req.validated.params.id,
+      req.user.id,
+      req.body?.reason || "",
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Hủy sự kiện thành công.",
+      data: { event },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deleteEvent = async (req, res, next) => {
+  try {
+    const result = await eventService.deleteEventByOrganizer(
+      req.validated.params.id,
+      req.user.id,
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Xóa sự kiện thành công.",
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const createTicketType = async (req, res, next) => {
   try {
     const ticketType = await eventService.addTicketTypeToEvent(

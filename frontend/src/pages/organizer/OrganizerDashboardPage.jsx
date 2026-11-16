@@ -28,6 +28,7 @@ import {
     Tabs,
     Tab,
     LinearProgress,
+    Pagination,
     Stack,
     InputAdornment,
     MenuItem,
@@ -63,13 +64,14 @@ import {
     Shield,
     MonetizationOn,
     Payments,
+    LocationOn,
+    Schedule,
     ReceiptLong,
     ArrowForward,
     Settings,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { organizerAPI, authAPI, userAPI } from '../../services/api';
@@ -128,18 +130,34 @@ const OrganizerDashboardPage = () => {
     const [events, setEvents] = useState(INITIAL_MY_EVENTS);
     const [financialLogs, setFinancialLogs] = useState(INITIAL_FINANCIAL_LOGS);
 
-    // Bộ lọc & Tab
-    const [statusTab, setStatusTab] = useState('all'); // 'all' | 'published' | 'pending' | 'ended'
-    const [searchTerm, setSearchTerm] = useState('');
-
     // Modal đối soát doanh thu on-chain
     const [openWithdrawModal, setOpenWithdrawModal] = useState(false);
+
+    // Modal xem chi tiết sự kiện cho Ban tổ chức
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [openDetailModal, setOpenDetailModal] = useState(false);
 
     // State ví Web3 của Ban tổ chức
     const [connectedWallet, setConnectedWallet] = useState(user?.walletAddress || '');
     const [walletBalance, setWalletBalance] = useState('');
     const [isConnectingWallet, setIsConnectingWallet] = useState(false);
     const [isLinkingWallet, setIsLinkingWallet] = useState(false);
+
+    // Phân trang nhật ký giao dịch (10 transactions/trang)
+    const [logsPage, setLogsPage] = useState(1);
+    const LOGS_PER_PAGE = 10;
+
+    const totalLogsPages = Math.ceil(financialLogs.length / LOGS_PER_PAGE) || 1;
+    const paginatedLogs = useMemo(() => {
+        const start = (logsPage - 1) * LOGS_PER_PAGE;
+        return financialLogs.slice(start, start + LOGS_PER_PAGE);
+    }, [financialLogs, logsPage]);
+
+    useEffect(() => {
+        if (logsPage > totalLogsPages) {
+            setLogsPage(1);
+        }
+    }, [totalLogsPages, logsPage]);
 
     // Snackbar thông báo
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
@@ -350,7 +368,12 @@ const OrganizerDashboardPage = () => {
                 const dbEvents = rawEvents.map((e) => {
                     const ticketsSold = e.ticketTypes?.reduce((sum, tt) => sum + (tt.currentSupply || tt.mintedAmount || 0), 0) || 0;
                     const maxSupply = e.ticketTypes?.reduce((sum, tt) => sum + (tt.maxSupply || 0), 0) || 0;
-                    const revEth = e.ticketTypes?.reduce((sum, tt) => sum + (tt.currentSupply || 0) * (Number(tt.originalPrice) || 0), 0) || 0;
+                    const revEth = +(
+                        (e.ticketTypes?.reduce(
+                            (sum, tt) => sum + (tt.currentSupply || tt.mintedAmount || 0) * (Number(tt.originalPrice) || 0),
+                            0
+                        ) || 0)
+                    ).toFixed(4);
 
                     let statusText = 'ĐANG MỞ BÁN';
                     if (e.status === 'approved') statusText = 'ĐÃ DUYỆT';
@@ -361,16 +384,30 @@ const OrganizerDashboardPage = () => {
                     return {
                         id: e.id,
                         title: e.title,
-                        venue: e.venueName || e.venueCity || 'Hà Nội',
+                        description: e.description || '',
+                        bannerUrl: e.bannerUrl || '',
+                        category: e.category || 'sports',
+                        categoryLabel:
+                            e.category === 'sports' ? 'Thể thao' :
+                            e.category === 'technology' ? 'Công nghệ & Web3' :
+                            e.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc',
+                        venue: e.venueName ? `${e.venueName}, ${e.venueAddress || e.venueCity || ''}` : e.venueCity || 'Hà Nội',
+                        venueName: e.venueName || '',
+                        venueAddress: e.venueAddress || '',
+                        venueCity: e.venueCity || '',
                         date: e.startTime ? new Date(e.startTime).toLocaleDateString('vi-VN') : '',
-                        startTime: e.startTime ? new Date(e.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '',
+                        startTime: e.startTime ? new Date(e.startTime).toLocaleString('vi-VN') : '',
+                        endTime: e.endTime ? new Date(e.endTime).toLocaleString('vi-VN') : '',
                         status: e.status,
                         statusText,
+                        onChainEventId: e.onChainEventId,
                         ticketsSold,
                         maxSupply,
                         checkedIn: 0,
                         totalRevenueEth: revEth,
                         royaltyEarnedEth: +(revEth * 0.05).toFixed(3),
+                        ticketTypes: Array.isArray(e.ticketTypes) ? e.ticketTypes : [],
+                        raw: e,
                     };
                 });
                 setEvents(dbEvents);
@@ -493,56 +530,27 @@ const OrganizerDashboardPage = () => {
         }
     };
 
-    // Lọc danh sách sự kiện
-    const filteredEvents = useMemo(() => {
-        return events.filter((evt) => {
-            const matchesStatus = statusTab === 'all' || evt.status === statusTab;
-            const matchesSearch =
-                evt.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                evt.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                evt.venue.toLowerCase().includes(searchTerm.toLowerCase());
-            return matchesStatus && matchesSearch;
-        });
-    }, [events, statusTab, searchTerm]);
+    // Xử lý mở modal xem chi tiết sự kiện dành cho Ban tổ chức
+    const handleViewEventDetail = (eventItem) => {
+        setSelectedEvent(eventItem);
+        setOpenDetailModal(true);
+    };
+
+    // Top 5 sự kiện gần đây hiển thị trên Dashboard
+    const recentEvents = useMemo(() => {
+        return events.slice(0, 5);
+    }, [events]);
 
     // Tính tỷ lệ check-in tổng thể
     const overallCheckInRate = metrics.totalTicketsSold > 0
         ? ((metrics.totalCheckedInCount / metrics.totalTicketsSold) * 100).toFixed(1)
         : '0.0';
 
-    const topActions = (
-        <Stack direction="row" spacing={1.5} alignItems="center">
-            <Button
-                variant="outlined"
-                color="primary"
-                size="small"
-                component={RouterLink}
-                to="/organizer/check-in"
-                startIcon={<QrCodeScanner />}
-                sx={{ height: 38, borderRadius: '8px', fontWeight: 600 }}
-            >
-                Soát vé
-            </Button>
-            <Button
-                variant="contained"
-                color="primary"
-                size="small"
-                component={RouterLink}
-                to="/organizer/create-event"
-                startIcon={<Add />}
-                sx={{ height: 38, borderRadius: '8px', fontWeight: 700 }}
-            >
-                Tạo sự kiện
-            </Button>
-        </Stack>
-    );
-
     return (
         <DashboardLayout
             role="organizer"
-            title="Bảng Điều Khiển Nhà Tổ Chức"
-            subtitle="Quản lý sự kiện, theo dõi doanh thu vé NFT và quyết toán On-Chain"
-            topActions={topActions}
+            title="Trung Tâm Điều Hành Ban Tổ Chức"
+            hideHeaderActions={true}
         >
             <Box sx={{ width: '100%' }}>
 
@@ -559,68 +567,11 @@ const OrganizerDashboardPage = () => {
                             overflow: 'hidden',
                         }}
                     >
-                        <Stack
-                            direction={{ xs: 'column', md: 'row' }}
-                            justifyContent="space-between"
-                            alignItems={{ xs: 'flex-start', md: 'center' }}
-                            spacing={2.5}
-                        >
-                            <Box>
-                                <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
-                                    <Chip
-                                        icon={<EventNote sx={{ fontSize: '1rem !important' }} />}
-                                        label="BAN TỔ CHỨC • QUẢN LÝ SỰ KIỆN & DOANH THU"
-                                        size="small"
-                                        color="primary"
-                                        sx={{ fontWeight: 700, fontSize: '0.75rem' }}
-                                    />
-                                    <Chip
-                                        icon={<Shield sx={{ fontSize: '1rem !important' }} />}
-                                        label="ON-CHAIN ROYALTY 5% (BR-02)"
-                                        size="small"
-                                        sx={{
-                                            fontWeight: 700,
-                                            fontSize: '0.75rem',
-                                            bgcolor: theme.palette.status?.successBg || 'rgba(16, 185, 129, 0.12)',
-                                            color: theme.palette.status?.success || 'success.main',
-                                        }}
-                                    />
-                                </Stack>
-
-                                <Typography variant="h1" fontWeight={800} color="text.primary" gutterBottom>
-                                    Trung Tâm Quản Trị Nhà Tổ Chức
-                                </Typography>
-
-                                <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 650, lineHeight: 1.6 }}>
-                                    Giám sát doanh số phát hành vé NFT sơ cấp, nguồn thu bản quyền 5% thứ cấp tự động trên Smart Contract,
-                                    và kiểm soát tỷ lệ check-in tại cổng sự kiện thời gian thực.
-                                </Typography>
-                            </Box>
-
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} width={{ xs: '100%', md: 'auto' }}>
-                                <Button
-                                    variant="outlined"
-                                    color="primary"
-                                    component={RouterLink}
-                                    to="/organizer/check-in"
-                                    startIcon={<QrCodeScanner />}
-                                    sx={{ height: 44, borderRadius: '8px', fontWeight: 600, px: 2.5 }}
-                                >
-                                    Soát Vé Tại Cổng
-                                </Button>
-
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    component={RouterLink}
-                                    to="/organizer/create-event"
-                                    startIcon={<Add />}
-                                    sx={{ height: 44, borderRadius: '8px', fontWeight: 700, px: 3 }}
-                                >
-                                    Tạo Sự Kiện Mới
-                                </Button>
-                            </Stack>
-                        </Stack>
+                        <Box>
+                            <Typography variant="h1" fontWeight={800} color="text.primary">
+                                Báo Cáo Hiệu Suất & Doanh Thu
+                            </Typography>
+                        </Box>
 
                         {/* THÔNG TIN VÍ & QUYẾT TOÁN ON-CHAIN */}
                         <Box sx={{ mt: 3, pt: 3, borderTop: 1, borderColor: 'divider' }}>
@@ -644,7 +595,7 @@ const OrganizerDashboardPage = () => {
                                         <Box sx={{ flex: 1 }}>
                                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                                 <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                                                    Ví Web3 Ban Tổ Chức (Ký tạo sự kiện & Nhận doanh thu):
+                                                    Ví Web3 Nhận Doanh Thu & Ký Smart Contract:
                                                 </Typography>
                                                 {connectedWallet ? (
                                                     <Chip
@@ -726,38 +677,26 @@ const OrganizerDashboardPage = () => {
                                 </Grid>
 
                                 <Grid item xs={12} md={5}>
-                                    <Stack direction="row" spacing={2} justifyContent={{ xs: 'flex-start', md: 'flex-end' }} alignItems="center">
-                                        <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
-                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                Doanh thu quyết toán về ví On-Chain:
-                                            </Typography>
-                                            <Typography variant="h3" fontWeight={800} color="primary.main">
-                                                {metrics.totalRevenueEth} ETH
-                                            </Typography>
-                                            <Typography variant="caption" sx={{ color: 'success.main', display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 0.5, fontWeight: 600 }}>
-                                                <CheckCircle sx={{ fontSize: 13 }} /> Đã chuyển thẳng vào ví Web3
-                                            </Typography>
-                                        </Box>
-
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            startIcon={<ReceiptLong />}
-                                            onClick={() => setOpenWithdrawModal(true)}
-                                            sx={{ borderRadius: '8px', fontWeight: 600, height: 40, px: 2.5 }}
-                                        >
-                                            Đối Soát On-Chain
-                                        </Button>
-                                    </Stack>
+                                    <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+                                        <Typography variant="caption" color="text.secondary" display="block">
+                                            Doanh Thu Quyết Toán Trực Tiếp (On-Chain):
+                                        </Typography>
+                                        <Typography variant="h3" fontWeight={800} color="primary.main">
+                                            {metrics.totalRevenueEth} ETH
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ color: 'success.main', display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 0.5, fontWeight: 600 }}>
+                                            <CheckCircle sx={{ fontSize: 13 }} /> 100% Doanh thu đã thanh khoản vào ví Web3
+                                        </Typography>
+                                    </Box>
                                 </Grid>
                             </Grid>
                         </Box>
                     </Box>
 
-                    {/* BỘ CHỈ SỐ KPI TÀI CHÍNH & VẬN HÀNH (4 CARDS) */}
+                    {/* BỘ CHỈ SỐ KPI TÀI CHÍNH & VẬN HÀNH (3 CARDS) */}
                     <Grid container spacing={3} sx={{ mb: 4 }}>
                         {/* 1. Tổng doanh thu bán vé */}
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid item xs={12} sm={6} md={4}>
                             <Paper
                                 elevation={0}
                                 sx={{
@@ -770,7 +709,7 @@ const OrganizerDashboardPage = () => {
                             >
                                 <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
                                     <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                                        TỔNG DOANH THU BÁN VÉ
+                                        TỔNG DOANH THU PHÁT HÀNH
                                     </Typography>
                                     <MonetizationOn color="primary" sx={{ fontSize: 20 }} />
                                 </Stack>
@@ -778,13 +717,13 @@ const OrganizerDashboardPage = () => {
                                     {metrics.totalRevenueEth} ETH
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    ~${metrics.totalRevenueUsd.toLocaleString()} USD (Bán sơ cấp)
+                                    Doanh số từ vé mở bán chính thức
                                 </Typography>
                             </Paper>
                         </Grid>
 
-                        {/* 2. Bản quyền Chợ thứ cấp (5% Royalty) */}
-                        <Grid item xs={12} sm={6} md={3}>
+                        {/* 2. Tổng số vé NFT đã bán ra */}
+                        <Grid item xs={12} sm={6} md={4}>
                             <Paper
                                 elevation={0}
                                 sx={{
@@ -797,52 +736,21 @@ const OrganizerDashboardPage = () => {
                             >
                                 <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
                                     <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                                        BẢN QUYỀN 5% ROYALTY
+                                        VÉ NFT ĐÃ PHÁT HÀNH
                                     </Typography>
-                                    <TrendingUp sx={{ fontSize: 20, color: theme.palette.status?.success || 'success.main' }} />
-                                </Stack>
-                                <Typography variant="h2" fontWeight={800} sx={{ color: theme.palette.status?.success || 'success.main' }} gutterBottom>
-                                    +{metrics.resaleRoyaltyEth} ETH
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Tự động từ TicketMarketplace (BR-02)
-                                </Typography>
-                            </Paper>
-                        </Grid>
-
-                        {/* 3. Tỷ lệ vé đã phát hành */}
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper
-                                elevation={0}
-                                sx={{
-                                    p: 2.5,
-                                    borderRadius: '12px',
-                                    bgcolor: 'background.paper',
-                                    border: 1,
-                                    borderColor: 'divider',
-                                }}
-                            >
-                                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                                    <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                                        TIẾN ĐỘ BÁN VÉ
-                                    </Typography>
-                                    <ConfirmationNumber color="action" sx={{ fontSize: 20 }} />
+                                    <ConfirmationNumber color="primary" sx={{ fontSize: 20 }} />
                                 </Stack>
                                 <Typography variant="h2" fontWeight={800} color="text.primary" gutterBottom>
-                                    {metrics.totalTicketsSold} / {metrics.totalTicketsMaxSupply}
+                                    {metrics.totalTicketsSold} Vé
                                 </Typography>
-                                <Box sx={{ width: '100%', mt: 0.5 }}>
-                                    <LinearProgress
-                                        variant="determinate"
-                                        value={(metrics.totalTicketsSold / metrics.totalTicketsMaxSupply) * 100}
-                                        sx={{ height: 6, borderRadius: 3 }}
-                                    />
-                                </Box>
+                                <Typography variant="caption" color="text.secondary">
+                                    Phân phối trên toàn bộ sự kiện
+                                </Typography>
                             </Paper>
                         </Grid>
 
-                        {/* 4. Tỷ lệ check-in thực tế */}
-                        <Grid item xs={12} sm={6} md={3}>
+                        {/* 3. Tỷ lệ check-in thực tế */}
+                        <Grid item xs={12} sm={6} md={4}>
                             <Paper
                                 elevation={0}
                                 sx={{
@@ -855,7 +763,7 @@ const OrganizerDashboardPage = () => {
                             >
                                 <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
                                     <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                                        TỶ LỆ CHECK-IN TẠI CỔNG
+                                        HIỆU SUẤT CHECK-IN THỰC TẾ
                                     </Typography>
                                     <CheckCircle sx={{ fontSize: 20, color: theme.palette.status?.checkedIn || '#8B5CF6' }} />
                                 </Stack>
@@ -863,7 +771,7 @@ const OrganizerDashboardPage = () => {
                                     {overallCheckInRate}%
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {metrics.totalCheckedInCount} khách đã quét hợp lệ
+                                    {metrics.totalCheckedInCount} lượt soát vé hợp lệ tại cổng
                                 </Typography>
                             </Paper>
                         </Grid>
@@ -881,52 +789,42 @@ const OrganizerDashboardPage = () => {
                             overflow: 'hidden',
                         }}
                     >
-                        {/* Header Bảng & Bộ lọc */}
-                        <Box sx={{ p: 2.5, borderBottom: 1, borderColor: 'divider' }}>
-                            <Grid container spacing={2} alignItems="center" justifyContent="space-between">
-                                <Grid item xs={12} md={6}>
-                                    <Tabs
-                                        value={statusTab}
-                                        onChange={(e, val) => setStatusTab(val)}
-                                        textColor="primary"
-                                        indicatorColor="primary"
-                                        sx={{ minHeight: 40, '& .MuiTab-root': { minHeight: 40, textTransform: 'none', fontWeight: 600 } }}
-                                    >
-                                        <Tab label={`Tất cả (${events.length})`} value="all" />
-                                        <Tab label="Đang mở bán" value="published" />
-                                        <Tab label="Chờ duyệt" value="pending" />
-                                        <Tab label="Đã kết thúc" value="ended" />
-                                    </Tabs>
-                                </Grid>
+                        {/* Header Tiêu đề & Nút Xem tất cả */}
+                        <Box
+                            sx={{
+                                p: 2.5,
+                                borderBottom: 1,
+                                borderColor: 'divider',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 2,
+                            }}
+                        >
+                            <Stack direction="row" spacing={1.5} alignItems="center">
+                                <EventNote color="primary" sx={{ fontSize: 26 }} />
+                                <Box>
+                                    <Typography variant="h3" fontWeight={700} color="text.primary">
+                                        Sự Kiện Hoạt Động Gần Đây
+                                    </Typography>
+                                </Box>
+                            </Stack>
 
-                                <Grid item xs={12} md={5}>
-                                    <TextField
-                                        fullWidth
-                                        size="small"
-                                        placeholder="Tìm theo tên sự kiện, mã EVT, địa điểm..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <Search color="action" fontSize="small" />
-                                                </InputAdornment>
-                                            ),
-                                            endAdornment: searchTerm && (
-                                                <InputAdornment position="end">
-                                                    <IconButton
-                                                        size="small"
-                                                        aria-label="Xóa tìm kiếm sự kiện"
-                                                        onClick={() => setSearchTerm('')}
-                                                    >
-                                                        <Close fontSize="small" />
-                                                    </IconButton>
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                    />
-                                </Grid>
-                            </Grid>
+                            <Button
+                                component={RouterLink}
+                                to="/organizer/events"
+                                endIcon={<ArrowForward />}
+                                color="primary"
+                                sx={{
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    borderRadius: '8px',
+                                    '&:hover': { bgcolor: 'action.hover' },
+                                }}
+                            >
+                                Xem tất cả ({events.length})
+                            </Button>
                         </Box>
 
                         {/* Bảng sự kiện */}
@@ -934,26 +832,35 @@ const OrganizerDashboardPage = () => {
                             <Table sx={{ minWidth: 800 }}>
                                 <TableHead sx={{ bgcolor: 'background.subtle' }}>
                                     <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, py: 1.5 }}>Sự kiện & Thời gian</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, py: 1.5 }}>Sự kiện & Địa điểm</TableCell>
                                         <TableCell sx={{ fontWeight: 700 }}>Trạng thái</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>Tiến độ bán vé</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>Soát vé cổng</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>Doanh thu (ETH)</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>Thao tác</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>Tiến độ phát hành</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>Soát vé tại cổng</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>Doanh thu (ETH)</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {filteredEvents.length === 0 ? (
+                                    {recentEvents.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} sx={{ textAlign: 'center', py: 6 }}>
-                                                <EventNote sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5, mb: 1 }} />
+                                            <TableCell colSpan={5} sx={{ textAlign: 'center', py: 6 }}>
+                                                <EventNote sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.4, mb: 1 }} />
                                                 <Typography variant="body1" fontWeight={600} color="text.secondary">
-                                                    Không tìm thấy sự kiện nào phù hợp.
+                                                    Bạn chưa có sự kiện nào được tạo.
                                                 </Typography>
+                                                <Button
+                                                    component={RouterLink}
+                                                    to="/organizer/events"
+                                                    variant="contained"
+                                                    size="small"
+                                                    startIcon={<Add />}
+                                                    sx={{ mt: 1.5, borderRadius: '8px', fontWeight: 700 }}
+                                                >
+                                                    Tạo sự kiện ngay
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        filteredEvents.map((evt) => {
+                                        recentEvents.map((evt) => {
                                             const salesPercent = evt.maxSupply > 0 ? ((evt.ticketsSold / evt.maxSupply) * 100).toFixed(0) : 0;
                                             const checkInPercent = evt.ticketsSold > 0 ? ((evt.checkedIn / evt.ticketsSold) * 100).toFixed(0) : 0;
 
@@ -964,16 +871,63 @@ const OrganizerDashboardPage = () => {
                                                     sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
                                                 >
                                                     {/* Sự kiện & Thời gian */}
-                                                    <TableCell>
-                                                        <Typography variant="subtitle2" fontWeight={700} color="text.primary">
-                                                            {evt.title}
-                                                        </Typography>
-                                                        <Typography variant="caption" color="text.secondary" display="block">
-                                                            {evt.venue} • {evt.date} ({evt.startTime})
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'primary.main', fontWeight: 600 }}>
-                                                            {evt.id}
-                                                        </Typography>
+                                                    <TableCell
+                                                        onClick={() => handleViewEventDetail(evt)}
+                                                        sx={{ cursor: 'pointer', py: 1.8 }}
+                                                    >
+                                                        <Stack direction="row" spacing={2} alignItems="center">
+                                                            {/* Banner ảnh bên trái */}
+                                                            <Box
+                                                                component="img"
+                                                                src={evt.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80'}
+                                                                alt={evt.title}
+                                                                sx={{
+                                                                    width: { xs: 60, sm: 76 },
+                                                                    height: { xs: 46, sm: 54 },
+                                                                    borderRadius: '8px',
+                                                                    objectFit: 'cover',
+                                                                    flexShrink: 0,
+                                                                    border: 1,
+                                                                    borderColor: 'divider',
+                                                                    bgcolor: 'background.subtle',
+                                                                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                                                                    transition: 'transform 0.2s',
+                                                                    '&:hover': {
+                                                                        transform: 'scale(1.05)',
+                                                                    },
+                                                                }}
+                                                            />
+
+                                                            {/* Nội dung chữ bên phải */}
+                                                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                                                                <Typography
+                                                                    variant="subtitle2"
+                                                                    fontWeight={700}
+                                                                    color="text.primary"
+                                                                    sx={{
+                                                                        transition: 'color 0.2s',
+                                                                        '&:hover': { color: 'primary.main', textDecoration: 'underline' },
+                                                                        fontSize: '0.92rem',
+                                                                        lineHeight: 1.3,
+                                                                        mb: 0.3,
+                                                                    }}
+                                                                >
+                                                                    {evt.title}
+                                                                </Typography>
+                                                                <Typography
+                                                                    variant="caption"
+                                                                    color="text.secondary"
+                                                                    display="block"
+                                                                    noWrap
+                                                                    sx={{ maxWidth: { xs: 260, sm: 380, md: 460 }, mb: 0.3 }}
+                                                                >
+                                                                    {evt.venue} • {evt.date} ({evt.startTime})
+                                                                </Typography>
+                                                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'primary.main', fontWeight: 600 }}>
+                                                                    Mã sự kiện: #{evt.id}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Stack>
                                                     </TableCell>
 
                                                     {/* Trạng thái */}
@@ -1028,69 +982,10 @@ const OrganizerDashboardPage = () => {
                                                     </TableCell>
 
                                                     {/* Doanh thu */}
-                                                    <TableCell>
-                                                        <Typography variant="body2" fontWeight={800} color="primary.main">
-                                                            {evt.totalRevenueEth.toFixed(2)} ETH
-                                                        </Typography>
-                                                        {evt.royaltyEarnedEth > 0 && (
-                                                            <Typography variant="caption" sx={{ color: theme.palette.status?.success || 'success.main', display: 'block' }}>
-                                                                +{evt.royaltyEarnedEth} ETH Royalty
-                                                            </Typography>
-                                                        )}
-                                                    </TableCell>
-
-                                                    {/* Thao tác */}
                                                     <TableCell align="right">
-                                                        <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
-                                                            {evt.status === 'approved' && (
-                                                                <Button
-                                                                    size="small"
-                                                                    variant="contained"
-                                                                    color="success"
-                                                                    onClick={() => handlePublishEvent(evt.id)}
-                                                                    sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, fontWeight: 700, borderRadius: '6px' }}
-                                                                >
-                                                                    Mở Bán
-                                                                </Button>
-                                                            )}
-
-                                                            {evt.status === 'draft' && (
-                                                                <Button
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                    color="primary"
-                                                                    onClick={() => handleSubmitReview(evt.id)}
-                                                                    sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, fontWeight: 700, borderRadius: '6px' }}
-                                                                >
-                                                                    Gửi Duyệt
-                                                                </Button>
-                                                            )}
-
-                                                            {evt.status === 'published' && (
-                                                                <Tooltip title="Mở máy quét soát vé tại cổng">
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="primary"
-                                                                        component={RouterLink}
-                                                                        to="/organizer/check-in"
-                                                                        aria-label={`Soát vé sự kiện ${evt.title}`}
-                                                                    >
-                                                                        <QrCodeScanner fontSize="small" />
-                                                                    </IconButton>
-                                                                </Tooltip>
-                                                            )}
-
-                                                            <Tooltip title="Xem trang sự kiện công khai">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    component={RouterLink}
-                                                                    to={`/events/${evt.id}`}
-                                                                    aria-label={`Xem sự kiện ${evt.title}`}
-                                                                >
-                                                                    <Launch fontSize="small" />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                        </Stack>
+                                                        <Typography variant="body2" fontWeight={800} color="primary.main">
+                                                            {Number(evt.totalRevenueEth || 0).toFixed(4).replace(/\.?0+$/, '')} ETH
+                                                        </Typography>
                                                     </TableCell>
                                                 </TableRow>
                                             );
@@ -1099,6 +994,29 @@ const OrganizerDashboardPage = () => {
                                 </TableBody>
                             </Table>
                         </TableContainer>
+
+                        {events.length > 5 && (
+                            <Box
+                                sx={{
+                                    p: 1.5,
+                                    textAlign: 'center',
+                                    bgcolor: 'background.subtle',
+                                    borderTop: 1,
+                                    borderColor: 'divider',
+                                }}
+                            >
+                                <Button
+                                    component={RouterLink}
+                                    to="/organizer/events"
+                                    endIcon={<ArrowForward />}
+                                    size="small"
+                                    color="inherit"
+                                    sx={{ fontWeight: 600, textTransform: 'none' }}
+                                >
+                                    Xem thêm {events.length - 5} sự kiện khác tại trang Quản lý sự kiện →
+                                </Button>
+                            </Box>
+                        )}
                     </Paper>
 
                     {/* NHẬT KÝ DÒNG TIỀN & BẢN QUYỀN GẦN NHẤT (FINANCIAL ACTIVITY FEED) */}
@@ -1117,10 +1035,7 @@ const OrganizerDashboardPage = () => {
                                 <TrendingUp color="primary" />
                                 <Box>
                                     <Typography variant="h3" fontWeight={700}>
-                                        Nhật Ký Dòng Tiền & Doanh Thu Bản Quyền Gần Nhất
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Đối soát trực tiếp giữa hợp đồng thông minh Sepolia và cơ sở dữ liệu Aiven Cloud MySQL
+                                        Nhật Ký Giao Dịch
                                     </Typography>
                                 </Box>
                             </Stack>
@@ -1143,11 +1058,11 @@ const OrganizerDashboardPage = () => {
                             {financialLogs.length === 0 ? (
                                 <Box sx={{ py: 4, textAlign: 'center' }}>
                                     <Typography variant="body2" color="text.secondary">
-                                        Chưa có phát sinh giao dịch tài chính hoặc phân phối bản quyền nào.
+                                        Chưa có phát sinh giao dịch tài chính nào.
                                     </Typography>
                                 </Box>
                             ) : (
-                                financialLogs.map((log) => (
+                                paginatedLogs.map((log) => (
                                 <Paper
                                     key={log.id}
                                     elevation={0}
@@ -1229,6 +1144,21 @@ const OrganizerDashboardPage = () => {
                             ))
                         )}
                         </Stack>
+
+                        {/* Phân trang 10 giao dịch / trang */}
+                        {financialLogs.length > LOGS_PER_PAGE && (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                                <Pagination
+                                    count={totalLogsPages}
+                                    page={logsPage}
+                                    onChange={(e, val) => setLogsPage(val)}
+                                    color="primary"
+                                    shape="rounded"
+                                    showFirstButton
+                                    showLastButton
+                                />
+                            </Box>
+                        )}
                     </Paper>
                 </Box>
 
@@ -1311,9 +1241,6 @@ const OrganizerDashboardPage = () => {
                                     variant="outlined"
                                     sx={{ fontWeight: 700, fontSize: '0.75rem' }}
                                 />
-                                <Typography variant="caption" color="text.secondary">
-                                    ~${metrics.totalRevenueUsd?.toLocaleString() || Math.round(metrics.totalRevenueEth * 3150)} USD
-                                </Typography>
                             </Stack>
                         </Paper>
 
@@ -1448,7 +1375,356 @@ const OrganizerDashboardPage = () => {
                 </DialogActions>
             </Dialog>
 
-            <Footer />
+            {/* MODAL XEM CHI TIẾT SỰ KIỆN CHO BAN TỔ CHỨC */}
+            <Dialog
+                open={openDetailModal}
+                onClose={() => setOpenDetailModal(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: '16px',
+                        overflow: 'hidden',
+                        bgcolor: 'background.paper',
+                        position: 'relative',
+                    },
+                }}
+            >
+                {/* NÚT ĐÓNG DẤU X TỔNG QUÁT TRÊN CÙNG */}
+                <IconButton
+                    onClick={() => setOpenDetailModal(false)}
+                    aria-label="Đóng popup chi tiết sự kiện"
+                    sx={{
+                        position: 'absolute',
+                        top: 14,
+                        right: 14,
+                        zIndex: 1400,
+                        bgcolor: 'rgba(0, 0, 0, 0.65)',
+                        color: '#ffffff',
+                        backdropFilter: 'blur(6px)',
+                        width: 36,
+                        height: 36,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                        '&:hover': {
+                            bgcolor: 'rgba(0, 0, 0, 0.9)',
+                            transform: 'scale(1.08)',
+                        },
+                        transition: 'all 0.2s ease',
+                    }}
+                >
+                    <Close fontSize="small" />
+                </IconButton>
+
+                {selectedEvent && (
+                    <>
+                        {/* BANNER / ẢNH SỰ KIỆN */}
+                        {selectedEvent.bannerUrl ? (
+                            <Box
+                                component="img"
+                                src={selectedEvent.bannerUrl}
+                                alt={selectedEvent.title}
+                                sx={{
+                                    width: '100%',
+                                    height: { xs: 180, sm: 220 },
+                                    objectFit: 'cover',
+                                    display: 'block',
+                                    bgcolor: 'background.subtle',
+                                }}
+                            />
+                        ) : null}
+
+                        {/* TIÊU ĐỀ SỰ KIỆN & TRẠNG THÁI */}
+                        <Box
+                            sx={{
+                                p: { xs: 2.5, sm: 3 },
+                                pr: !selectedEvent.bannerUrl ? 7 : { xs: 2.5, sm: 3 },
+                                pb: 1.5,
+                                bgcolor: 'background.paper',
+                                borderBottom: 1,
+                                borderColor: 'divider',
+                            }}
+                        >
+                            <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                                <Chip
+                                    label={selectedEvent.statusText}
+                                    size="small"
+                                    sx={{
+                                        fontWeight: 700,
+                                        fontSize: '0.75rem',
+                                        bgcolor:
+                                            selectedEvent.status === 'published'
+                                                ? 'rgba(16, 185, 129, 0.15)'
+                                                : selectedEvent.status === 'pending'
+                                                ? 'rgba(245, 158, 11, 0.15)'
+                                                : 'action.hover',
+                                        color:
+                                            selectedEvent.status === 'published'
+                                                ? '#10B981'
+                                                : selectedEvent.status === 'pending'
+                                                ? '#F59E0B'
+                                                : 'text.secondary',
+                                        border: 1,
+                                        borderColor:
+                                            selectedEvent.status === 'published'
+                                                ? 'rgba(16, 185, 129, 0.3)'
+                                                : selectedEvent.status === 'pending'
+                                                ? 'rgba(245, 158, 11, 0.3)'
+                                                : 'divider',
+                                    }}
+                                />
+                            </Stack>
+                            <Typography
+                                variant="h2"
+                                fontWeight={800}
+                                color="text.primary"
+                                sx={{
+                                    fontSize: { xs: '1.35rem', sm: '1.65rem' },
+                                    lineHeight: 1.3,
+                                }}
+                            >
+                                {selectedEvent.title}
+                            </Typography>
+                        </Box>
+
+                        <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+                            <Stack spacing={3}>
+                                {/* BỘ CHỈ SỐ NHANH CỦA SỰ KIỆN (3 CARDS) */}
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12} sm={4}>
+                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', bgcolor: 'background.subtle', border: 1, borderColor: 'divider' }}>
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                                Vé đã phát hành:
+                                            </Typography>
+                                            <Typography variant="h3" fontWeight={800} color="primary.main">
+                                                {selectedEvent.ticketsSold} / {selectedEvent.maxSupply}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Tỷ lệ: {selectedEvent.maxSupply > 0 ? ((selectedEvent.ticketsSold / selectedEvent.maxSupply) * 100).toFixed(0) : 0}%
+                                            </Typography>
+                                        </Paper>
+                                    </Grid>
+                                    <Grid item xs={12} sm={4}>
+                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', bgcolor: 'background.subtle', border: 1, borderColor: 'divider' }}>
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                                Doanh thu bán vé:
+                                            </Typography>
+                                            <Typography variant="h3" fontWeight={800} color="primary.main">
+                                                {Number(selectedEvent.totalRevenueEth || 0).toFixed(4).replace(/\.?0+$/, '')} ETH
+                                            </Typography>
+                                        </Paper>
+                                    </Grid>
+                                    <Grid item xs={12} sm={4}>
+                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', bgcolor: 'background.subtle', border: 1, borderColor: 'divider' }}>
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                                Soát vé tại cổng:
+                                            </Typography>
+                                            <Typography variant="h3" fontWeight={800} sx={{ color: '#8B5CF6' }}>
+                                                {selectedEvent.checkedIn} khách
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Đã quét mã QR
+                                            </Typography>
+                                        </Paper>
+                                    </Grid>
+                                </Grid>
+
+                                {/* THỜI GIAN & ĐỊA ĐIỂM TỔ CHỨC */}
+                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', bgcolor: 'background.paper', border: 1, borderColor: 'divider' }}>
+                                    <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <EventNote sx={{ fontSize: 18, color: 'primary.main' }} /> Thời Gian & Địa Điểm Tổ Chức
+                                    </Typography>
+                                    <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                                        <Grid item xs={12} sm={6}>
+                                            <Stack spacing={0.5}>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                    <Schedule sx={{ fontSize: 15 }} /> Thời gian bắt đầu:
+                                                </Typography>
+                                                <Typography variant="body2" fontWeight={600}>
+                                                    {selectedEvent.startTime || 'Chưa thiết lập'}
+                                                </Typography>
+                                            </Stack>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Stack spacing={0.5}>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                    <Schedule sx={{ fontSize: 15 }} /> Thời gian kết thúc:
+                                                </Typography>
+                                                <Typography variant="body2" fontWeight={600}>
+                                                    {selectedEvent.endTime || 'Chưa thiết lập'}
+                                                </Typography>
+                                            </Stack>
+                                        </Grid>
+                                        <Grid item xs={12}>
+                                            <Divider sx={{ my: 0.5 }} />
+                                            <Stack spacing={0.5} sx={{ mt: 1 }}>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                    <LocationOn sx={{ fontSize: 15 }} /> Địa điểm tổ chức:
+                                                </Typography>
+                                                <Typography variant="body2" fontWeight={600}>
+                                                    {selectedEvent.venueName ? `${selectedEvent.venueName} - ` : ''}
+                                                    {selectedEvent.venueAddress || selectedEvent.venue}
+                                                </Typography>
+                                            </Stack>
+                                        </Grid>
+                                    </Grid>
+                                </Paper>
+
+                                {/* MÔ TẢ NỘI DUNG SỰ KIỆN */}
+                                {selectedEvent.description && (
+                                    <Box>
+                                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                                            Mô Tả Chi Tiết Sự Kiện
+                                        </Typography>
+                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', bgcolor: 'background.subtle', border: 1, borderColor: 'divider' }}>
+                                            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line', lineHeight: 1.6 }}>
+                                                {selectedEvent.description}
+                                            </Typography>
+                                        </Paper>
+                                    </Box>
+                                )}
+
+                                {/* DANH SÁCH CÁC HẠNG VÉ (TICKET TIERS) */}
+                                <Box>
+                                    <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <ConfirmationNumber sx={{ fontSize: 18, color: 'primary.main' }} /> Danh Sách Các Hạng Vé Đã Tạo ({selectedEvent.ticketTypes?.length || 0})
+                                    </Typography>
+                                    {(!selectedEvent.ticketTypes || selectedEvent.ticketTypes.length === 0) ? (
+                                        <Paper elevation={0} sx={{ p: 2, textAlign: 'center', bgcolor: 'background.subtle', borderRadius: '10px' }}>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Sự kiện chưa có hạng vé nào được tạo.
+                                            </Typography>
+                                        </Paper>
+                                    ) : (
+                                        <Stack spacing={1.5}>
+                                            {selectedEvent.ticketTypes.map((tt) => {
+                                                const sold = Number(tt.currentSupply || tt.mintedAmount || 0);
+                                                const max = Number(tt.maxSupply || 0);
+                                                const percent = max > 0 ? ((sold / max) * 100).toFixed(0) : 0;
+                                                const originalPrice = Number(tt.originalPrice || 0);
+                                                const maxResale = +(originalPrice * 1.2).toFixed(4);
+
+                                                return (
+                                                    <Paper
+                                                        key={tt.id}
+                                                        elevation={0}
+                                                        sx={{
+                                                            p: 2,
+                                                            borderRadius: '10px',
+                                                            bgcolor: 'background.subtle',
+                                                            border: 1,
+                                                            borderColor: 'divider',
+                                                        }}
+                                                    >
+                                                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} mb={1}>
+                                                            <Box>
+                                                                <Typography variant="subtitle2" fontWeight={800} color="primary.main">
+                                                                    {tt.name}
+                                                                </Typography>
+                                                                {tt.description && (
+                                                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                                                        {tt.description}
+                                                                    </Typography>
+                                                                )}
+                                                            </Box>
+
+                                                            <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+                                                                <Typography variant="subtitle1" fontWeight={800} color="text.primary">
+                                                                    {originalPrice} ETH
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary" display="block">
+                                                                    Trần bán lại tối đa: {maxResale} ETH
+                                                                </Typography>
+                                                            </Box>
+                                                        </Stack>
+
+                                                        <Stack direction="row" spacing={1} alignItems="center" mt={1}>
+                                                            <LinearProgress
+                                                                variant="determinate"
+                                                                value={Number(percent)}
+                                                                sx={{ height: 6, borderRadius: 3, flexGrow: 1 }}
+                                                            />
+                                                            <Typography variant="caption" fontWeight={700} sx={{ minWidth: 80, textAlign: 'right' }}>
+                                                                {sold} / {max} ({percent}%)
+                                                            </Typography>
+                                                        </Stack>
+                                                    </Paper>
+                                                );
+                                            })}
+                                        </Stack>
+                                    )}
+                                </Box>
+
+                                {/* THÔNG TIN HỢP ĐỒNG ON-CHAIN */}
+                                <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', bgcolor: 'action.selected', border: 1, borderColor: 'divider' }}>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                                        <Box>
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                                Hợp đồng vé Smart Contract (Sepolia):
+                                            </Typography>
+                                            <Typography variant="body2" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
+                                                {EVENT_TICKET_ADDRESS}
+                                            </Typography>
+                                        </Box>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            component="a"
+                                            href={`https://sepolia.etherscan.io/address/${EVENT_TICKET_ADDRESS}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            endIcon={<OpenInNew sx={{ fontSize: '0.85rem !important' }} />}
+                                            sx={{ borderRadius: '6px', fontSize: '0.75rem', textTransform: 'none' }}
+                                        >
+                                            Xem Contract trên Etherscan
+                                        </Button>
+                                    </Stack>
+                                </Paper>
+
+                            </Stack>
+                        </DialogContent>
+
+                        <DialogActions sx={{ p: 2.5, pt: 1.5, bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider' }}>
+                            {selectedEvent.status === 'approved' && (
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    onClick={() => {
+                                        handlePublishEvent(selectedEvent.id);
+                                        setOpenDetailModal(false);
+                                    }}
+                                    sx={{ borderRadius: '8px', fontWeight: 700, mr: 'auto' }}
+                                >
+                                    Mở Bán Sự Kiện Ngay
+                                </Button>
+                            )}
+
+                            {selectedEvent.status === 'draft' && (
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={() => {
+                                        handleSubmitReview(selectedEvent.id);
+                                        setOpenDetailModal(false);
+                                    }}
+                                    sx={{ borderRadius: '8px', fontWeight: 700, mr: 'auto' }}
+                                >
+                                    Gửi Duyệt Sự Kiện
+                                </Button>
+                            )}
+
+                            <Button
+                                variant="contained"
+                                color="inherit"
+                                onClick={() => setOpenDetailModal(false)}
+                                sx={{ borderRadius: '8px', fontWeight: 600, px: 3, ml: 'auto' }}
+                            >
+                                Đóng
+                            </Button>
+                        </DialogActions>
+                    </>
+                )}
+            </Dialog>
 
             <Snackbar
                 open={snackbar.open}

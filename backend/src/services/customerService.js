@@ -194,6 +194,7 @@ export const getMyTickets = async (user, walletQuery) => {
           "id",
           "title",
           "description",
+          "category",
           "bannerUrl",
           "venueName",
           "venueAddress",
