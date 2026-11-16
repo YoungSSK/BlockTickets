@@ -20,6 +20,8 @@ import {
   getEventById,
   createEvent,
   updateEvent,
+  cancelEvent,
+  deleteEvent,
   createTicketType,
   submitForReview,
   publishEvent,
@@ -53,6 +55,8 @@ router.get("/:id", optionalProtect, validate(eventIdParamSchema), getEventById);
 router.use(protect, authorize("organizer", "admin"));
 router.post("/", validate(createEventSchema), createEvent);
 router.put("/:id", validate(updateEventSchema), updateEvent);
+router.patch("/:id/cancel", validate(eventIdParamSchema), cancelEvent);
+router.delete("/:id", validate(eventIdParamSchema), deleteEvent);
 router.post(
   "/:id/ticket-types",
   validate(createTicketTypeSchema),

@@ -67,7 +67,6 @@ import {
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import Footer from '../../components/Footer';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { checkInAPI, eventAPI } from '../../services/api';
@@ -410,6 +409,7 @@ const CheckInScannerPage = () => {
             role="organizer"
             title="Soát Vé Tại Cổng Sự Kiện"
             subtitle="Quét mã QR HMAC động, đối soát vé trực tiếp và ghi nhận vào hệ thống"
+            hideHeaderActions={true}
         >
             <Box sx={{ width: '100%' }}>
                     {/* THANH ĐIỀU HƯỚNG VÀ TRẠNG THÁI CA TRỰC */}
@@ -422,13 +422,6 @@ const CheckInScannerPage = () => {
                     >
                         <Box>
                             <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
-                                <Chip
-                                    icon={<QrCodeScanner sx={{ fontSize: '1rem !important' }} />}
-                                    label="SOÁT VÉ TẠI CỔNG • CHECK-IN TERMINAL"
-                                    size="small"
-                                    color="primary"
-                                    sx={{ fontWeight: 700, fontSize: '0.75rem' }}
-                                />
                                 <Chip
                                     icon={<FiberManualRecord sx={{ fontSize: '0.65rem !important', color: isScannerRunning ? 'success.main' : 'text.disabled' }} />}
                                     label={isScannerRunning ? 'CAMERA ĐANG BẬT' : 'CAMERA ĐANG TẮT'}

@@ -199,35 +199,78 @@ export const createEvent = async (organizerId, payload) => {
   });
 };
 
-// 5. Organizer: Cập nhật sự kiện (chỉ khi draft hoặc rejected)
+// 5. Organizer: Cập nhật sự kiện
 export const updateEvent = async (eventId, organizerId, payload) => {
   const event = await getEventOrFail(eventId);
   assertEventOwner(event, organizerId);
 
-  if (!EDITABLE_STATUSES.includes(event.status)) {
+  if (["draft", "rejected", "pending"].includes(event.status)) {
+    const nextStart = payload.startTime ?? event.startTime;
+    const nextEnd = payload.endTime ?? event.endTime;
+    if (payload.startTime && new Date(nextStart) <= new Date()) {
+      throw new AppError("Thời gian bắt đầu sự kiện phải ở tương lai.", 400);
+    }
+    if (payload.endTime && new Date(nextEnd) <= new Date(nextStart)) {
+      throw new AppError("Thời gian kết thúc phải sau thời gian bắt đầu.", 400);
+    }
+
+    Object.assign(event, payload);
+    if (event.status === "rejected") {
+      event.status = "draft";
+      event.rejectionReason = null;
+    }
+  } else if (["approved", "published"].includes(event.status)) {
+    // Với sự kiện đã duyệt/công bố: cho phép cập nhật thông tin mô tả, banner, địa điểm
+    const allowedFields = ["title", "description", "bannerUrl", "venueName", "venueAddress", "venueCity", "category"];
+    for (const key of allowedFields) {
+      if (payload[key] !== undefined) {
+        event[key] = payload[key];
+      }
+    }
+  } else {
     throw new AppError(
       `Không thể chỉnh sửa sự kiện đang ở trạng thái "${event.status}".`,
       409,
     );
   }
 
-  const nextStart = payload.startTime ?? event.startTime;
-  const nextEnd = payload.endTime ?? event.endTime;
-  if (payload.startTime && new Date(nextStart) <= new Date()) {
-    throw new AppError("Thời gian bắt đầu sự kiện phải ở tương lai.", 400);
-  }
-  if (new Date(nextEnd) <= new Date(nextStart)) {
-    throw new AppError("Thời gian kết thúc phải sau thời gian bắt đầu.", 400);
-  }
-
-  Object.assign(event, payload);
-  if (event.status === "rejected") {
-    event.status = "draft";
-    event.rejectionReason = null;
-  }
-
   await event.save();
   return event;
+};
+
+// Organizer: Hủy sự kiện
+export const cancelEventByOrganizer = async (eventId, organizerId, reason = "") => {
+  const event = await getEventOrFail(eventId);
+  assertEventOwner(event, organizerId);
+
+  if (event.status === "cancelled") {
+    throw new AppError("Sự kiện này đã bị hủy trước đó.", 400);
+  }
+  if (event.status === "ended") {
+    throw new AppError("Không thể hủy sự kiện đã kết thúc.", 400);
+  }
+
+  event.status = "cancelled";
+  if (reason) {
+    event.rejectionReason = reason;
+  }
+  await event.save();
+  return event;
+};
+
+// Organizer: Xóa vĩnh viễn sự kiện (nếu chưa bán vé)
+export const deleteEventByOrganizer = async (eventId, organizerId) => {
+  const event = await getEventOrFail(eventId);
+  assertEventOwner(event, organizerId);
+
+  const ticketCount = await Ticket.count({ where: { eventId } });
+  if (ticketCount > 0) {
+    throw new AppError("Sự kiện đã phát sinh vé NFT bán ra trên hệ thống, không thể xóa vĩnh viễn. Vui lòng chọn chức năng Hủy sự kiện.", 400);
+  }
+
+  await TicketType.destroy({ where: { eventId } });
+  await event.destroy();
+  return { id: eventId, deleted: true };
 };
 
 // 6. Organizer: Thêm hạng vé cho sự kiện
@@ -342,6 +385,7 @@ export const getOrganizerStats = async (organizerId) => {
   const eventIds = events.map((e) => e.id);
 
   let totalTicketsMinted = 0;
+  let totalTicketsMaxSupply = 0;
   let totalRevenueEth = 0;
   let checkedInCount = 0;
 
@@ -349,6 +393,7 @@ export const getOrganizerStats = async (organizerId) => {
     if (Array.isArray(event.ticketTypes)) {
       for (const tt of event.ticketTypes) {
         totalTicketsMinted += Number(tt.currentSupply || tt.mintedAmount || 0);
+        totalTicketsMaxSupply += Number(tt.maxSupply || 0);
         totalRevenueEth +=
           Number(tt.currentSupply || tt.mintedAmount || 0) *
           Number(tt.originalPrice || 0);
@@ -372,7 +417,7 @@ export const getOrganizerStats = async (organizerId) => {
         { model: TicketType, as: "ticketType", attributes: ["id", "name"] },
       ],
       order: [["createdAt", "DESC"]],
-      limit: 20,
+      limit: 100,
     });
 
     recentSettlements = recentTickets.map((t) => ({
@@ -401,6 +446,7 @@ export const getOrganizerStats = async (organizerId) => {
     pendingEventsCount,
     draftEventsCount,
     totalTicketsMinted,
+    totalTicketsMaxSupply,
     totalRevenueEth: +totalRevenueEth.toFixed(4),
     totalRevenueUsd: Math.round(totalRevenueEth * 3150),
     checkedInCount,

@@ -84,6 +84,7 @@ const App = () => {
             <Route path="/check-in" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CheckInScannerPage /></ProtectedRoute>} />
             <Route path="/scanner" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CheckInScannerPage /></ProtectedRoute>} />
             <Route path="/organizer/scanner" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CheckInScannerPage /></ProtectedRoute>} />
+            <Route path="/organizer/events" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />
             <Route path="/organizer/create-event" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />
             <Route path="/create-event" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />
             <Route path="/events/create" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />

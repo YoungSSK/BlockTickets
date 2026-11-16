@@ -75,15 +75,21 @@ const normalizeTicket = (t) => {
     const maxResale = +(origPrice * 1.2).toFixed(4);
     const status = t.isUsed ? 'used' : t.isListedForResale ? 'resale' : 'valid';
 
+    const categoryMap = {
+        technology: 'Công nghệ & Web3',
+        sports: 'Thể thao',
+        music: 'Âm nhạc',
+        workshop: 'Hội thảo',
+    };
+
+    const eventCategory = t.event?.category || 'sports';
+
     return {
         id: t.id,
         tokenId: t.tokenId,
         eventTitle: t.event?.title || 'Sự kiện BlockTickets',
-        category: t.event?.category || 'technology',
-        categoryLabel:
-            t.event?.category === 'technology' ? 'Công nghệ & Web3' :
-            t.event?.category === 'sports' ? 'Thể thao' :
-            t.event?.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc cổ điển',
+        category: eventCategory,
+        categoryLabel: categoryMap[t.event?.category] || (t.event?.category ? t.event.category : 'Thể thao'),
         tierName: t.ticketType?.name || 'Vé tham dự chính thức',
         bannerUrl: t.event?.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
         venue: t.event?.venueName ? `${t.event.venueName}, ${t.event.venueAddress || ''}` : 'Trung tâm sự kiện',
