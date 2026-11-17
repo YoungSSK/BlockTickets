@@ -18,6 +18,7 @@ import {
     ListItemButton,
     ListItemIcon,
     ListItemText,
+    Paper,
 } from '@mui/material';
 import {
     ConfirmationNumber,
@@ -35,11 +36,17 @@ import {
     FiberManualRecord,
     Storefront,
     CheckCircle,
+    KeyboardArrowDown,
+    ContentCopy,
+    OpenInNew,
+    SwapHoriz,
+    LinkOff,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useAppTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useWallet } from '../context/WalletContext';
 
 // MetaMask Fox inline SVG
 const MetaMaskIcon = ({ size = 18 }) => (
@@ -64,119 +71,81 @@ const truncateHash = (hash, start = 6, end = 4) => {
 const Navbar = () => {
     const { mode, toggleTheme } = useAppTheme();
     const { user, logout, isAuthenticated } = useAuth();
+    const {
+        walletAddress,
+        walletBalance,
+        connectWallet,
+        switchWallet,
+        disconnectWallet,
+    } = useWallet();
     const navigate = useNavigate();
     const location = useLocation();
 
     // State menu điều hướng trên thiết bị di động
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
-    // State ví MetaMask
-    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '');
-    const [walletBalance, setWalletBalance] = useState('');
 
-    const fetchWalletBalance = useCallback(async (address) => {
-        if (!address) {
-            setWalletBalance('');
-            return;
+
+    // State Menu tài khoản & ví Web3
+    const [userMenuAnchor, setUserMenuAnchor] = useState(null);
+    const [walletMenuAnchor, setWalletMenuAnchor] = useState(null);
+    const [copiedAddress, setCopiedAddress] = useState(false);
+
+    const isUserMenuOpen = Boolean(userMenuAnchor);
+    const isWalletMenuOpen = Boolean(walletMenuAnchor);
+
+    const handleUserMenuOpen = (event) => setUserMenuAnchor(event.currentTarget);
+    const handleUserMenuClose = () => setUserMenuAnchor(null);
+
+    const handleProfileClick = (event) => {
+        if (!user?.role || user?.role === 'customer') {
+            navigate('/profile');
+        } else {
+            handleUserMenuOpen(event);
         }
-        try {
-            if (window.ethereum) {
-                const browserProvider = new ethers.BrowserProvider(window.ethereum);
-                const balanceBigInt = await browserProvider.getBalance(address);
-                const ethStr = ethers.formatEther(balanceBigInt);
-                const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
-                setWalletBalance(`${ethNum} ETH`);
-            } else {
-                try {
-                    const rpcProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
-                    const balanceBigInt = await rpcProvider.getBalance(address);
-                    const ethStr = ethers.formatEther(balanceBigInt);
-                    const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
-                    setWalletBalance(`${ethNum} ETH`);
-                } catch {
-                    setWalletBalance('');
-                }
-            }
-        } catch (err) {
-            console.error('Lỗi khi lấy số dư ví Navbar:', err);
+    };
+
+    const handleWalletMenuOpen = (event) => setWalletMenuAnchor(event.currentTarget);
+    const handleWalletMenuClose = () => setWalletMenuAnchor(null);
+
+    const handleCopyAddress = (e) => {
+        e?.stopPropagation();
+        if (walletAddress) {
+            navigator.clipboard.writeText(walletAddress);
+            setCopiedAddress(true);
+            setTimeout(() => setCopiedAddress(false), 2000);
         }
-    }, []);
+    };
 
-    useEffect(() => {
-        let isMounted = true;
-        const checkWallet = async () => {
-            if (window.ethereum) {
-                try {
-                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                    if (accounts && accounts[0]) {
-                        if (isMounted) {
-                            setWalletAddress(accounts[0]);
-                            await fetchWalletBalance(accounts[0]);
-                        }
-                        return;
-                    }
-                } catch (err) {
-                    console.error('Lỗi kiểm tra eth_accounts Navbar:', err);
-                }
-            }
-            if (user?.walletAddress) {
-                setWalletAddress(user.walletAddress);
-                fetchWalletBalance(user.walletAddress);
-            } else {
-                setWalletAddress('');
-                setWalletBalance('');
-            }
-        };
 
-        checkWallet();
-        return () => {
-            isMounted = false;
-        };
-    }, [user, fetchWalletBalance]);
-
-    useEffect(() => {
-        if (!window.ethereum) return;
-
-        const handleAccountsChanged = async (accounts) => {
-            if (accounts && accounts.length > 0) {
-                setWalletAddress(accounts[0]);
-                await fetchWalletBalance(accounts[0]);
-            } else {
-                setWalletAddress('');
-                setWalletBalance('');
-            }
-        };
-
-        const handleChainChanged = () => {
-            if (walletAddress) {
-                fetchWalletBalance(walletAddress);
-            }
-        };
-
-        window.ethereum.on('accountsChanged', handleAccountsChanged);
-        window.ethereum.on('chainChanged', handleChainChanged);
-
-        return () => {
-            if (window.ethereum?.removeListener) {
-                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-                window.ethereum.removeListener('chainChanged', handleChainChanged);
-            }
-        };
-    }, [walletAddress, fetchWalletBalance]);
 
     const handleConnectWallet = async () => {
-        if (window.ethereum) {
-            try {
-                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                if (accounts && accounts[0]) {
-                    setWalletAddress(accounts[0]);
-                    await fetchWalletBalance(accounts[0]);
-                }
-            } catch (err) {
-                console.error('Lỗi kết nối ví MetaMask:', err);
+        try {
+            await connectWallet();
+        } catch (err) {
+            if (err?.code !== 4001) {
+                alert(err.message || 'Lỗi kết nối ví MetaMask');
             }
-        } else {
-            alert('Vui lòng cài đặt tiện ích mở rộng MetaMask trên trình duyệt của bạn!');
+        }
+    };
+
+    // Đổi tài khoản ví MetaMask bằng EIP-2255 wallet_requestPermissions
+    const handleSwitchWallet = async () => {
+        try {
+            await switchWallet();
+        } catch (err) {
+            if (err?.code !== 4001) {
+                console.error('Lỗi khi đổi tài khoản ví MetaMask:', err);
+            }
+        }
+    };
+
+    // Ngắt kết nối ví
+    const handleDisconnectWallet = async () => {
+        try {
+            await disconnectWallet();
+        } finally {
+            handleWalletMenuClose();
         }
     };
 
@@ -300,64 +269,149 @@ const Navbar = () => {
                         })}
                     </Stack>
 
-                    {/* Right Action Tools: Wallet & Theme & Profile */}
-                    <Stack direction="row" alignItems="center" spacing={1.5}>
-                        {/* Sepolia Testnet Pill */}
-                        <Chip
-                            icon={<FiberManualRecord sx={{ color: 'status.success', fontSize: 10 }} />}
-                            label="Sepolia"
-                            size="small"
-                            sx={{
-                                bgcolor: 'status.successBg',
-                                color: 'status.success',
-                                fontWeight: 600,
-                                height: 26,
-                                display: { xs: 'none', sm: 'inline-flex' },
-                            }}
-                        />
+                    {/* Right Action Tools: Wallet Capsule, Theme Toggle & Profile Menu */}
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                        {/* MetaMask Wallet Button / Capsule - Chỉ hiển thị sau khi đã đăng nhập */}
+                        {isAuthenticated && (
+                            walletAddress ? (
+                                <Tooltip title="Ví MetaMask (Ethereum Sepolia) - Nhấp để xem chi tiết">
+                                    <Button
+                                        onClick={handleWalletMenuOpen}
+                                        sx={{
+                                            height: 38,
+                                            px: 1.2,
+                                            borderRadius: '10px',
+                                            border: 1,
+                                            borderColor: isWalletMenuOpen ? 'primary.main' : 'divider',
+                                            bgcolor: 'background.paper',
+                                            textTransform: 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            boxShadow: isWalletMenuOpen ? 1 : 0,
+                                            '&:hover': {
+                                                bgcolor: 'action.hover',
+                                                borderColor: 'primary.main',
+                                            },
+                                        }}
+                                    >
+                                        {/* Sepolia Status Dot + Balance */}
+                                        <Stack direction="row" alignItems="center" spacing={0.6}>
+                                            <FiberManualRecord sx={{ color: 'status.success', fontSize: 9 }} />
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    fontWeight: 700,
+                                                    color: 'text.primary',
+                                                    fontSize: '0.78rem',
+                                                    display: { xs: 'none', sm: 'inline-block' },
+                                                }}
+                                            >
+                                                {walletBalance || '0 ETH'}
+                                            </Typography>
+                                        </Stack>
 
-                        {/* MetaMask Wallet Button / Pill */}
-                        {walletAddress ? (
-                            <Tooltip title="Ví MetaMask đang kết nối mạng Ethereum Sepolia">
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 1,
-                                        p: '5px 12px',
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: '8px',
-                                        bgcolor: 'background.subtle',
-                                        cursor: 'pointer',
-                                    }}
+                                        <Divider orientation="vertical" flexItem sx={{ height: 16, my: 'auto', display: { xs: 'none', sm: 'block' } }} />
+
+                                        {/* MetaMask Fox + Truncated Address */}
+                                        <Stack direction="row" alignItems="center" spacing={0.6}>
+                                            <MetaMaskIcon size={16} />
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    fontFamily: 'monospace',
+                                                    fontWeight: 600,
+                                                    color: 'text.primary',
+                                                    fontSize: '0.78rem',
+                                                }}
+                                            >
+                                                {truncateHash(walletAddress, 4, 4)}
+                                            </Typography>
+                                            <KeyboardArrowDown sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                        </Stack>
+                                    </Button>
+                                </Tooltip>
+                            ) : (
+                                <Button
+                                    variant="outlined"
+                                    color="primary"
+                                    size="small"
                                     onClick={handleConnectWallet}
+                                    startIcon={<MetaMaskIcon size={16} />}
+                                    sx={{ height: 38, borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
                                 >
-                                    <MetaMaskIcon size={18} />
-                                    <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'text.primary', display: 'block', lineHeight: 1.1 }}>
-                                            {truncateHash(walletAddress, 6, 4)}
-                                        </Typography>
-                                        <Typography variant="caption" color="primary.main" sx={{ fontSize: '0.68rem', fontWeight: 600 }}>
-                                            {walletBalance}
-                                        </Typography>
-                                    </Box>
-                                </Box>
+                                    Kết nối ví
+                                </Button>
+                            )
+                        )}
+
+                        {/* Auth / Profile Button */}
+                        {isAuthenticated ? (
+                            <Tooltip title={!user?.role || user?.role === 'customer' ? `Hồ sơ cá nhân: ${user?.fullName || 'Khách hàng'}` : 'Tài khoản & Tùy chọn'}>
+                                <Button
+                                    onClick={handleProfileClick}
+                                    sx={{
+                                        height: 38,
+                                        px: 1.2,
+                                        borderRadius: '10px',
+                                        border: 1,
+                                        borderColor: (isUserMenuOpen && user?.role !== 'customer') ? 'primary.main' : 'divider',
+                                        bgcolor: (isUserMenuOpen && user?.role !== 'customer') ? 'action.selected' : 'background.paper',
+                                        textTransform: 'none',
+                                        display: { xs: 'none', sm: 'flex' },
+                                        alignItems: 'center',
+                                        gap: 0.8,
+                                        '&:hover': {
+                                            bgcolor: 'action.hover',
+                                            borderColor: 'primary.main',
+                                        },
+                                    }}
+                                >
+                                    <Avatar
+                                        sx={{
+                                            width: 26,
+                                            height: 26,
+                                            bgcolor: 'primary.main',
+                                            color: '#fff',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                        }}
+                                    >
+                                        {(user?.fullName || user?.username || 'U')[0].toUpperCase()}
+                                    </Avatar>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            fontWeight: 600,
+                                            fontSize: '0.82rem',
+                                            color: 'text.primary',
+                                            maxWidth: 110,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        {user?.fullName || 'Tài khoản'}
+                                    </Typography>
+                                    {user?.role && user?.role !== 'customer' && (
+                                        <KeyboardArrowDown sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    )}
+                                </Button>
                             </Tooltip>
                         ) : (
                             <Button
-                                variant="outlined"
+                                variant="contained"
                                 color="primary"
                                 size="small"
-                                onClick={handleConnectWallet}
-                                startIcon={<MetaMaskIcon />}
-                                sx={{ height: 38, borderRadius: '8px' }}
+                                component={RouterLink}
+                                to="/login"
+                                sx={{ height: 38, borderRadius: '8px', textTransform: 'none', fontWeight: 600, display: { xs: 'none', sm: 'inline-flex' } }}
                             >
-                                Kết nối ví
+                                Đăng nhập
                             </Button>
                         )}
 
-                        {/* Theme Toggle Button */}
+                        {/* Theme Toggle Button (Đem ra ngoài cùng bên phải) */}
                         <Tooltip title={mode === 'light' ? 'Chuyển Dark Mode' : 'Chuyển Light Mode'}>
                             <IconButton
                                 aria-label="Chuyển đổi giao diện sáng tối"
@@ -369,63 +423,208 @@ const Navbar = () => {
                                     width: 38,
                                     height: 38,
                                     color: 'text.secondary',
-                                    '&:hover': { bgcolor: 'action.hover' },
+                                    '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
                                 }}
                             >
                                 {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
                             </IconButton>
                         </Tooltip>
 
-                        {/* Auth / Profile Button */}
-                        {isAuthenticated ? (
-                            <Stack direction="row" spacing={1} alignItems="center" sx={{ display: { xs: 'none', sm: 'flex' } }}>
-                                <Tooltip title={`${user?.fullName || 'Người dùng'} (${user?.role || 'customer'})`}>
-                                    <Chip
-                                        label={user?.fullName || 'Tài khoản'}
-                                        size="small"
-                                        color="primary"
-                                        variant="outlined"
-                                        sx={{ fontWeight: 600, maxWidth: 140 }}
-                                    />
-                                </Tooltip>
-                                <Button
-                                    variant="outlined"
-                                    color="error"
-                                    size="small"
-                                    onClick={() => {
-                                        logout();
-                                        navigate('/login');
-                                    }}
-                                    startIcon={<Logout />}
-                                    sx={{ height: 38, borderRadius: '8px' }}
-                                >
-                                    Đăng xuất
-                                </Button>
-                            </Stack>
-                        ) : (
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                size="small"
-                                component={RouterLink}
-                                to="/login"
-                                sx={{ height: 38, borderRadius: '8px', display: { xs: 'none', sm: 'inline-flex' } }}
-                            >
-                                Đăng nhập
-                            </Button>
-                        )}
-
                         {/* Mobile Hamburger Menu */}
                         <IconButton
                             aria-label="Mở menu điều hướng"
                             onClick={() => setMobileDrawerOpen(true)}
-                            sx={{ display: { xs: 'flex', lg: 'none' }, border: 1, borderColor: 'divider', borderRadius: '8px' }}
+                            sx={{ display: { xs: 'flex', lg: 'none' }, border: 1, borderColor: 'divider', borderRadius: '8px', width: 38, height: 38 }}
                         >
                             <MenuIcon fontSize="small" />
                         </IconButton>
                     </Stack>
                 </Stack>
             </Container>
+
+            {/* Wallet Web3 Dropdown Menu - Chỉ hiển thị khi đã đăng nhập */}
+            {isAuthenticated && (
+                <Menu
+                    anchorEl={walletMenuAnchor}
+                    open={isWalletMenuOpen}
+                    onClose={handleWalletMenuClose}
+                    transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                    anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                    PaperProps={{
+                        elevation: 3,
+                        sx: {
+                            minWidth: 260,
+                            p: 1.5,
+                            borderRadius: '12px',
+                            mt: 1,
+                            border: 1,
+                            borderColor: 'divider',
+                        },
+                    }}
+                >
+                    {/* Network Status Header */}
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.2}>
+                        <Stack direction="row" alignItems="center" spacing={0.8}>
+                            <FiberManualRecord sx={{ color: 'status.success', fontSize: 10 }} />
+                            <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                Ethereum Sepolia
+                            </Typography>
+                        </Stack>
+                        <Chip label="Testnet" size="small" sx={{ height: 20, fontSize: '0.68rem', fontWeight: 600 }} />
+                    </Stack>
+
+                    {/* Truncated Address & Copy Tool */}
+                    <Paper
+                        variant="outlined"
+                        sx={{
+                            p: 1,
+                            mb: 1.5,
+                            borderRadius: '8px',
+                            bgcolor: 'background.subtle',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                        }}
+                    >
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                            {truncateHash(walletAddress, 6, 4)}
+                        </Typography>
+                        <Tooltip title={copiedAddress ? 'Đã sao chép!' : 'Sao chép địa chỉ ví'}>
+                            <IconButton size="small" onClick={handleCopyAddress} sx={{ p: 0.5 }}>
+                                {copiedAddress ? <CheckCircle fontSize="small" color="success" /> : <ContentCopy fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                    </Paper>
+
+                    {/* Wallet Balance */}
+                    <Box sx={{ mb: 1.5, px: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                            Số dư khả dụng:
+                        </Typography>
+                        <Typography variant="h4" color="primary.main" fontWeight={700}>
+                            {walletBalance || '0 ETH'}
+                        </Typography>
+                    </Box>
+
+                    <Divider sx={{ my: 1 }} />
+
+                    {/* Explorer & Change Actions */}
+                    <MenuItem
+                        component="a"
+                        href={`https://sepolia.etherscan.io/address/${walletAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={handleWalletMenuClose}
+                        sx={{ borderRadius: '6px', fontSize: '0.85rem', gap: 1, py: 0.8 }}
+                    >
+                        <OpenInNew fontSize="small" sx={{ color: 'text.secondary' }} />
+                        Xem trên Etherscan Sepolia
+                    </MenuItem>
+                    <MenuItem
+                        onClick={() => {
+                            handleWalletMenuClose();
+                            handleSwitchWallet();
+                        }}
+                        sx={{ borderRadius: '6px', fontSize: '0.85rem', gap: 1, py: 0.8 }}
+                    >
+                        <SwapHoriz fontSize="small" sx={{ color: 'primary.main' }} />
+                        Đổi tài khoản ví MetaMask
+                    </MenuItem>
+                    <Divider sx={{ my: 1 }} />
+                    <MenuItem
+                        onClick={handleDisconnectWallet}
+                        sx={{
+                            borderRadius: '6px',
+                            fontSize: '0.85rem',
+                            gap: 1,
+                            py: 0.8,
+                            color: 'error.main',
+                            fontWeight: 600,
+                            '&:hover': {
+                                bgcolor: 'action.hover',
+                            },
+                        }}
+                    >
+                        <LinkOff fontSize="small" />
+                        Ngắt kết nối ví
+                    </MenuItem>
+                </Menu>
+            )}
+
+            {/* User Profile Dropdown Menu - Chỉ hiển thị cho Quản trị viên & Ban tổ chức, Khách hàng chuyển thẳng tới trang Profile */}
+            {user?.role && user?.role !== 'customer' && (
+                <Menu
+                    anchorEl={userMenuAnchor}
+                    open={isUserMenuOpen}
+                    onClose={handleUserMenuClose}
+                    transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                    anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                    PaperProps={{
+                        elevation: 3,
+                        sx: {
+                            minWidth: 230,
+                            p: 1,
+                            borderRadius: '12px',
+                            mt: 1,
+                            border: 1,
+                            borderColor: 'divider',
+                        },
+                    }}
+                >
+                    {/* User Info Header */}
+                    <Box sx={{ px: 1.5, py: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={700} color="text.primary">
+                            {user?.fullName || 'Người dùng'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.8 }}>
+                            {user?.email || ''}
+                        </Typography>
+                        <Chip
+                            label={user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'organizer' ? 'Ban tổ chức' : 'Khách hàng'}
+                            size="small"
+                            color={user?.role === 'admin' ? 'secondary' : user?.role === 'organizer' ? 'warning' : 'primary'}
+                            sx={{ fontWeight: 600, height: 20, fontSize: '0.7rem' }}
+                        />
+                    </Box>
+
+                    <Divider sx={{ my: 1 }} />
+
+                    {/* Profile Shortcut */}
+                    <MenuItem
+                        onClick={() => {
+                            handleUserMenuClose();
+                            navigate('/profile');
+                        }}
+                        sx={{ borderRadius: '6px', fontSize: '0.85rem', gap: 1.2, py: 0.8 }}
+                    >
+                        <Person fontSize="small" sx={{ color: 'primary.main' }} />
+                        Hồ sơ cá nhân
+                    </MenuItem>
+
+                    <Divider sx={{ my: 1 }} />
+                    <MenuItem
+                        onClick={() => {
+                            handleUserMenuClose();
+                            logout();
+                            navigate('/login');
+                        }}
+                        sx={{
+                            borderRadius: '6px',
+                            fontSize: '0.85rem',
+                            gap: 1.2,
+                            py: 0.8,
+                            color: 'error.main',
+                            fontWeight: 600,
+                            '&:hover': {
+                                bgcolor: 'action.hover',
+                            },
+                        }}
+                    >
+                        <Logout fontSize="small" />
+                        Đăng xuất
+                    </MenuItem>
+                </Menu>
+            )}
 
             {/* Mobile Navigation Drawer */}
             <Drawer

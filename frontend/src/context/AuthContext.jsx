@@ -34,10 +34,18 @@ export const AuthContextProvider = ({ children }) => {
         localStorage.removeItem('blocktickets_refresh_token');
     }, []);
 
+    const updateUser = useCallback((updatedFields) => {
+        setUser((prev) => {
+            const updated = { ...prev, ...updatedFields };
+            localStorage.setItem('blocktickets_user', JSON.stringify(updated));
+            return updated;
+        });
+    }, []);
+
     const isAuthenticated = Boolean(user && token);
 
     return (
-        <AuthContext.Provider value={{ user, token, isAuthenticated, login, logout }}>
+        <AuthContext.Provider value={{ user, token, isAuthenticated, login, logout, updateUser }}>
             {children}
         </AuthContext.Provider>
     );

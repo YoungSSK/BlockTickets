@@ -223,12 +223,20 @@ export const getOrderDetail = async (orderId) => {
 
 // 4. Lấy danh sách Vé NFT của tôi
 export const getMyTickets = async (user, walletQuery) => {
-  const targetWallet = (walletQuery || user?.walletAddress || "").toLowerCase();
+  const targetWallet = (walletQuery || user?.walletAddress || "").trim();
 
-  const where = {};
-  if (targetWallet) {
-    where.ownerWallet = targetWallet;
+  // Bắt buộc phải có địa chỉ ví của khách hàng (qua query hoặc tài khoản đã liên kết)
+  // Nếu chưa có ví, không trả về toàn bộ vé trong hệ thống mà trả về danh sách rỗng
+  if (!targetWallet) {
+    return [];
   }
+
+  const where = {
+    [Op.or]: [
+      { ownerWallet: targetWallet },
+      { ownerWallet: targetWallet.toLowerCase() },
+    ],
+  };
 
   const tickets = await Ticket.findAll({
     where,
