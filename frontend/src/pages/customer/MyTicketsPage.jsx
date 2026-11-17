@@ -50,6 +50,7 @@ import {
     Storefront,
     ArrowBack,
 } from '@mui/icons-material';
+import { DoorOpen, Armchair } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
@@ -93,7 +94,8 @@ const normalizeTicket = (t) => {
         tierName: t.ticketType?.name || 'Vé tham dự chính thức',
         bannerUrl: t.event?.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
         venue: t.event?.venueName ? `${t.event.venueName}, ${t.event.venueAddress || ''}` : 'Trung tâm sự kiện',
-        gate: 'Cửa kiểm soát vé chính',
+        gate: t.entryGate || t.ticketType?.entryGate || 'Cổng A - Khán Đài Phổ Thông Tầng 1',
+        seatNumber: t.seatNumber || `Khu ${t.ticketType?.name || 'A'} - Ghế ${t.id}`,
         startTime: t.event?.startTime ? new Date(t.event.startTime).toLocaleString('vi-VN') : '',
         attendeeName: 'Khách hàng BlockTickets',
         originalPrice: origPrice,
@@ -738,6 +740,32 @@ const MyTicketsPage = () => {
                                             <Typography variant="caption" color="text.secondary" display="block">
                                                 Người tham dự: <strong>{ticket.attendeeName}</strong>
                                             </Typography>
+                                            <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap" gap={0.5}>
+                                                <Chip
+                                                    size="small"
+                                                    icon={<DoorOpen size={13} style={{ marginLeft: 6, color: 'inherit' }} />}
+                                                    label={ticket.gate}
+                                                    sx={{
+                                                        fontWeight: 700,
+                                                        fontSize: '0.72rem',
+                                                        bgcolor: 'primary.subtle',
+                                                        color: 'primary.main',
+                                                        '& .MuiChip-icon': { color: 'inherit' },
+                                                    }}
+                                                />
+                                                <Chip
+                                                    size="small"
+                                                    icon={<Armchair size={13} style={{ marginLeft: 6, color: 'inherit' }} />}
+                                                    label={`Ghế: ${ticket.seatNumber}`}
+                                                    sx={{
+                                                        fontWeight: 700,
+                                                        fontSize: '0.72rem',
+                                                        bgcolor: 'background.subtle',
+                                                        color: 'text.secondary',
+                                                        '& .MuiChip-icon': { color: 'inherit' },
+                                                    }}
+                                                />
+                                            </Stack>
                                         </Stack>
 
                                         {/* Thông tin giá & On-chain Hash */}
@@ -937,16 +965,37 @@ const MyTicketsPage = () => {
                                 </Typography>
                             </Alert>
 
-                            {/* Thông tin vị trí cổng soát vé */}
+                            {/* Thông tin vị trí cổng soát vé và số ghế */}
                             <Box sx={{ p: 2, bgcolor: 'background.subtle', borderRadius: '8px', textAlign: 'left' }}>
-                                <Typography variant="caption" color="text.secondary">HẠNG VÉ:</Typography>
-                                <Typography variant="subtitle2" color="primary.main" fontWeight={700} mb={0.5}>
-                                    {activeTicket.tierName}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">LỐI VÀO SOÁT VÉ:</Typography>
-                                <Typography variant="body2" color="text.primary" fontWeight={600}>
-                                    {activeTicket.gate}
-                                </Typography>
+                                <Grid container spacing={1.5}>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="text.secondary">HẠNG VÉ:</Typography>
+                                        <Typography variant="subtitle2" color="primary.main" fontWeight={700}>
+                                            {activeTicket.tierName}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="text.secondary">SỐ GHẾ NGỒI:</Typography>
+                                        <Typography variant="subtitle2" fontWeight={700} color="text.primary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                                            <Armchair size={15} style={{ color: 'inherit' }} /> {activeTicket.seatNumber}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <Divider sx={{ my: 0.5 }} />
+                                    </Grid>
+                                    <Grid item xs={8}>
+                                        <Typography variant="caption" color="text.secondary">CỔNG SOÁT VÉ CHỈ ĐỊNH:</Typography>
+                                        <Typography variant="body2" color="text.primary" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                                            <DoorOpen size={16} style={{ color: '#3B82F6' }} /> {activeTicket.gate}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={4} textAlign="right">
+                                        <Typography variant="caption" color="text.secondary">MÃ TOKEN NFT:</Typography>
+                                        <Typography variant="body2" color="primary.main" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
+                                            Token #{activeTicket.tokenId}
+                                        </Typography>
+                                    </Grid>
+                                </Grid>
                             </Box>
                         </DialogContent>
 
@@ -1068,15 +1117,25 @@ const MyTicketsPage = () => {
             ═══════════════════════════════════════════════════════════════════ */}
             <Snackbar
                 open={snackbar.open}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={handleCloseSnackbar}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                sx={{ zIndex: 99999 }}
             >
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity={snackbar.severity}
                     variant="filled"
-                    sx={{ width: '100%', borderRadius: '8px', color: '#fff' }}
+                    elevation={8}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                    }}
                 >
                     {snackbar.message}
                 </Alert>

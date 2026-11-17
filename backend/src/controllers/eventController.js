@@ -126,6 +126,43 @@ export const createTicketType = async (req, res, next) => {
   }
 };
 
+export const updateTicketType = async (req, res, next) => {
+  try {
+    const ticketType = await eventService.updateTicketType(
+      req.validated.params.id,
+      req.validated.params.ticketTypeId,
+      req.user.id,
+      req.body,
+      req.user?.role,
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Cập nhật hạng vé thành công.",
+      data: { ticketType },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deleteTicketType = async (req, res, next) => {
+  try {
+    const result = await eventService.deleteTicketType(
+      req.params.id,
+      req.params.ticketTypeId,
+      req.user.id,
+      req.user?.role,
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Xóa hạng vé thành công.",
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const submitForReview = async (req, res, next) => {
   try {
     const event = await eventService.submitEventForReview(

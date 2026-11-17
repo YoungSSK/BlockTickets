@@ -42,34 +42,24 @@ import {
     useTheme,
 } from '@mui/material';
 import {
-    EventNote,
-    ConfirmationNumber,
-    AccountBalanceWallet,
+    CalendarDays,
+    Ticket,
     TrendingUp,
-    PeopleAlt,
-    CheckCircle,
-    HourglassEmpty,
-    Refresh,
-    ContentCopy,
-    OpenInNew,
-    Security,
-    Search,
-    Visibility,
-    Add,
-    QrCodeScanner,
-    Storefront,
-    Close,
-    Launch,
-    FiberManualRecord,
-    InfoOutlined,
-    Shield,
-    MonetizationOn,
-    Payments,
-    LocationOn,
-    Schedule,
-    ReceiptLong,
-    ArrowForward,
-    Settings,
+    CheckCircle2,
+    RefreshCw,
+    Copy,
+    ExternalLink,
+    Plus,
+    X,
+    Coins,
+    MapPin,
+    Clock,
+    ArrowRight,
+    DoorOpen,
+    Armchair,
+    Crown,
+} from 'lucide-react';
+import {
     SwapHoriz,
     LinkOff,
 } from '@mui/icons-material';
@@ -673,7 +663,7 @@ const OrganizerDashboardPage = () => {
                                                 </Typography>
                                                 {connectedWallet ? (
                                                     <Chip
-                                                        icon={<CheckCircle sx={{ fontSize: '12px !important' }} />}
+                                                        icon={<CheckCircle2 size={12} />}
                                                         label="Đã kết nối Sepolia"
                                                         size="small"
                                                         color="success"
@@ -700,7 +690,7 @@ const OrganizerDashboardPage = () => {
                                                             onClick={() => handleCopy(connectedWallet, 'địa chỉ ví')}
                                                             sx={{ p: 0.3 }}
                                                         >
-                                                            <ContentCopy sx={{ fontSize: 14 }} />
+                                                            <Copy size={14} />
                                                         </IconButton>
                                                     </Tooltip>
                                                     <Typography variant="body2" color="primary.main" fontWeight={700} sx={{ ml: 0.5 }}>
@@ -712,7 +702,7 @@ const OrganizerDashboardPage = () => {
                                                             onClick={() => fetchWalletBalance(connectedWallet)}
                                                             sx={{ p: 0.3 }}
                                                         >
-                                                            <Refresh sx={{ fontSize: 14 }} />
+                                                            <RefreshCw size={14} />
                                                         </IconButton>
                                                     </Tooltip>
 
@@ -786,7 +776,7 @@ const OrganizerDashboardPage = () => {
                                             {metrics.totalRevenueEth} ETH
                                         </Typography>
                                         <Typography variant="caption" sx={{ color: 'success.main', display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 0.5, fontWeight: 600 }}>
-                                            <CheckCircle sx={{ fontSize: 13 }} /> 100% Doanh thu đã thanh khoản vào ví Web3
+                                            <CheckCircle2 size={13} /> 100% Doanh thu đã thanh khoản vào ví Web3
                                         </Typography>
                                     </Box>
                                 </Grid>
@@ -812,7 +802,7 @@ const OrganizerDashboardPage = () => {
                                     <Typography variant="caption" color="text.secondary" fontWeight={700}>
                                         TỔNG DOANH THU PHÁT HÀNH
                                     </Typography>
-                                    <MonetizationOn color="primary" sx={{ fontSize: 20 }} />
+                                    <Coins size={20} color={theme.palette.primary.main} />
                                 </Stack>
                                 <Typography variant="h2" fontWeight={800} color="primary.main" gutterBottom>
                                     {metrics.totalRevenueEth} ETH
@@ -839,7 +829,7 @@ const OrganizerDashboardPage = () => {
                                     <Typography variant="caption" color="text.secondary" fontWeight={700}>
                                         VÉ NFT ĐÃ PHÁT HÀNH
                                     </Typography>
-                                    <ConfirmationNumber color="primary" sx={{ fontSize: 20 }} />
+                                    <Ticket size={20} color={theme.palette.primary.main} />
                                 </Stack>
                                 <Typography variant="h2" fontWeight={800} color="text.primary" gutterBottom>
                                     {metrics.totalTicketsSold} Vé
@@ -866,7 +856,7 @@ const OrganizerDashboardPage = () => {
                                     <Typography variant="caption" color="text.secondary" fontWeight={700}>
                                         HIỆU SUẤT CHECK-IN THỰC TẾ
                                     </Typography>
-                                    <CheckCircle sx={{ fontSize: 20, color: theme.palette.status?.checkedIn || '#8B5CF6' }} />
+                                    <CheckCircle2 size={20} color={theme.palette.status?.checkedIn || '#8B5CF6'} />
                                 </Stack>
                                 <Typography variant="h2" fontWeight={800} sx={{ color: theme.palette.status?.checkedIn || '#8B5CF6' }} gutterBottom>
                                     {overallCheckInRate}%
@@ -904,7 +894,7 @@ const OrganizerDashboardPage = () => {
                             }}
                         >
                             <Stack direction="row" spacing={1.5} alignItems="center">
-                                <EventNote color="primary" sx={{ fontSize: 26 }} />
+                                <CalendarDays size={24} color={theme.palette.primary.main} />
                                 <Box>
                                     <Typography variant="h3" fontWeight={700} color="text.primary">
                                         Sự Kiện Hoạt Động Gần Đây
@@ -915,7 +905,7 @@ const OrganizerDashboardPage = () => {
                             <Button
                                 component={RouterLink}
                                 to="/organizer/events"
-                                endIcon={<ArrowForward />}
+                                endIcon={<ArrowRight size={16} />}
                                 color="primary"
                                 sx={{
                                     fontWeight: 700,
@@ -944,7 +934,7 @@ const OrganizerDashboardPage = () => {
                                     {recentEvents.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} sx={{ textAlign: 'center', py: 6 }}>
-                                                <EventNote sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.4, mb: 1 }} />
+                                                <CalendarDays size={48} style={{ opacity: 0.4, marginBottom: 8, color: 'currentColor' }} />
                                                 <Typography variant="body1" fontWeight={600} color="text.secondary">
                                                     Bạn chưa có sự kiện nào được tạo.
                                                 </Typography>
@@ -953,7 +943,7 @@ const OrganizerDashboardPage = () => {
                                                     to="/organizer/events"
                                                     variant="contained"
                                                     size="small"
-                                                    startIcon={<Add />}
+                                                    startIcon={<Plus size={16} />}
                                                     sx={{ mt: 1.5, borderRadius: '8px', fontWeight: 700 }}
                                                 >
                                                     Tạo sự kiện ngay
@@ -1109,7 +1099,7 @@ const OrganizerDashboardPage = () => {
                                 <Button
                                     component={RouterLink}
                                     to="/organizer/events"
-                                    endIcon={<ArrowForward />}
+                                    endIcon={<ArrowRight size={16} />}
                                     size="small"
                                     color="inherit"
                                     sx={{ fontWeight: 600, textTransform: 'none' }}
@@ -1133,7 +1123,7 @@ const OrganizerDashboardPage = () => {
                     >
                         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2.5}>
                             <Stack direction="row" spacing={1.5} alignItems="center">
-                                <TrendingUp color="primary" />
+                                <TrendingUp size={22} color={theme.palette.primary.main} />
                                 <Box>
                                     <Typography variant="h3" fontWeight={700}>
                                         Nhật Ký Giao Dịch
@@ -1148,7 +1138,7 @@ const OrganizerDashboardPage = () => {
                                     await loadOrganizerData();
                                     showSnackbar('Đã đồng bộ giao dịch mới nhất từ blockchain!', 'success');
                                 }}
-                                startIcon={<Refresh />}
+                                startIcon={<RefreshCw size={15} />}
                                 sx={{ textTransform: 'none', fontWeight: 600 }}
                             >
                                 Làm mới
@@ -1238,7 +1228,7 @@ const OrganizerDashboardPage = () => {
                                             {log.amountEth > 0 ? `+${log.amountEth} ETH` : `${log.amountEth} ETH`}
                                         </Typography>
                                         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                                            <CheckCircle sx={{ fontSize: 13, color: 'success.main' }} /> On-chain Confirmed
+                                            <CheckCircle2 size={13} style={{ color: '#10B981' }} /> On-chain Confirmed
                                         </Typography>
                                     </Box>
                                 </Paper>
@@ -1292,7 +1282,7 @@ const OrganizerDashboardPage = () => {
                                     justifyContent: 'center',
                                 }}
                             >
-                                <ReceiptLong />
+                                <TrendingUp size={22} />
                             </Box>
                             <Box>
                                 <Typography variant="h3" fontWeight={700}>
@@ -1308,7 +1298,7 @@ const OrganizerDashboardPage = () => {
                             aria-label="Đóng popup đối soát doanh thu"
                             onClick={() => setOpenWithdrawModal(false)}
                         >
-                            <Close />
+                            <X size={20} />
                         </IconButton>
                     </Stack>
                 </DialogTitle>
@@ -1335,7 +1325,7 @@ const OrganizerDashboardPage = () => {
                             </Typography>
                             <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" flexWrap="wrap">
                                 <Chip
-                                    icon={<CheckCircle sx={{ fontSize: '1rem !important' }} />}
+                                    icon={<CheckCircle2 size={15} />}
                                     label="100% Tiền đã chuyển thẳng vào ví"
                                     size="small"
                                     color="success"
@@ -1364,7 +1354,7 @@ const OrganizerDashboardPage = () => {
                                         href={`https://sepolia.etherscan.io/address/${user.walletAddress}#internaltx`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        endIcon={<OpenInNew sx={{ fontSize: '0.9rem !important' }} />}
+                                        endIcon={<ExternalLink size={14} />}
                                         sx={{ textTransform: 'none', borderRadius: '8px', fontSize: '0.75rem' }}
                                     >
                                         Xem trên Etherscan
@@ -1459,7 +1449,7 @@ const OrganizerDashboardPage = () => {
                             href={`https://sepolia.etherscan.io/address/${user.walletAddress}#internaltx`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            startIcon={<OpenInNew />}
+                            startIcon={<ExternalLink size={16} />}
                             sx={{ borderRadius: '8px', fontWeight: 600, mr: 'auto' }}
                         >
                             Tra cứu Internal Txns trên Etherscan
@@ -1514,7 +1504,7 @@ const OrganizerDashboardPage = () => {
                         transition: 'all 0.2s ease',
                     }}
                 >
-                    <Close fontSize="small" />
+                    <X size={18} />
                 </IconButton>
 
                 {selectedEvent && (
@@ -1633,13 +1623,13 @@ const OrganizerDashboardPage = () => {
                                 {/* THỜI GIAN & ĐỊA ĐIỂM TỔ CHỨC */}
                                 <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', bgcolor: 'background.paper', border: 1, borderColor: 'divider' }}>
                                     <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <EventNote sx={{ fontSize: 18, color: 'primary.main' }} /> Thời Gian & Địa Điểm Tổ Chức
+                                        <CalendarDays size={18} color={theme.palette.primary.main} /> Thời Gian & Địa Điểm Tổ Chức
                                     </Typography>
                                     <Grid container spacing={2} sx={{ mt: 0.5 }}>
                                         <Grid item xs={12} sm={6}>
                                             <Stack spacing={0.5}>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <Schedule sx={{ fontSize: 15 }} /> Thời gian bắt đầu:
+                                                    <Clock size={15} /> Thời gian bắt đầu:
                                                 </Typography>
                                                 <Typography variant="body2" fontWeight={600}>
                                                     {selectedEvent.startTime || 'Chưa thiết lập'}
@@ -1649,7 +1639,7 @@ const OrganizerDashboardPage = () => {
                                         <Grid item xs={12} sm={6}>
                                             <Stack spacing={0.5}>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <Schedule sx={{ fontSize: 15 }} /> Thời gian kết thúc:
+                                                    <Clock size={15} /> Thời gian kết thúc:
                                                 </Typography>
                                                 <Typography variant="body2" fontWeight={600}>
                                                     {selectedEvent.endTime || 'Chưa thiết lập'}
@@ -1660,7 +1650,7 @@ const OrganizerDashboardPage = () => {
                                             <Divider sx={{ my: 0.5 }} />
                                             <Stack spacing={0.5} sx={{ mt: 1 }}>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <LocationOn sx={{ fontSize: 15 }} /> Địa điểm tổ chức:
+                                                    <MapPin size={15} /> Địa điểm tổ chức:
                                                 </Typography>
                                                 <Typography variant="body2" fontWeight={600}>
                                                     {selectedEvent.venueName ? `${selectedEvent.venueName} - ` : ''}
@@ -1688,7 +1678,7 @@ const OrganizerDashboardPage = () => {
                                 {/* DANH SÁCH CÁC HẠNG VÉ (TICKET TIERS) */}
                                 <Box>
                                     <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <ConfirmationNumber sx={{ fontSize: 18, color: 'primary.main' }} /> Danh Sách Các Hạng Vé Đã Tạo ({selectedEvent.ticketTypes?.length || 0})
+                                        <Ticket size={18} color={theme.palette.primary.main} /> Danh Sách Các Hạng Vé Đã Tạo ({selectedEvent.ticketTypes?.length || 0})
                                     </Typography>
                                     {(!selectedEvent.ticketTypes || selectedEvent.ticketTypes.length === 0) ? (
                                         <Paper elevation={0} sx={{ p: 2, textAlign: 'center', bgcolor: 'background.subtle', borderRadius: '10px' }}>
@@ -1719,14 +1709,29 @@ const OrganizerDashboardPage = () => {
                                                     >
                                                         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} mb={1}>
                                                             <Box>
-                                                                <Typography variant="subtitle2" fontWeight={800} color="primary.main">
-                                                                    {tt.name}
-                                                                </Typography>
+                                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                                    <Typography variant="subtitle2" fontWeight={800} color="primary.main">
+                                                                        {tt.name}
+                                                                    </Typography>
+                                                                    {tt.tierType === 'vip' ? (
+                                                                        <Chip icon={<Crown size={12} />} label="Hạng VIP" size="small" color="warning" sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }} />
+                                                                    ) : (
+                                                                        <Chip icon={<Ticket size={12} />} label="Tiêu Chuẩn" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.68rem', fontWeight: 600 }} />
+                                                                    )}
+                                                                </Stack>
+                                                                {tt.seatZone && (
+                                                                    <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary', mt: 0.3 }}>
+                                                                        <Armchair size={13} /> {tt.seatZone} • {tt.seatRow} (Ghế {tt.seatStart} - {tt.seatEnd})
+                                                                    </Typography>
+                                                                )}
                                                                 {tt.description && (
                                                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                                                                         {tt.description}
                                                                     </Typography>
                                                                 )}
+                                                                <Typography variant="caption" sx={{ color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, fontWeight: 600 }}>
+                                                                    <DoorOpen size={13} /> Cổng check-in: {tt.entryGate || 'Cổng A - Khán Đài Phổ Thông Tầng 1'}
+                                                                </Typography>
                                                             </Box>
 
                                                             <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
@@ -1774,7 +1779,7 @@ const OrganizerDashboardPage = () => {
                                             href={`https://sepolia.etherscan.io/address/${EVENT_TICKET_ADDRESS}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            endIcon={<OpenInNew sx={{ fontSize: '0.85rem !important' }} />}
+                                            endIcon={<ExternalLink size={14} />}
                                             sx={{ borderRadius: '6px', fontSize: '0.75rem', textTransform: 'none' }}
                                         >
                                             Xem Contract trên Etherscan
@@ -1829,15 +1834,25 @@ const OrganizerDashboardPage = () => {
 
             <Snackbar
                 open={snackbar.open}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                sx={{ zIndex: 99999 }}
             >
                 <Alert
                     onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
                     severity={snackbar.severity}
                     variant="filled"
-                    sx={{ width: '100%', borderRadius: '10px', fontWeight: 600 }}
+                    elevation={8}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                    }}
                 >
                     {snackbar.message}
                 </Alert>
