@@ -27,8 +27,6 @@ import {
     InputAdornment,
     Tabs,
     Tab,
-    ToggleButton,
-    ToggleButtonGroup,
     CircularProgress,
     Drawer,
     List,
@@ -118,8 +116,8 @@ const CheckInScannerPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    // Phương thức soát vé: 'qr' (Quét mã QR qua Camera) hoặc 'token' (Nhập Token ID)
-    const [checkInMode, setCheckInMode] = useState('qr');
+    // Phương thức soát vé: 'token' (Nhập thủ công Token ID) hoặc 'qr' (Quét mã QR qua Camera)
+    const [checkInMode, setCheckInMode] = useState('token');
 
     // Danh sách sự kiện & Cấu hình soát vé
     const [eventsList, setEventsList] = useState([]);
@@ -290,7 +288,7 @@ const CheckInScannerPage = () => {
                         tokenId: data.ticket?.tokenId,
                         eventId: selectedEventId,
                         gate: selectedGate,
-                        staffNote: `Soát tại ${selectedGate} bởi ${user?.fullName || user?.name || 'Nhân viên cổng'} (${checkInMode === 'token' ? 'Nhập Token ID' : 'Quét QR'})`,
+                        staffNote: `Soát tại ${selectedGate} bởi ${user?.fullName || user?.name || 'Nhân viên cổng'} (${checkInMode === 'token' ? 'Nhập Thủ Công' : 'Quét QR'})`,
                     });
 
                     if (soundEnabled) playFeedbackSound(data.gateMismatch ? 'warning' : 'success');
@@ -313,7 +311,7 @@ const CheckInScannerPage = () => {
                             gateAllowed: selectedGate,
                         },
                         tokenId: confirmedTicket?.tokenId || confirmedTicket?.id,
-                        method: checkInMode === 'token' ? 'Nhập Token ID' : 'Quét Mã QR',
+                        method: checkInMode === 'token' ? 'Nhập Thủ Công' : 'Quét Mã QR',
                         time: new Date().toLocaleTimeString('vi-VN'),
                     });
 
@@ -365,7 +363,7 @@ const CheckInScannerPage = () => {
                         message: data.message || 'Mã vé không hợp lệ.',
                         ticket: data.ticket,
                         tokenId: data.ticket?.tokenId || data.ticket?.id || payload.tokenId || 'N/A',
-                        method: checkInMode === 'token' ? 'Nhập Token ID' : 'Quét Mã QR',
+                        method: checkInMode === 'token' ? 'Nhập Thủ Công' : 'Quét Mã QR',
                         time: new Date().toLocaleTimeString('vi-VN'),
                     });
 
@@ -514,7 +512,7 @@ const CheckInScannerPage = () => {
                         <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
                             <Chip
                                 icon={<Circle size={8} fill="currentColor" style={{ color: checkInMode === 'qr' && isScannerRunning ? '#10B981' : '#94A3B8', marginRight: 4 }} />}
-                                label={checkInMode === 'qr' ? (isScannerRunning ? 'CAMERA ĐANG BẬT' : 'CAMERA ĐANG TẮT') : 'CHẾ ĐỘ NHẬP TOKEN ID'}
+                                label={checkInMode === 'qr' ? (isScannerRunning ? 'CAMERA ĐANG BẬT' : 'CAMERA ĐANG TẮT') : 'CHẾ ĐỘ NHẬP THỦ CÔNG'}
                                 size="small"
                                 variant="outlined"
                                 sx={{ fontWeight: 600, fontSize: '0.75rem' }}
@@ -562,7 +560,7 @@ const CheckInScannerPage = () => {
                     }}
                 >
                     <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} md={5}>
+                        <Grid item xs={12} md={7}>
                             <FormControl fullWidth size="small">
                                 <InputLabel id="event-select-label">Sự kiện đang soát vé</InputLabel>
                                 <Select
@@ -587,7 +585,7 @@ const CheckInScannerPage = () => {
                             </FormControl>
                         </Grid>
 
-                        <Grid item xs={12} sm={6} md={4}>
+                        <Grid item xs={12} md={5}>
                             <FormControl fullWidth size="small">
                                 <InputLabel id="gate-select-label">Vị trí cổng kiểm soát</InputLabel>
                                 <Select
@@ -604,39 +602,12 @@ const CheckInScannerPage = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-
-                        <Grid item xs={12} sm={6} md={3}>
-                            <ToggleButtonGroup
-                                value={checkInMode}
-                                exclusive
-                                onChange={(_, newMode) => {
-                                    if (newMode) {
-                                        setCheckInMode(newMode);
-                                        if (newMode === 'token' && isScannerRunning) {
-                                            setIsScannerRunning(false);
-                                        }
-                                    }
-                                }}
-                                fullWidth
-                                size="small"
-                                sx={{ height: 40 }}
-                            >
-                                <ToggleButton value="qr" sx={{ fontWeight: 700, textTransform: 'none', gap: 1 }}>
-                                    <QrCode size={16} />
-                                    Quét QR
-                                </ToggleButton>
-                                <ToggleButton value="token" sx={{ fontWeight: 700, textTransform: 'none', gap: 1 }}>
-                                    <Keyboard size={16} />
-                                    Nhập Token ID
-                                </ToggleButton>
-                            </ToggleButtonGroup>
-                        </Grid>
                     </Grid>
                 </Paper>
 
-                {/* VÙNG TRỌNG TÂM: CỘT TRÁI (QUÉT QR HOẶC NHẬP TOKEN ID) & CỘT PHẢI (KẾT QUẢ SOÁT VÉ) */}
+                {/* VÙNG TRỌNG TÂM: CỘT TRÁI (NHẬP THỦ CÔNG HOẶC QUÉT QR) & CỘT PHẢI (KẾT QUẢ SOÁT VÉ) */}
                 <Grid container spacing={3}>
-                    {/* CỘT TRÁI: DUAL-MODE SCANNER (QUÉT QR / NHẬP TOKEN ID) */}
+                    {/* CỘT TRÁI: DUAL-MODE SCANNER (NHẬP THỦ CÔNG / QUÉT QR) */}
                     <Grid item xs={12} md={7}>
                         <Card
                             sx={{
@@ -673,178 +644,22 @@ const CheckInScannerPage = () => {
                                     }}
                                 >
                                     <Tab
-                                        value="qr"
-                                        label="Hình Thức 1: Quét Mã QR"
-                                        icon={<QrCode size={18} />}
+                                        value="token"
+                                        label="Hình Thức 1: Nhập Thủ Công (Token ID)"
+                                        icon={<Keyboard size={18} />}
                                         iconPosition="start"
                                     />
                                     <Tab
-                                        value="token"
-                                        label="Hình Thức 2: Nhập Token ID"
-                                        icon={<Keyboard size={18} />}
+                                        value="qr"
+                                        label="Hình Thức 2: Quét Mã QR"
+                                        icon={<QrCode size={18} />}
                                         iconPosition="start"
                                     />
                                 </Tabs>
                             </Box>
 
                             {/* =========================================================================
-                                HÌNH THỨC 1: CAMERA SCANNER QUÉT MÃ QR
-                            ========================================================================= */}
-                            {checkInMode === 'qr' && (
-                                <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-                                    <Box
-                                        sx={{
-                                            p: 2,
-                                            bgcolor: 'background.subtle',
-                                            borderBottom: 1,
-                                            borderColor: 'divider',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <Stack direction="row" spacing={1} alignItems="center">
-                                            <Camera size={20} color={theme.palette.primary.main} />
-                                            <Typography variant="subtitle2" fontWeight={700}>
-                                                Khung Ngắm Quét Mã QR Vé
-                                            </Typography>
-                                        </Stack>
-
-                                        <Stack direction="row" spacing={1}>
-                                            <Tooltip title="Đổi camera trước / sau">
-                                                <span>
-                                                    <IconButton
-                                                        size="small"
-                                                        aria-label="Chuyển đổi camera"
-                                                        onClick={handleToggleFacingMode}
-                                                        disabled={!isScannerRunning}
-                                                    >
-                                                        <SwitchCamera size={16} />
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-
-                                            <Button
-                                                size="small"
-                                                variant={isScannerRunning ? 'outlined' : 'contained'}
-                                                color={isScannerRunning ? 'error' : 'primary'}
-                                                startIcon={isScannerRunning ? <Square size={16} /> : <Play size={16} />}
-                                                onClick={() => setIsScannerRunning(!isScannerRunning)}
-                                                sx={{ borderRadius: '6px', fontWeight: 600, px: 2 }}
-                                            >
-                                                {isScannerRunning ? 'Dừng Camera' : 'Bật Camera'}
-                                            </Button>
-                                        </Stack>
-                                    </Box>
-
-                                    {/* KHUNG CAMERA SCANNER TRỰC QUAN */}
-                                    <Box
-                                        sx={{
-                                            position: 'relative',
-                                            minHeight: 400,
-                                            flexGrow: 1,
-                                            bgcolor: '#0B0F19',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            overflow: 'hidden',
-                                        }}
-                                    >
-                                        {/* HTML5 QrCode Reader Mounting Element */}
-                                        <Box
-                                            id="qr-reader-viewport"
-                                            sx={{
-                                                width: '100%',
-                                                height: '100%',
-                                                display: isScannerRunning ? 'block' : 'none',
-                                                '& video': {
-                                                    width: '100% !important',
-                                                    height: '100% !important',
-                                                    objectFit: 'cover',
-                                                },
-                                                '& #qr-reader-viewport__scan_region': {
-                                                    minHeight: '380px',
-                                                },
-                                            }}
-                                        />
-
-                                        {/* Khung ngắm đồ họa Hologram khi Camera đang chạy */}
-                                        {isScannerRunning && (
-                                            <Box
-                                                sx={{
-                                                    position: 'absolute',
-                                                    width: 250,
-                                                    height: 250,
-                                                    border: `2px dashed ${theme.palette.primary.main}`,
-                                                    borderRadius: '16px',
-                                                    pointerEvents: 'none',
-                                                    boxShadow: `0 0 20px ${theme.palette.primary.main}40`,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    animation: 'pulse 2s infinite',
-                                                }}
-                                            >
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        color: '#FFFFFF',
-                                                        bgcolor: 'rgba(0,0,0,0.65)',
-                                                        px: 1.5,
-                                                        py: 0.5,
-                                                        borderRadius: '4px',
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    Căn chỉnh mã QR vào ô vuông
-                                                </Typography>
-                                            </Box>
-                                        )}
-
-                                        {/* Màn hình chờ khi chưa bật camera */}
-                                        {!isScannerRunning && (
-                                            <Box sx={{ textAlign: 'center', p: 4, color: '#94A3B8' }}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                                                    <QrCode size={64} style={{ opacity: 0.6, color: theme.palette.primary.light }} />
-                                                </Box>
-                                                <Typography variant="h3" fontWeight={700} color="#F8FAFC" gutterBottom>
-                                                    Camera Đang Tắt
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ maxWidth: 360, mx: 'auto', mb: 3 }}>
-                                                    Bấm nút "Bật Camera" bên dưới để bắt đầu quét mã QR vé của người tham dự, hoặc chuyển sang tab "Nhập Token ID" để kiểm tra thủ công.
-                                                </Typography>
-                                                <Button
-                                                    variant="contained"
-                                                    color="primary"
-                                                    startIcon={<Play size={16} />}
-                                                    onClick={() => setIsScannerRunning(true)}
-                                                    sx={{ borderRadius: '8px', fontWeight: 600, px: 3, py: 1 }}
-                                                >
-                                                    Bật Camera Ngay
-                                                </Button>
-                                            </Box>
-                                        )}
-
-                                        {cameraError && (
-                                            <Alert
-                                                severity="error"
-                                                sx={{
-                                                    position: 'absolute',
-                                                    bottom: 16,
-                                                    left: 16,
-                                                    right: 16,
-                                                    borderRadius: '8px',
-                                                }}
-                                            >
-                                                {cameraError}
-                                            </Alert>
-                                        )}
-                                    </Box>
-                                </Box>
-                            )}
-
-                            {/* =========================================================================
-                                HÌNH THỨC 2: NHẬP TOKEN ID THỦ CÔNG TRỰC TIẾP
+                                HÌNH THỨC 1: NHẬP TOKEN ID THỦ CÔNG TRỰC TIẾP
                             ========================================================================= */}
                             {checkInMode === 'token' && (
                                 <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'space-between' }}>
@@ -979,6 +794,162 @@ const CheckInScannerPage = () => {
                                     <Alert severity="info" sx={{ borderRadius: '10px', fontSize: '0.85rem' }}>
                                         <strong>Quy tắc bảo mật Web3:</strong> Mỗi Token ID là một tài sản NFT đại diện cho vé vào cửa duy nhất. Khi đã ghi nhận check-in thành công, vé sẽ bị khóa trạng thái và không thể sử dụng lại lần thứ hai.
                                     </Alert>
+                                </Box>
+                            )}
+
+                            {/* =========================================================================
+                                HÌNH THỨC 2: CAMERA SCANNER QUÉT MÃ QR
+                            ========================================================================= */}
+                            {checkInMode === 'qr' && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+                                    <Box
+                                        sx={{
+                                            p: 2,
+                                            bgcolor: 'background.subtle',
+                                            borderBottom: 1,
+                                            borderColor: 'divider',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <Camera size={20} color={theme.palette.primary.main} />
+                                            <Typography variant="subtitle2" fontWeight={700}>
+                                                Khung Ngắm Quét Mã QR Vé
+                                            </Typography>
+                                        </Stack>
+
+                                        <Stack direction="row" spacing={1}>
+                                            <Tooltip title="Đổi camera trước / sau">
+                                                <span>
+                                                    <IconButton
+                                                        size="small"
+                                                        aria-label="Chuyển đổi camera"
+                                                        onClick={handleToggleFacingMode}
+                                                        disabled={!isScannerRunning}
+                                                    >
+                                                        <SwitchCamera size={16} />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+
+                                            <Button
+                                                size="small"
+                                                variant={isScannerRunning ? 'outlined' : 'contained'}
+                                                color={isScannerRunning ? 'error' : 'primary'}
+                                                startIcon={isScannerRunning ? <Square size={16} /> : <Play size={16} />}
+                                                onClick={() => setIsScannerRunning(!isScannerRunning)}
+                                                sx={{ borderRadius: '6px', fontWeight: 600, px: 2 }}
+                                            >
+                                                {isScannerRunning ? 'Dừng Camera' : 'Bật Camera'}
+                                            </Button>
+                                        </Stack>
+                                    </Box>
+
+                                    {/* KHUNG CAMERA SCANNER TRỰC QUAN */}
+                                    <Box
+                                        sx={{
+                                            position: 'relative',
+                                            minHeight: 400,
+                                            flexGrow: 1,
+                                            bgcolor: '#0B0F19',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            overflow: 'hidden',
+                                        }}
+                                    >
+                                        {/* HTML5 QrCode Reader Mounting Element */}
+                                        <Box
+                                            id="qr-reader-viewport"
+                                            sx={{
+                                                width: '100%',
+                                                height: '100%',
+                                                display: isScannerRunning ? 'block' : 'none',
+                                                '& video': {
+                                                    width: '100% !important',
+                                                    height: '100% !important',
+                                                    objectFit: 'cover',
+                                                },
+                                                '& #qr-reader-viewport__scan_region': {
+                                                    minHeight: '380px',
+                                                },
+                                            }}
+                                        />
+
+                                        {/* Khung ngắm đồ họa Hologram khi Camera đang chạy */}
+                                        {isScannerRunning && (
+                                            <Box
+                                                sx={{
+                                                    position: 'absolute',
+                                                    width: 250,
+                                                    height: 250,
+                                                    border: `2px dashed ${theme.palette.primary.main}`,
+                                                    borderRadius: '16px',
+                                                    pointerEvents: 'none',
+                                                    boxShadow: `0 0 20px ${theme.palette.primary.main}40`,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    animation: 'pulse 2s infinite',
+                                                }}
+                                            >
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: '#FFFFFF',
+                                                        bgcolor: 'rgba(0,0,0,0.65)',
+                                                        px: 1.5,
+                                                        py: 0.5,
+                                                        borderRadius: '4px',
+                                                        fontWeight: 600,
+                                                    }}
+                                                >
+                                                    Căn chỉnh mã QR vào ô vuông
+                                                </Typography>
+                                            </Box>
+                                        )}
+
+                                        {/* Màn hình chờ khi chưa bật camera */}
+                                        {!isScannerRunning && (
+                                            <Box sx={{ textAlign: 'center', p: 4, color: '#94A3B8' }}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                                                    <QrCode size={64} style={{ opacity: 0.6, color: theme.palette.primary.light }} />
+                                                </Box>
+                                                <Typography variant="h3" fontWeight={700} color="#F8FAFC" gutterBottom>
+                                                    Camera Đang Tắt
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ maxWidth: 360, mx: 'auto', mb: 3 }}>
+                                                    Bấm nút "Bật Camera" bên dưới để bắt đầu quét mã QR vé của người tham dự, hoặc chuyển sang tab "Nhập Thủ Công" để kiểm tra vé.
+                                                </Typography>
+                                                <Button
+                                                    variant="contained"
+                                                    color="primary"
+                                                    startIcon={<Play size={16} />}
+                                                    onClick={() => setIsScannerRunning(true)}
+                                                    sx={{ borderRadius: '8px', fontWeight: 600, px: 3, py: 1 }}
+                                                >
+                                                    Bật Camera Ngay
+                                                </Button>
+                                            </Box>
+                                        )}
+
+                                        {cameraError && (
+                                            <Alert
+                                                severity="error"
+                                                sx={{
+                                                    position: 'absolute',
+                                                    bottom: 16,
+                                                    left: 16,
+                                                    right: 16,
+                                                    borderRadius: '8px',
+                                                }}
+                                            >
+                                                {cameraError}
+                                            </Alert>
+                                        )}
+                                    </Box>
                                 </Box>
                             )}
                         </Card>
