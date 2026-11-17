@@ -462,48 +462,8 @@ const AdminDashboardPage = () => {
             topActions={topActions}
         >
             <Box sx={{ width: '100%' }}>
-                {/* ═══════════════════════════════════════════════════════════════════
-                    2. BANNER GIÁM SÁT TUÂN THỦ TRẦN GIÁ (COMPLIANCE NOTICE)
-                ═══════════════════════════════════════════════════════════════════ */}
-                <Alert
-                    severity="info"
-                    icon={<Security sx={{ color: 'primary.main' }} />}
-                    sx={{
-                        mb: 4,
-                        border: 1,
-                        borderColor: 'divider',
-                        bgcolor: 'background.paper',
-                        '& .MuiAlert-message': { width: '100%' },
-                    }}
-                >
-                    <Stack
-                        direction={{ xs: 'column', md: 'row' }}
-                        alignItems={{ xs: 'flex-start', md: 'center' }}
-                        justifyContent="space-between"
-                        spacing={1}
-                    >
-                        <Box>
-                            <Typography variant="subtitle2" color="text.primary" fontWeight={600}>
-                                Giám sát tính toàn vẹn Smart Contract (BR-02: Quy tắc trần giá 120%)
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Hợp đồng <code>TicketMarketplace.sol</code> đang kiểm duyệt 100% giao dịch thứ cấp trên chuỗi Sepolia.
-                                Tỷ lệ tuân thủ: <strong>100%</strong> • 0 giao dịch vi phạm được ghi nhận.
-                            </Typography>
-                        </Box>
-                        <Stack direction="row" spacing={1}>
-                            <Button
-                                size="small"
-                                variant="text"
-                                color="primary"
-                                startIcon={<Launch sx={{ fontSize: 16 }} />}
-                                onClick={() => handleCopy('0x48D11894aB01029384910293849102938491B281', 'Địa chỉ hợp đồng Chợ')}
-                            >
-                                Sao chép Contract Chợ
-                            </Button>
-                        </Stack>
-                    </Stack>
-                </Alert>
+                
+                
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     3. BẢNG CHỈ SỐ KPIs CỐT LÕI (OVERVIEW METRIC CARDS)
