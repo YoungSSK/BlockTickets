@@ -56,6 +56,7 @@ import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAuth } from '../../context/AuthContext';
+import { useWallet } from '../../context/WalletContext';
 import { ticketAPI } from '../../services/api';
 import { ethers } from 'ethers';
 import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
@@ -114,6 +115,7 @@ const normalizeTicket = (t) => {
 const MyTicketsPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { walletAddress } = useWallet();
 
     // Data state
     const [tickets, setTickets] = useState([]);
@@ -162,7 +164,13 @@ const MyTicketsPage = () => {
                 } catch (_) {}
             }
 
-            const res = await ticketAPI.getMyTickets(activeWallet ? { wallet: activeWallet } : undefined);
+            if (!activeWallet) {
+                setTickets([]);
+                setIsRefreshing(false);
+                return;
+            }
+
+            const res = await ticketAPI.getMyTickets({ wallet: activeWallet });
             const backendTickets = res.data?.data?.tickets;
             if (Array.isArray(backendTickets)) {
                 setTickets(backendTickets.map(normalizeTicket));
