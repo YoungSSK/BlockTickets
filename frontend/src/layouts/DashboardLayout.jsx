@@ -26,25 +26,21 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
-    Dashboard as DashboardIcon,
+    LayoutDashboard,
     TrendingUp,
-    EventNote,
-    CheckCircle,
-    PeopleAlt,
-    QrCodeScanner,
-    AddCircleOutline,
-    Logout,
-    DarkMode,
-    LightMode,
+    CalendarDays,
+    CalendarPlus,
+    Users,
+    QrCode,
+    LogOut,
+    Moon,
+    Sun,
     Menu as MenuIcon,
-    Close as CloseIcon,
-    ConfirmationNumber,
-    Shield,
-    AdminPanelSettings,
-    FiberManualRecord,
-    ContentCopy,
-    Refresh,
-} from '@mui/icons-material';
+    X,
+    Ticket,
+    ShieldCheck,
+    Circle,
+} from 'lucide-react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
@@ -117,21 +113,21 @@ const DashboardLayout = ({
                 key: 'dashboard',
                 label: 'Bảng Điều Khiển',
                 path: '/admin/dashboard',
-                icon: <TrendingUp />,
+                icon: <TrendingUp size={19} />,
                 desc: 'Tổng quan chỉ số & audit log',
             },
             {
                 key: 'events',
                 label: 'Duyệt Sự Kiện',
                 path: '/admin/events',
-                icon: <EventNote />,
+                icon: <CalendarDays size={19} />,
                 desc: 'Phê duyệt & kiểm tra smart contract',
             },
             {
                 key: 'users',
                 label: 'Quản Lý Người Dùng',
                 path: '/admin/users',
-                icon: <PeopleAlt />,
+                icon: <Users size={19} />,
                 desc: 'Phân quyền & giám sát ví Web3',
             },
         ]
@@ -140,21 +136,21 @@ const DashboardLayout = ({
                 key: 'dashboard',
                 label: 'Bảng Điều Khiển',
                 path: '/organizer/dashboard',
-                icon: <TrendingUp />,
+                icon: <LayoutDashboard size={19} />,
                 desc: 'Doanh số vé & rút tiền on-chain',
             },
             {
                 key: 'create-event',
                 label: 'Tạo sự kiện',
                 path: '/organizer/events',
-                icon: <EventNote />,
+                icon: <CalendarPlus size={19} />,
                 desc: 'Danh sách sự kiện & khởi tạo mới',
             },
             {
                 key: 'check-in',
                 label: 'Soát Vé Tại Cổng',
                 path: '/organizer/check-in',
-                icon: <QrCodeScanner />,
+                icon: <QrCode size={19} />,
                 desc: 'Quét mã QR HMAC bảo mật',
             },
         ];
@@ -190,7 +186,7 @@ const DashboardLayout = ({
                             boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
                         }}
                     >
-                        {role === 'admin' ? <AdminPanelSettings sx={{ fontSize: 24 }} /> : <ConfirmationNumber sx={{ fontSize: 24 }} />}
+                        {role === 'admin' ? <ShieldCheck size={22} /> : <Ticket size={22} />}
                     </Box>
                     <Box sx={{ overflow: 'hidden' }}>
                         <Typography variant="h6" fontWeight={800} color="text.primary" sx={{ lineHeight: 1.1, fontSize: '1.1rem' }}>
@@ -204,7 +200,7 @@ const DashboardLayout = ({
 
                 <Stack direction="row" spacing={1} alignItems="center" mt={1.5}>
                     <Chip
-                        icon={<FiberManualRecord sx={{ fontSize: '10px !important', color: 'status.success' }} />}
+                        icon={<Circle size={8} fill="currentColor" style={{ color: '#10B981', marginRight: 4 }} />}
                         label="Sepolia Testnet #11155111"
                         size="small"
                         sx={{
@@ -337,7 +333,7 @@ const DashboardLayout = ({
                                 height: 38,
                             }}
                         >
-                            {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
+                            {mode === 'light' ? <Moon size={18} /> : <Sun size={18} />}
                         </IconButton>
                     </Tooltip>
 
@@ -347,7 +343,7 @@ const DashboardLayout = ({
                         variant="outlined"
                         color="error"
                         size="small"
-                        startIcon={<Logout />}
+                        startIcon={<LogOut size={16} />}
                         onClick={() => setLogoutDialogOpen(true)}
                         sx={{
                             height: 38,
@@ -455,7 +451,7 @@ const DashboardLayout = ({
                                 onClick={handleDrawerToggle}
                                 sx={{ display: { lg: 'none' } }}
                             >
-                                <MenuIcon />
+                                <MenuIcon size={22} />
                             </IconButton>
 
                             <Box>
@@ -509,7 +505,7 @@ const DashboardLayout = ({
                     <Button onClick={() => setLogoutDialogOpen(false)} variant="outlined" color="inherit" sx={{ borderRadius: '8px' }}>
                         Hủy
                     </Button>
-                    <Button onClick={handleLogout} variant="contained" color="error" startIcon={<Logout />} sx={{ borderRadius: '8px' }}>
+                    <Button onClick={handleLogout} variant="contained" color="error" startIcon={<LogOut size={18} />} sx={{ borderRadius: '8px' }}>
                         Đăng xuất ngay
                     </Button>
                 </DialogActions>
@@ -518,15 +514,25 @@ const DashboardLayout = ({
             {/* Snackbar thông báo ví Web3 */}
             <Snackbar
                 open={snackbar.open}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                sx={{ zIndex: 99999 }}
             >
                 <Alert
                     severity={snackbar.severity}
                     onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
                     variant="filled"
-                    sx={{ width: '100%', borderRadius: '8px', fontWeight: 600 }}
+                    elevation={8}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                    }}
                 >
                     {snackbar.message}
                 </Alert>

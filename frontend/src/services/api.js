@@ -202,6 +202,12 @@ export const organizerAPI = {
     // Thêm hạng vé cho sự kiện
     addTicketType: (eventId, data) => api.post(`/events/${eventId}/ticket-types`, data),
 
+    // Cập nhật một hạng vé (khi chưa có người mua)
+    updateTicketType: (eventId, ticketTypeId, data) => api.put(`/events/${eventId}/ticket-types/${ticketTypeId}`, data),
+
+    // Xóa một hạng vé (khi chưa có người mua)
+    deleteTicketType: (eventId, ticketTypeId) => api.delete(`/events/${eventId}/ticket-types/${ticketTypeId}`),
+
     // Gửi sự kiện cho Admin xét duyệt (draft -> pending)
     submitReview: (eventId) => api.post(`/events/${eventId}/submit-review`),
 

@@ -123,10 +123,94 @@ export const getComponentOverrides = (mode) => ({
             },
         },
     },
-    MuiAlert: {
+    MuiSnackbar: {
+        defaultProps: {
+            autoHideDuration: 2000,
+            anchorOrigin: { vertical: 'bottom', horizontal: 'right' },
+        },
         styleOverrides: {
             root: {
-                borderRadius: '8px',
+                zIndex: 99999,
+            },
+        },
+    },
+    MuiAlert: {
+        defaultProps: {
+            variant: 'filled',
+            elevation: 6,
+        },
+        styleOverrides: {
+            root: {
+                borderRadius: '10px',
+                fontWeight: 700,
+                fontSize: '0.925rem',
+                color: '#ffffff',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+            },
+            filledError: {
+                backgroundColor: '#dc2626 !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
+            },
+            filledSuccess: {
+                backgroundColor: '#16a34a !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
+            },
+            filledWarning: {
+                backgroundColor: '#d97706 !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
+            },
+            filledInfo: {
+                backgroundColor: '#2563eb !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
+            },
+            standardError: {
+                backgroundColor: '#dc2626 !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
+            },
+            standardSuccess: {
+                backgroundColor: '#16a34a !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
+            },
+            standardWarning: {
+                backgroundColor: '#d97706 !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
+            },
+            standardInfo: {
+                backgroundColor: '#2563eb !important',
+                color: '#ffffff !important',
+                '& .MuiAlert-icon': {
+                    color: '#ffffff !important',
+                    fontSize: '1.35rem',
+                },
             },
         },
     },
