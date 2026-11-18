@@ -288,13 +288,13 @@ const EventDetailPage = () => {
                         }
                     }
 
-                    const ticketTypes = uniqueTicketTypes.map((tt, index) => {
+                    const ticketTypes = uniqueTicketTypes.map((tt) => {
                         const maxSupply = Number(tt.maxSupply || 0);
                         const currentSupply = Number(tt.currentSupply || 0);
                         const remainingSupply = Math.max(0, maxSupply - currentSupply);
                         return {
                             id: tt.id,
-                            onChainTierId: tt.onChainTierId || (index + 1),
+                            onChainTierId: tt.onChainTierId ? Number(tt.onChainTierId) : null,
                             name: tt.name,
                             badge: tt.tierType === 'vip' || tt.name.toUpperCase().includes('VIP') ? 'VIP' : 'Phổ thông',
                             originalPrice: Number(tt.originalPrice || 0),
@@ -408,6 +408,12 @@ const EventDetailPage = () => {
     // Kiểm tra trạng thái mở bán của hạng vé đang chọn
     const saleStatus = useMemo(() => {
         if (!activeTier) return { isBuyDisabled: true, buttonText: 'Chọn hạng vé' };
+        if (event?.status !== 'published' || !event?.onChainEventId) {
+            return { isBuyDisabled: true, buttonText: 'Chờ BTC công bố on-chain' };
+        }
+        if (!activeTier.onChainTierId) {
+            return { isBuyDisabled: true, buttonText: 'Hạng vé chưa đồng bộ on-chain' };
+        }
         const now = new Date();
         const isSoldOut = activeTier.maxSupply > 0 && activeTier.currentSupply >= activeTier.maxSupply;
         if (isSoldOut) return { isBuyDisabled: true, buttonText: 'Hạng vé đã hết' };

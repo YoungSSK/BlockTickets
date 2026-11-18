@@ -186,6 +186,7 @@ export const publishEvent = async (req, res, next) => {
       req.validated.params.id,
       req.user.id,
       req.body?.onChainEventId,
+      req.body?.tierMappings,
     );
     return res.status(200).json({
       success: true,

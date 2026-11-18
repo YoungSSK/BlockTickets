@@ -90,6 +90,11 @@ const TicketType = sequelize.define(
       allowNull: true,
       field: "seat_config",
     },
+    onChainTierId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: "on_chain_tier_id",
+    },
   },
   {
     tableName: "ticket_types",

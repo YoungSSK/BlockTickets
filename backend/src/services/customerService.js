@@ -70,8 +70,11 @@ export const createOrder = async (
 
   const event = await Event.findByPk(parsedEventId);
   if (!event) throw new AppError("Không tìm thấy sự kiện.", 404);
-  if (!["published", "approved"].includes(event.status)) {
-    throw new AppError("Sự kiện chưa được mở bán vé.", 400);
+  if (event.status !== "published" || !event.onChainEventId) {
+    throw new AppError(
+      "Sự kiện chưa được Ban tổ chức công bố mở bán on-chain trên Blockchain.",
+      400,
+    );
   }
 
   const ticketType = await TicketType.findOne({
@@ -79,6 +82,13 @@ export const createOrder = async (
   });
   if (!ticketType)
     throw new AppError("Hạng vé không tồn tại trong sự kiện.", 404);
+
+  if (!ticketType.onChainTierId) {
+    throw new AppError(
+      `Hạng vé "${ticketType.name}" chưa được đồng bộ mã Tier on-chain. Vui lòng liên hệ Ban tổ chức.`,
+      400,
+    );
+  }
 
   const currentSupply = Number(ticketType.currentSupply || 0);
   const maxSupply = Number(ticketType.maxSupply || 0);

@@ -182,7 +182,15 @@ export const publishEventSchema = z.object({
   params: eventIdParam,
   body: z
     .object({
-      onChainEventId: z.coerce.number().int().nonnegative().optional(),
+      onChainEventId: z.coerce.number().int().positive().optional(),
+      tierMappings: z
+        .array(
+          z.object({
+            ticketTypeId: z.coerce.number().int().positive(),
+            onChainTierId: z.coerce.number().int().positive(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 });

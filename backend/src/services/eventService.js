@@ -70,6 +70,9 @@ export const listPublishedEvents = async ({
           "currency",
           "maxSupply",
           "currentSupply",
+          "onChainTierId",
+          "saleStartTime",
+          "saleEndTime",
         ],
       },
     ],
@@ -635,6 +638,7 @@ export const publishApprovedEvent = async (
   eventId,
   organizerId,
   onChainEventId,
+  tierMappings = [],
 ) => {
   const event = await getEventOrFail(eventId);
   assertEventOwner(event, organizerId);
@@ -653,7 +657,24 @@ export const publishApprovedEvent = async (
   }
   event.status = "published";
   await event.save();
-  return event;
+
+  // Lưu đồng bộ mã onChainTierId cho từng hạng vé từ log TicketTierAdded của Smart Contract
+  if (Array.isArray(tierMappings) && tierMappings.length > 0) {
+    for (const mapping of tierMappings) {
+      const ticketTypeId = Number(mapping?.ticketTypeId);
+      const onChainTierId = Number(mapping?.onChainTierId);
+      if (Number.isInteger(ticketTypeId) && ticketTypeId > 0 && Number.isInteger(onChainTierId) && onChainTierId > 0) {
+        await TicketType.update(
+          { onChainTierId },
+          { where: { id: ticketTypeId, eventId: event.id } },
+        );
+      }
+    }
+  }
+
+  return Event.findByPk(event.id, {
+    include: [{ model: TicketType, as: "ticketTypes" }],
+  });
 };
 
 // 9. Organizer: Thống kê số liệu Dashboard của Ban tổ chức

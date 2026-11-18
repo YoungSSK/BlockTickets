@@ -497,6 +497,7 @@ const OrganizerDashboardPage = () => {
             }
 
             let onChainEventId = targetEvt.onChainEventId || null;
+            const tierMappings = [];
 
             // Nếu sự kiện chưa có trên Smart Contract, bắt buộc phải kết nối MetaMask để tạo on-chain
             if (!onChainEventId) {
@@ -582,7 +583,25 @@ const OrganizerDashboardPage = () => {
                                 saleStartUnix,
                                 saleEndUnix
                             );
-                            await tierTx.wait();
+                            const tierReceipt = await tierTx.wait();
+
+                            let onChainTierId = null;
+                            for (const log of tierReceipt.logs) {
+                                try {
+                                    const parsed = iface.parseLog(log);
+                                    if (parsed && parsed.name === 'TicketTierAdded') {
+                                        onChainTierId = Number(parsed.args.tierId);
+                                        break;
+                                    }
+                                } catch (_) {}
+                            }
+                            if (!onChainTierId) {
+                                throw new Error(`Không thể đọc mã Tier ID on-chain cho hạng vé "${tier.name}".`);
+                            }
+                            tierMappings.push({
+                                ticketTypeId: tier.id,
+                                onChainTierId,
+                            });
                         }
                     }
                 } catch (onChainErr) {
@@ -597,8 +616,11 @@ const OrganizerDashboardPage = () => {
                 }
             }
 
-            // 3. Sau khi on-chain thành công mới cập nhật trạng thái trong database
-            await organizerAPI.publishEvent(eventId, onChainEventId ? { onChainEventId } : {});
+            // 3. Sau khi on-chain thành công mới cập nhật trạng thái và lưu ánh xạ tierId trong database
+            await organizerAPI.publishEvent(
+                eventId,
+                onChainEventId ? { onChainEventId, tierMappings } : {}
+            );
             showSnackbar('Đã công khai mở bán sự kiện thành công trên cả Hệ Thống và Blockchain Sepolia!', 'success');
             loadOrganizerData();
         } catch (err) {

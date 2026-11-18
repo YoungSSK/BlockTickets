@@ -358,13 +358,27 @@ const CheckoutPage = () => {
                 const subtotal = Number(tier?.originalPrice || 0) * quantity;
                 const totalCostWei = ethers.parseEther(subtotal.toFixed(6));
 
-                // Xác định onChainEventId và onChainTierId
-                const eventOnChainId = BigInt(eventData?.onChainEventId || 1);
-                const tierOnChainId = BigInt(tier?.onChainTierId || tier?.id || 1);
+                // Xác định chính xác onChainEventId và onChainTierId (tuyệt đối không fallback về 1)
+                if (!eventData?.onChainEventId || !tier?.onChainTierId) {
+                    throw new Error('Sự kiện hoặc hạng vé này chưa được Ban tổ chức đồng bộ lên Smart Contract Sepolia. Không thể thanh toán.');
+                }
+                const eventOnChainId = BigInt(eventData.onChainEventId);
+                const tierOnChainId = BigInt(tier.onChainTierId);
+
+                // Đối chiếu trực tiếp thông tin hạng vé on-chain trước khi mở ví MetaMask ký giao dịch
+                const onChainTier = await contract.getTicketTier(tierOnChainId);
+                if (!onChainTier?.exists || Number(onChainTier.eventId) !== Number(eventOnChainId)) {
+                    throw new Error(`Hạng vé on-chain #${tierOnChainId} không thuộc sự kiện #${eventOnChainId} trên Smart Contract.`);
+                }
+                const onChainTotalCostWei = BigInt(onChainTier.originalPrice) * BigInt(quantity);
+                if (onChainTotalCostWei !== totalCostWei) {
+                    const expectedEth = ethers.formatEther(onChainTotalCostWei);
+                    throw new Error(`Giá vé trong hệ thống (${subtotal.toFixed(6)} ETH) đang lệch với giá on-chain (${expectedEth} ETH). Vui lòng tải lại trang hoặc liên hệ Ban tổ chức.`);
+                }
 
                 // Mở popup MetaMask cho người dùng ký giao dịch mua vé
                 const tx = await contract.buyTicket(eventOnChainId, tierOnChainId, quantity, {
-                    value: totalCostWei,
+                    value: onChainTotalCostWei,
                 });
 
                 // Bước 2: Ký xong -> Nhận txHash thật, chờ thợ đào đóng Block Sepolia
