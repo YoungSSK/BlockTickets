@@ -909,19 +909,22 @@ const CreateEventPage = () => {
     // ==========================================
     const resetCreateForm = () => {
         setActiveStep(0);
-        setEventData(INITIAL_EVENT_DATA);
-        setTicketTiers([
-            {
-                id: 1,
-                name: 'Vé Tiêu Chuẩn (Standard)',
-                description: 'Vé vào cổng tiêu chuẩn tham gia toàn bộ sự kiện',
-                originalPrice: '0.001',
-                maxSupply: '100',
-                saleStartTime: '',
-                saleEndTime: '',
-                perks: 'Vé vào cổng hợp lệ, check-in QR động',
-            },
-        ]);
+        setEventData({ ...INITIAL_EVENT_DATA });
+        setEventGates([...DEFAULT_EVENT_GATES]);
+        setSeatingMap(
+            DEFAULT_SEATING_MAP.map((s) => ({
+                ...s,
+                rows: Array.isArray(s.rows) ? s.rows.map((r) => ({ ...r })) : [],
+            }))
+        );
+        setTicketTiers(
+            INITIAL_TIERS.map((t) => ({
+                ...t,
+                seatAllocations: Array.isArray(t.seatAllocations)
+                    ? t.seatAllocations.map((a) => ({ ...a }))
+                    : [],
+            }))
+        );
         setErrors({});
     };
 
@@ -968,7 +971,12 @@ const CreateEventPage = () => {
             return;
         }
         const removed = eventGates[index];
-        setEventGates((prev) => prev.filter((_, i) => i !== index));
+        const remainingGates = eventGates.filter((_, i) => i !== index);
+        const fallbackGate = remainingGates[0] || '';
+        setEventGates(remainingGates);
+        setTicketTiers((tiers) =>
+            tiers.map((t) => (t.entryGate === removed ? { ...t, entryGate: fallbackGate } : t))
+        );
         showSnackbar(`Đã xóa cổng "${removed}"`, 'info');
     };
 
@@ -992,22 +1000,32 @@ const CreateEventPage = () => {
     const handleUpdateStandName = (standIndex, newName) => {
         setSeatingMap((prev) => {
             const next = [...prev];
-            const oldName = next[standIndex].name;
+            const oldStand = next[standIndex];
+            const oldName = oldStand.name;
+            const oldRows = oldStand.rows || [];
+            const newRows = generateStandRows(newName, oldStand.rowCount || 3, oldStand.seatsPerRow || 20);
             const updated = {
-                ...next[standIndex],
+                ...oldStand,
                 name: newName,
-                rows: generateStandRows(newName, next[standIndex].rowCount || 3, next[standIndex].seatsPerRow || 20),
+                rows: newRows,
             };
             next[standIndex] = updated;
             setTicketTiers((tiers) =>
                 tiers.map((t) => {
-                    const allocs = ensureAllocations(t, updated, updated.rows?.[0]).map((a) =>
-                        a.zone === oldName ? { ...a, zone: newName } : a
-                    );
+                    const allocs = ensureAllocations(t, updated, newRows[0]).map((a) => {
+                        if (a.zone !== oldName) return a;
+                        const oldRowIdx = oldRows.findIndex((r) => r.name === a.row);
+                        const mappedRow =
+                            oldRowIdx >= 0 && newRows[oldRowIdx]
+                                ? newRows[oldRowIdx].name
+                                : newRows[0]?.name || a.row;
+                        return { ...a, zone: newName, row: mappedRow };
+                    });
                     return {
                         ...t,
                         seatAllocations: allocs,
                         seatZone: [...new Set(allocs.map((a) => a.zone))].join(', '),
+                        seatRow: allocs.map((a) => a.row).join(', '),
                     };
                 })
             );
@@ -1020,8 +1038,44 @@ const CreateEventPage = () => {
             showSnackbar('Cần có ít nhất 1 khán đài trong sơ đồ', 'warning');
             return;
         }
-        setSeatingMap((prev) => prev.filter((_, i) => i !== standIndex));
-        showSnackbar('Đã xóa khán đài.', 'info');
+        const removedStand = seatingMap[standIndex];
+        const remainingStands = seatingMap.filter((_, i) => i !== standIndex);
+        const fallbackStand = remainingStands[0];
+        const fallbackRow = fallbackStand?.rows?.[0];
+        setSeatingMap(remainingStands);
+        setTicketTiers((tiers) =>
+            tiers.map((t) => {
+                const currentAllocs = ensureAllocations(t, fallbackStand, fallbackRow);
+                let nextAllocs = currentAllocs.filter((a) => a.zone !== removedStand?.name);
+                if (nextAllocs.length === 0) {
+                    const maxSeats = fallbackRow?.seatCount || 20;
+                    nextAllocs = [
+                        {
+                            id: `alloc-${t.id || Date.now()}-1`,
+                            zone: fallbackStand?.name || 'Khán đài A',
+                            row: fallbackRow?.name || 'Dãy A1',
+                            seatStart: 1,
+                            seatEnd: Math.min(20, maxSeats),
+                        },
+                    ];
+                }
+                const totalMax = nextAllocs.reduce((sum, a) => {
+                    const s = Number(a.seatStart);
+                    const e = Number(a.seatEnd);
+                    return sum + (Number.isFinite(s) && Number.isFinite(e) && e >= s ? e - s + 1 : 0);
+                }, 0);
+                return {
+                    ...t,
+                    seatAllocations: nextAllocs,
+                    seatZone: [...new Set(nextAllocs.map((a) => a.zone))].join(', '),
+                    seatRow: nextAllocs.map((a) => a.row).join(', '),
+                    seatStart: nextAllocs[0]?.seatStart || 1,
+                    seatEnd: nextAllocs[nextAllocs.length - 1]?.seatEnd || totalMax,
+                    maxSupply: totalMax,
+                };
+            })
+        );
+        showSnackbar(`Đã xóa "${removedStand?.name || 'khán đài'}".`, 'info');
     };
 
     const handleUpdateStandConfig = (standIndex, field, value) => {

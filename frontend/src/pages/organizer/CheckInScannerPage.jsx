@@ -130,6 +130,9 @@ const CheckInScannerPage = () => {
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [cameraError, setCameraError] = useState(null);
     const scannerRef = useRef(null);
+    const isVerifyingRef = useRef(false);
+    const lastQrScanRef = useRef({ text: '', time: 0 });
+    const processTicketCheckInRef = useRef(null);
 
     // Trạng thái nhập Token ID thủ công & Dữ liệu cổng soát vé
     const [manualTokenInput, setManualTokenInput] = useState('');
@@ -257,7 +260,19 @@ const CheckInScannerPage = () => {
 
     // Xử lý xác thực và soát vé (hỗ trợ cả Quét QR và Nhập Token ID)
     const processTicketCheckIn = async ({ qrData, tokenId } = {}) => {
-        if (isVerifying) return;
+        if (isVerifyingRef.current) return;
+
+        // Chống quét trùng cùng một mã QR liên tục từ camera (12fps) trong vòng 3 giây
+        if (qrData !== undefined && qrData !== null && (tokenId === undefined || tokenId === null)) {
+            const qrStr = typeof qrData === 'string' ? qrData.trim() : JSON.stringify(qrData);
+            const now = Date.now();
+            if (lastQrScanRef.current.text === qrStr && now - lastQrScanRef.current.time < 3000) {
+                return;
+            }
+            lastQrScanRef.current = { text: qrStr, time: now };
+        }
+
+        isVerifyingRef.current = true;
         setIsVerifying(true);
 
         try {
@@ -272,7 +287,6 @@ const CheckInScannerPage = () => {
                 payload.qrData = qrData;
             } else {
                 showSnackbar('Vui lòng nhập Token ID hoặc quét mã QR hợp lệ.', 'warning');
-                setIsVerifying(false);
                 return;
             }
 
@@ -339,7 +353,6 @@ const CheckInScannerPage = () => {
                     );
 
                     setManualTokenInput('');
-                    setIsVerifying(false);
                     return;
                 } else {
                     // Backend trả về vé không hợp lệ (hết hạn HMAC, đã dùng, sai sự kiện,...)
@@ -383,7 +396,6 @@ const CheckInScannerPage = () => {
                         }, matched.status, matched.title);
                     }
 
-                    setIsVerifying(false);
                     return;
                 }
             }
@@ -403,9 +415,14 @@ const CheckInScannerPage = () => {
                 totalScanned: prev.totalScanned + 1,
                 rejectedCount: prev.rejectedCount + 1,
             }));
+        } finally {
+            isVerifyingRef.current = false;
             setIsVerifying(false);
         }
     };
+
+    // Luôn giữ tham chiếu hàm mới nhất để callback Camera QR không bị stale closure
+    processTicketCheckInRef.current = processTicketCheckIn;
 
     const addCheckInLog = (ticket, status, statusText) => {
         const newLog = {
@@ -441,7 +458,7 @@ const CheckInScannerPage = () => {
                     { facingMode },
                     config,
                     (decodedText) => {
-                        processTicketCheckIn({ qrData: decodedText });
+                        processTicketCheckInRef.current?.({ qrData: decodedText });
                     },
                     () => {
                         // Lỗi quét từng frame bỏ qua để tránh spam console
@@ -1184,6 +1201,7 @@ const CheckInScannerPage = () => {
                                             startIcon={<CheckCheck size={18} />}
                                             onClick={() => {
                                                 setScanResult(null);
+                                                lastQrScanRef.current = { text: '', time: 0 };
                                                 if (checkInMode === 'qr' && !isScannerRunning) {
                                                     setIsScannerRunning(true);
                                                 }

@@ -517,8 +517,23 @@ const OrganizerDashboardPage = () => {
                     const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
 
                     showSnackbar('Đang mở popup MetaMask để ký khởi tạo sự kiện trên Sepolia...', 'info');
-                    const startTimeUnix = Math.floor(new Date(targetEvt.startTime).getTime() / 1000);
-                    const endTimeUnix = Math.floor(new Date(targetEvt.endTime || Date.now() + 86400000 * 30).getTime() / 1000);
+                    const rawStart = targetEvt.raw?.startTime;
+                    const rawEnd = targetEvt.raw?.endTime;
+                    const parsedStartMs = rawStart ? new Date(rawStart).getTime() : NaN;
+                    const parsedEndMs = rawEnd ? new Date(rawEnd).getTime() : NaN;
+                    const nowUnix = Math.floor(Date.now() / 1000);
+                    const startTimeUnix = Number.isFinite(parsedStartMs)
+                        ? Math.floor(parsedStartMs / 1000)
+                        : nowUnix + 3600;
+                    let endTimeUnix = Number.isFinite(parsedEndMs)
+                        ? Math.floor(parsedEndMs / 1000)
+                        : startTimeUnix + 86400;
+                    if (endTimeUnix <= startTimeUnix) {
+                        endTimeUnix = startTimeUnix + 3600;
+                    }
+                    if (endTimeUnix <= nowUnix) {
+                        throw new Error('Thời gian kết thúc sự kiện phải ở tương lai để có thể công bố lên Blockchain.');
+                    }
 
                     // 1. Tạo sự kiện on-chain: createEvent(startTime, endTime)
                     const tx = await contract.createEvent(startTimeUnix, endTimeUnix);
@@ -547,10 +562,18 @@ const OrganizerDashboardPage = () => {
                         for (const tier of targetEvt.ticketTypes) {
                             const priceWei = ethers.parseEther(Number(tier.originalPrice || tier.price || 0.01).toFixed(6));
                             const maxSupply = BigInt(tier.maxSupply || tier.capacity || 100);
-                            const saleStartUnix = Math.floor(new Date(tier.saleStartTime || targetEvt.startTime).getTime() / 1000);
-                            let saleEndUnix = Math.floor(new Date(tier.saleEndTime || targetEvt.endTime).getTime() / 1000);
+                            const tierSaleStartMs = tier.saleStartTime ? new Date(tier.saleStartTime).getTime() : NaN;
+                            const tierSaleEndMs = tier.saleEndTime ? new Date(tier.saleEndTime).getTime() : NaN;
+                            let saleEndUnix = Number.isFinite(tierSaleEndMs)
+                                ? Math.floor(tierSaleEndMs / 1000)
+                                : startTimeUnix;
                             if (saleEndUnix > endTimeUnix) saleEndUnix = endTimeUnix;
-                            if (saleEndUnix <= saleStartUnix) saleEndUnix = saleStartUnix + 3600;
+                            let saleStartUnix = Number.isFinite(tierSaleStartMs)
+                                ? Math.floor(tierSaleStartMs / 1000)
+                                : Math.min(nowUnix, Math.max(0, saleEndUnix - 3600));
+                            if (saleEndUnix <= saleStartUnix) {
+                                saleStartUnix = Math.max(0, saleEndUnix - 3600);
+                            }
 
                             const tierTx = await contract.addTicketTier(
                                 onChainEventId,

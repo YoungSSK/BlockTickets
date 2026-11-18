@@ -260,16 +260,10 @@ const AdminDashboardPage = () => {
                 activeEventsCount: prev.activeEventsCount + 1,
             }));
             showSnackbar(`Đã phê duyệt sự kiện "${event.title}" thành công! Sự kiện đã sẵn sàng mở bán.`, 'success');
-        } catch (err) {
-            setPendingEvents((prev) => prev.filter((e) => e.id !== event.id));
-            setMetrics((prev) => ({
-                ...prev,
-                pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
-                activeEventsCount: prev.activeEventsCount + 1,
-            }));
-            showSnackbar(err.message || `Đã phê duyệt sự kiện "${event.title}" (chế độ demo).`, 'info');
-        } finally {
             if (detailModalOpen) setDetailModalOpen(false);
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || `Không thể phê duyệt sự kiện "${event.title}".`;
+            showSnackbar(msg, 'error');
         }
     };
 
@@ -287,6 +281,10 @@ const AdminDashboardPage = () => {
             setRejectError('Vui lòng nhập lý do từ chối để thông báo cho Nhà tổ chức.');
             return;
         }
+        if (rejectionReason.trim().length < 5) {
+            setRejectError('Lý do từ chối cần có ít nhất 5 ký tự.');
+            return;
+        }
 
         const targetEvent = selectedEvent;
         try {
@@ -297,16 +295,12 @@ const AdminDashboardPage = () => {
                 pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
             }));
             showSnackbar(`Đã từ chối sự kiện "${targetEvent.title}". Thông báo kèm lý do đã được gửi tới Organizer.`, 'info');
-        } catch (err) {
-            setPendingEvents((prev) => prev.filter((e) => e.id !== targetEvent.id));
-            setMetrics((prev) => ({
-                ...prev,
-                pendingEventsCount: Math.max(0, prev.pendingEventsCount - 1),
-            }));
-            showSnackbar(err.message || `Đã từ chối sự kiện "${targetEvent.title}".`, 'info');
-        } finally {
             setRejectModalOpen(false);
             if (detailModalOpen) setDetailModalOpen(false);
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || `Không thể từ chối sự kiện "${targetEvent.title}".`;
+            setRejectError(msg);
+            showSnackbar(msg, 'error');
         }
     };
 
@@ -315,10 +309,10 @@ const AdminDashboardPage = () => {
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();
         return (
-            evt.title.toLowerCase().includes(q) ||
-            evt.organizer.toLowerCase().includes(q) ||
-            evt.categoryLabel.toLowerCase().includes(q) ||
-            evt.id.toLowerCase().includes(q)
+            String(evt.title || '').toLowerCase().includes(q) ||
+            String(evt.organizer || '').toLowerCase().includes(q) ||
+            String(evt.categoryLabel || '').toLowerCase().includes(q) ||
+            String(evt.id ?? '').toLowerCase().includes(q)
         );
     });
 
@@ -460,6 +454,7 @@ const AdminDashboardPage = () => {
             title="Bảng Điều Khiển Quản Trị"
             subtitle={`Sepolia Testnet #11155111 • Đồng bộ gần nhất: ${lastSyncTime}`}
             topActions={topActions}
+            hideHeaderActions={false}
         >
             <Box sx={{ width: '100%' }}>
                 

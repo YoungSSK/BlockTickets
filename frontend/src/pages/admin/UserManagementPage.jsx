@@ -197,16 +197,13 @@ const UserManagementPage = () => {
                 prev.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
             );
             showSnackbar(`Đã cập nhật vai trò của "${selectedUser.fullName}" thành ${selectedRole.toUpperCase()} thành công!`, 'success');
-        } catch (err) {
-            setUsers((prev) =>
-                prev.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
-            );
-            showSnackbar(err.message || `Đã cập nhật vai trò của "${selectedUser.fullName}" (chế độ demo).`, 'info');
-        } finally {
             setRoleModalOpen(false);
             if (detailModalOpen) {
                 setSelectedUser((prev) => ({ ...prev, role: selectedRole }));
             }
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || `Không thể cập nhật vai trò của "${selectedUser.fullName}".`;
+            showSnackbar(msg, 'error');
         }
     };
 
@@ -246,20 +243,14 @@ const UserManagementPage = () => {
                     : `Đã khóa tài khoản "${selectedUser.fullName}". Lý do đã được lưu vết kiểm toán.`,
                 isCurrentlySuspended ? 'success' : 'info'
             );
-        } catch (err) {
-            setUsers((prev) =>
-                prev.map((u) =>
-                    u.id === selectedUser.id
-                        ? { ...u, status: nextStatus, suspendReason: nextReason }
-                        : u
-                )
-            );
-            showSnackbar(err.message || `Đã cập nhật trạng thái của "${selectedUser.fullName}".`, 'info');
-        } finally {
             setSuspendModalOpen(false);
             if (detailModalOpen) {
                 setSelectedUser((prev) => ({ ...prev, status: nextStatus, suspendReason: nextReason }));
             }
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || `Không thể cập nhật trạng thái của "${selectedUser.fullName}".`;
+            setSuspendError(msg);
+            showSnackbar(msg, 'error');
         }
     };
 
@@ -338,10 +329,10 @@ const UserManagementPage = () => {
             // Tìm kiếm
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
-                const matchName = u.fullName.toLowerCase().includes(q);
-                const matchEmail = u.email.toLowerCase().includes(q);
-                const matchId = u.id.toLowerCase().includes(q);
-                const matchWallet = u.walletAddress && u.walletAddress.toLowerCase().includes(q);
+                const matchName = String(u.fullName || '').toLowerCase().includes(q);
+                const matchEmail = String(u.email || '').toLowerCase().includes(q);
+                const matchId = String(u.id ?? '').toLowerCase().includes(q);
+                const matchWallet = Boolean(u.walletAddress && String(u.walletAddress).toLowerCase().includes(q));
                 if (!matchName && !matchEmail && !matchId && !matchWallet) return false;
             }
 
@@ -475,6 +466,7 @@ const UserManagementPage = () => {
             title="Quản Lý Người Dùng & Web3"
             subtitle="Tra cứu hồ sơ, phân quyền tài khoản và kiểm soát địa chỉ ví"
             topActions={topActions}
+            hideHeaderActions={false}
         >
             <Box sx={{ width: '100%' }}>
                 {/* ═══════════════════════════════════════════════════════════════════

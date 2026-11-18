@@ -128,6 +128,7 @@ const MyTicketsPage = () => {
     const [activeTicket, setActiveTicket] = useState(null);
     const [qrCountdown, setQrCountdown] = useState(30);
     const [qrNonce, setQrNonce] = useState('');
+    const [serverQrPayload, setServerQrPayload] = useState('');
 
     // Modal Rao bán lại (Resale Modal)
     const [resaleModalOpen, setResaleModalOpen] = useState(false);
@@ -214,12 +215,28 @@ const MyTicketsPage = () => {
         showSnackbar('Đã đồng bộ dữ liệu vé NFT mới nhất từ hệ thống!', 'success');
     };
 
+    // Lấy mã QR động có chữ ký HMAC thật từ Backend
+    const fetchDynamicQr = useCallback(async (ticketId) => {
+        if (!ticketId) return;
+        try {
+            const res = await ticketAPI.getQRCode(ticketId);
+            const payloadStr = res.data?.data?.qrPayload;
+            if (payloadStr) {
+                setServerQrPayload(payloadStr);
+            }
+        } catch (err) {
+            console.warn('Không lấy được mã QR HMAC từ backend:', err?.message || err);
+        }
+    }, []);
+
     // Mở Modal QR động
     const handleOpenQrModal = (ticket) => {
         setActiveTicket(ticket);
         setQrCountdown(30);
         setQrNonce(Math.random().toString(36).substring(2, 10));
+        setServerQrPayload('');
         setQrModalOpen(true);
+        fetchDynamicQr(ticket.id);
     };
 
     // Đồng hồ đếm ngược 30 giây cho mã QR động HMAC (Mục 1.3 Business Requirements)
@@ -229,8 +246,9 @@ const MyTicketsPage = () => {
             timer = setInterval(() => {
                 setQrCountdown((prev) => {
                     if (prev <= 1) {
-                        // Tự động xoay mã nonce mới sau 30s
+                        // Tự động xoay mã HMAC mới từ backend sau mỗi 30s (hiệu lực 60s)
                         setQrNonce(Math.random().toString(36).substring(2, 10));
+                        fetchDynamicQr(activeTicket.id);
                         return 30;
                     }
                     return prev - 1;
@@ -240,19 +258,20 @@ const MyTicketsPage = () => {
         return () => {
             if (timer) clearInterval(timer);
         };
-    }, [qrModalOpen, activeTicket]);
+    }, [qrModalOpen, activeTicket, fetchDynamicQr]);
 
-    // Tạo payload mã QR HMAC động
+    // Tạo payload mã QR HMAC động (ưu tiên chữ ký HMAC thật từ Backend)
     const qrPayload = useMemo(() => {
         if (!activeTicket) return '';
+        if (serverQrPayload) return serverQrPayload;
         return JSON.stringify({
+            ticketId: activeTicket.id,
             tokenId: activeTicket.tokenId,
-            contract: '0x71C948261901823901928394819203849102A319',
             owner: activeTicket.ownerWallet,
             nonce: qrNonce,
             timestamp: Date.now(),
         });
-    }, [activeTicket, qrNonce]);
+    }, [activeTicket, qrNonce, serverQrPayload]);
 
     // Mở Modal Rao bán lại
     const handleOpenResaleModal = (ticket) => {
@@ -873,7 +892,7 @@ const MyTicketsPage = () => {
                                                         color="primary"
                                                         size="small"
                                                         component={RouterLink}
-                                                        to={`/events/${ticket.tokenId === 1422 ? 'EVT-2026-002' : 'EVT-2026-001'}`}
+                                                        to="/marketplace"
                                                     >
                                                         Xem trên chợ
                                                     </Button>
@@ -888,7 +907,7 @@ const MyTicketsPage = () => {
                                                     startIcon={<CheckCircle />}
                                                     sx={{ '&.Mui-disabled': { color: 'status.checkedIn' } }}
                                                 >
-                                                    Đã quét tại cổng ({ticket.usedAt})
+                                                    Đã quét tại cổng{ticket.usedAt ? ` (${new Date(ticket.usedAt).toLocaleString('vi-VN')})` : ''}
                                                 </Button>
                                             )}
                                         </Stack>

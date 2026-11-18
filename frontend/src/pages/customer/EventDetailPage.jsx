@@ -288,21 +288,27 @@ const EventDetailPage = () => {
                         }
                     }
 
-                    const ticketTypes = uniqueTicketTypes.map((tt, index) => ({
+                    const ticketTypes = uniqueTicketTypes.map((tt, index) => {
+                        const maxSupply = Number(tt.maxSupply || 0);
+                        const currentSupply = Number(tt.currentSupply || 0);
+                        const remainingSupply = Math.max(0, maxSupply - currentSupply);
+                        return {
                             id: tt.id,
                             onChainTierId: tt.onChainTierId || (index + 1),
                             name: tt.name,
-                            badge: tt.name.toUpperCase().includes('VIP') ? 'VIP' : 'Phổ thông',
+                            badge: tt.tierType === 'vip' || tt.name.toUpperCase().includes('VIP') ? 'VIP' : 'Phổ thông',
                             originalPrice: Number(tt.originalPrice || 0),
                             maxResalePrice: Number(tt.maxResalePrice || (Number(tt.originalPrice || 0) * 1.2).toFixed(4)),
                             currency: tt.currency || 'ETH',
-                            maxSupply: Number(tt.maxSupply || 100),
-                            currentSupply: Number(tt.currentSupply || 0),
+                            maxSupply,
+                            currentSupply,
+                            remainingSupply,
                             saleStartTime: tt.saleStartTime,
                             saleEndTime: tt.saleEndTime,
                             description: tt.description || 'Hạng vé chính thức của sự kiện.',
                             perks: ['Vé NFT độc bản', 'QR Check-in động', 'Bảo hiểm trần giá 120%'],
-                        }));
+                        };
+                    });
 
                     const normalized = {
                         ...backendEvent,
@@ -321,6 +327,8 @@ const EventDetailPage = () => {
                             city: backendEvent.venueCity || 'Việt Nam',
                             notes: 'Vui lòng xuất trình mã QR động tại cổng soát vé.',
                         },
+                        rawStartTime: backendEvent.startTime || null,
+                        rawEndTime: backendEvent.endTime || null,
                         startTime: backendEvent.startTime ? new Date(backendEvent.startTime).toLocaleString('vi-VN') : '',
                         endTime: backendEvent.endTime ? new Date(backendEvent.endTime).toLocaleString('vi-VN') : '',
                         countdownDays: (() => {
@@ -394,7 +402,8 @@ const EventDetailPage = () => {
         const isSoldOut = activeTier.maxSupply > 0 && activeTier.currentSupply >= activeTier.maxSupply;
         if (isSoldOut) return { isBuyDisabled: true, buttonText: 'Hạng vé đã hết' };
 
-        if (event?.endTime && now > new Date(event.endTime)) {
+        const endDate = event?.rawEndTime ? new Date(event.rawEndTime) : null;
+        if (endDate && !isNaN(endDate.getTime()) && now > endDate) {
             return { isBuyDisabled: true, buttonText: 'Sự kiện đã kết thúc' };
         }
 
@@ -745,12 +754,20 @@ const EventDetailPage = () => {
                                     </Box>
                                     <Box>
                                         <Typography variant="caption" color="text.secondary" fontWeight={500}>GIÁ PHÁT HÀNH TỪ</Typography>
-                                        <Typography variant="h3" color="primary.main" fontWeight={700}>
-                                            {event.ticketTypes[0]?.originalPrice} ETH
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            ~${Math.round(event.ticketTypes[0]?.originalPrice * ethToUsdRate)} USD / vé
-                                        </Typography>
+                                        {(() => {
+                                            const prices = (event.ticketTypes || []).map((t) => Number(t.originalPrice || 0));
+                                            const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+                                            return (
+                                                <>
+                                                    <Typography variant="h3" color="primary.main" fontWeight={700}>
+                                                        {prices.length > 0 ? `${minPrice} ETH` : 'Đang cập nhật'}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {prices.length > 0 ? `~$${Math.round(minPrice * ethToUsdRate)} USD / vé` : 'Chưa mở bán hạng vé'}
+                                                    </Typography>
+                                                </>
+                                            );
+                                        })()}
                                     </Box>
                                 </Stack>
                             </Grid>
@@ -803,7 +820,10 @@ const EventDetailPage = () => {
                                 <Stack spacing={2.5}>
                                     {event.ticketTypes.map((tier) => {
                                         const isSelected = selectedTierId === tier.id;
-                                        const soldPercentage = Math.round(((tier.maxSupply - tier.remainingSupply) / tier.maxSupply) * 100);
+                                        const remaining = tier.remainingSupply ?? Math.max(0, (tier.maxSupply || 0) - (tier.currentSupply || 0));
+                                        const soldPercentage = tier.maxSupply > 0
+                                            ? Math.min(100, Math.max(0, Math.round(((tier.maxSupply - remaining) / tier.maxSupply) * 100)))
+                                            : 0;
 
                                         return (
                                             <Card
@@ -1048,10 +1068,10 @@ const EventDetailPage = () => {
                                     <Box sx={{ p: 2, bgcolor: 'background.subtle', borderRadius: '8px', mb: 2.5 }}>
                                         <Typography variant="caption" color="text.secondary">HẠNG VÉ ĐANG CHỌN</Typography>
                                         <Typography variant="subtitle1" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {activeTier.name}
+                                            {activeTier?.name || 'Chưa có hạng vé'}
                                         </Typography>
                                         <Typography variant="h3" color="primary.main" fontWeight={700} mt={0.5}>
-                                            {activeTier.originalPrice} ETH{' '}
+                                            {activeTier ? `${activeTier.originalPrice} ETH` : '—'}{' '}
                                             <Typography component="span" variant="body2" color="text.secondary">
                                                 / vé
                                             </Typography>

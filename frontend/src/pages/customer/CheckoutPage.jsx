@@ -320,7 +320,7 @@ const CheckoutPage = () => {
 
         let backendOrderId = null;
         try {
-            // Khởi tạo đơn đặt vé trên Backend
+            // Khởi tạo đơn đặt vé trên Backend trước khi thu tiền ETH qua MetaMask
             try {
                 const orderRes = await orderAPI.createOrder({
                     eventId: eventData.id,
@@ -329,98 +329,86 @@ const CheckoutPage = () => {
                     buyerWallet: walletAddress,
                 });
                 backendOrderId = orderRes.data?.data?.order?.id;
+                if (!backendOrderId) {
+                    throw new Error('Hệ thống không trả về mã đơn hàng hợp lệ.');
+                }
             } catch (createErr) {
-                console.log('Tạo đơn trên API (sẽ fallback nếu chạy offline):', createErr.message);
+                const msg = createErr?.response?.data?.message || createErr.message || 'Không thể khởi tạo đơn hàng trên hệ thống.';
+                throw new Error(msg);
             }
 
-            // Gọi MetaMask hoặc sinh giao dịch on-chain thật
-            if (window.ethereum) {
+            // Bắt buộc có MetaMask để ký giao dịch on-chain thật
+            if (!window.ethereum) {
+                throw new Error('Vui lòng cài đặt tiện ích MetaMask để ký giao dịch mua vé NFT trên Sepolia.');
+            }
+
+            try {
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const signer = await browserProvider.getSigner();
+
+                // Khởi tạo contract EventTicket với ví người dùng đã kết nối
+                const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
+
+                // Tính tổng tiền ETH cần thanh toán
+                const subtotal = Number(tier?.originalPrice || 0) * quantity;
+                const totalCostWei = ethers.parseEther(subtotal.toFixed(6));
+
+                // Xác định onChainEventId và onChainTierId
+                const eventOnChainId = BigInt(eventData?.onChainEventId || 1);
+                const tierOnChainId = BigInt(tier?.onChainTierId || tier?.id || 1);
+
+                // Mở popup MetaMask cho người dùng ký giao dịch mua vé
+                const tx = await contract.buyTicket(eventOnChainId, tierOnChainId, quantity, {
+                    value: totalCostWei,
+                });
+
+                // Bước 2: Ký xong -> Nhận txHash thật, chờ thợ đào đóng Block Sepolia
+                setTxHash(tx.hash);
+                setTxStatus('verifying_block');
+
+                await tx.wait(); // Đợi giao dịch hoàn tất trên mạng blockchain
+
+                // Gửi xác nhận txHash thật lên Backend để đối soát và cấp vé vào MySQL
+                let confirmedTokenIds = null;
                 try {
-                    const browserProvider = new ethers.BrowserProvider(window.ethereum);
-                    const signer = await browserProvider.getSigner();
-
-                    // Khởi tạo contract EventTicket với ví người dùng đã kết nối
-                    const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
-
-                    // Tính tổng tiền ETH cần thanh toán
-                    const subtotal = Number(tier?.originalPrice || 0) * quantity;
-                    const totalCostWei = ethers.parseEther(subtotal.toFixed(6));
-
-                    // Xác định onChainEventId và onChainTierId
-                    const eventOnChainId = BigInt(eventData?.onChainEventId || 1);
-                    const tierOnChainId = BigInt(tier?.onChainTierId || tier?.id || 1);
-
-                    // Mở popup MetaMask cho người dùng ký giao dịch mua vé
-                    const tx = await contract.buyTicket(eventOnChainId, tierOnChainId, quantity, {
-                        value: totalCostWei,
-                    });
-
-                    // Bước 2: Ký xong -> Nhận txHash thật, chờ thợ đào đóng Block Sepolia
-                    setTxHash(tx.hash);
-                    setTxStatus('verifying_block');
-
-                    await tx.wait(); // Đợi giao dịch hoàn tất trên mạng blockchain
-
-                    // Gửi xác nhận txHash thật lên Backend để đối soát và cấp vé vào MySQL
-                    let confirmedTokenIds = null;
-                    if (backendOrderId) {
-                        try {
-                            const verifyRes = await orderAPI.verifyOrderTx(backendOrderId, { txHash: tx.hash });
-                            const tickets = verifyRes.data?.data?.tickets;
-                            if (Array.isArray(tickets) && tickets.length > 0) {
-                                confirmedTokenIds = tickets.map((t) => t.tokenId);
-                            }
-                        } catch (verifyErr) {
-                            console.log('Xác thực đơn hàng backend:', verifyErr.message);
-                        }
+                    const verifyRes = await orderAPI.verifyOrderTx(backendOrderId, { txHash: tx.hash });
+                    const tickets = verifyRes.data?.data?.tickets;
+                    if (Array.isArray(tickets) && tickets.length > 0) {
+                        confirmedTokenIds = tickets.map((t) => t.tokenId);
                     }
-
-                    // Bước 3: Hoàn tất
-                    const tokenIds = confirmedTokenIds || Array.from({ length: quantity }, (_, i) => 1420 + i);
-                    setMintedTokenIds(tokenIds);
-                    setTxStatus('confirmed');
-                    showSnackbar('Giao dịch thành công! Vé NFT đã được lưu vĩnh viễn trên Sepolia.', 'success');
-                    return;
-                } catch (walletErr) {
-                    if (walletErr.code === 4001 || walletErr.info?.error?.code === 4001) {
-                        throw new Error('Người dùng đã từ chối ký giao dịch trên ví MetaMask.');
-                    }
-                    console.warn('Lỗi gọi contract on-chain:', walletErr);
-                    const errorMsg = walletErr.reason || walletErr.info?.error?.message || walletErr.message;
-                    if (errorMsg?.includes('Event does not exist')) {
-                        throw new Error('Sự kiện này chưa được tạo on-chain trên Smart Contract mới deploy. Vui lòng tạo sự kiện mới từ tài khoản Organizer.');
-                    }
-                    if (errorMsg?.includes('insufficient funds')) {
-                        throw new Error('Số dư Sepolia ETH trong ví của bạn không đủ để thanh toán vé và phí gas.');
-                    }
-                    throw new Error(errorMsg || 'Giao dịch trên Smart Contract thất bại.');
+                } catch (verifyErr) {
+                    const vMsg = verifyErr?.response?.data?.message || verifyErr.message || 'Lỗi đồng bộ đơn hàng trên máy chủ.';
+                    throw new Error(`Giao dịch on-chain đã xác nhận (${tx.hash}) nhưng đồng bộ vé lên hệ thống gặp lỗi: ${vMsg}`);
                 }
-            }
 
-            // Fallback môi trường demo khi không có MetaMask extension
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-            const mockTx = '0x8a9f3b12dc089148b39019284918239018294018234810239481902371ef8923';
-            setTxHash(mockTx);
-            setTxStatus('verifying_block');
-
-            if (backendOrderId) {
-                try {
-                    await orderAPI.verifyOrderTx(backendOrderId, { txHash: mockTx });
-                } catch (e) {
-                    console.log('Xác nhận vé demo:', e.message);
+                // Bước 3: Hoàn tất
+                setMintedTokenIds(confirmedTokenIds || []);
+                setTxStatus('confirmed');
+                showSnackbar('Giao dịch thành công! Vé NFT đã được lưu vĩnh viễn trên Sepolia.', 'success');
+                return;
+            } catch (walletErr) {
+                if (walletErr.code === 4001 || walletErr.info?.error?.code === 4001) {
+                    throw new Error('Người dùng đã từ chối ký giao dịch trên ví MetaMask.');
                 }
+                console.warn('Lỗi gọi contract on-chain:', walletErr);
+                const errorMsg = walletErr.reason || walletErr.info?.error?.message || walletErr.message;
+                if (errorMsg?.includes('Event does not exist')) {
+                    throw new Error('Sự kiện này chưa được tạo on-chain trên Smart Contract mới deploy. Vui lòng tạo sự kiện mới từ tài khoản Organizer.');
+                }
+                if (errorMsg?.includes('insufficient funds')) {
+                    throw new Error('Số dư Sepolia ETH trong ví của bạn không đủ để thanh toán vé và phí gas.');
+                }
+                throw new Error(errorMsg || 'Giao dịch trên Smart Contract thất bại.');
             }
-
-            await new Promise((resolve) => setTimeout(resolve, 2500));
-            const tokenIds = Array.from({ length: quantity }, (_, i) => 1422 + i);
-            setMintedTokenIds(tokenIds);
-            setTxStatus('confirmed');
-            showSnackbar('Giao dịch thành công! Vé NFT đã được ghi nhận trên Sepolia.', 'success');
         } catch (err) {
             setTxStatus('error');
             setTxError(err.message || 'Giao dịch trên Blockchain bị hủy bỏ hoặc thất bại.');
         }
     };
+
+    if (!eventData || !tier) {
+        return null;
+    }
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 8 }}>
@@ -609,7 +597,7 @@ const CheckoutPage = () => {
                                                     {tier.name}
                                                 </Typography>
                                                 <Typography variant="caption" color="text.secondary">
-                                                    Còn lại: <strong>{tier.remainingSupply}</strong> / {tier.maxSupply} vé
+                                                    Còn lại: <strong>{tier.remainingSupply ?? Math.max(0, (tier.maxSupply || 0) - (tier.currentSupply || 0))}</strong> / {tier.maxSupply} vé
                                                 </Typography>
                                             </Box>
                                             <Typography variant="h3" color="primary.main" fontWeight={700}>
