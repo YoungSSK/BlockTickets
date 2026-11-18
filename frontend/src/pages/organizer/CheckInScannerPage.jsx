@@ -751,7 +751,6 @@ const CheckInScannerPage = () => {
                                                 bgcolor: 'background.subtle',
                                                 border: 1,
                                                 borderColor: 'divider',
-                                                mb: 3,
                                             }}
                                         >
                                             <Stack direction="row" spacing={1} alignItems="center" mb={1.5}>
@@ -789,11 +788,6 @@ const CheckInScannerPage = () => {
                                             )}
                                         </Paper>
                                     </Box>
-
-                                    {/* THÔNG TIN HƯỚNG DẪN DÀNH CHO NHÂN VIÊN SOÁT VÉ */}
-                                    <Alert severity="info" sx={{ borderRadius: '10px', fontSize: '0.85rem' }}>
-                                        <strong>Quy tắc bảo mật Web3:</strong> Mỗi Token ID là một tài sản NFT đại diện cho vé vào cửa duy nhất. Khi đã ghi nhận check-in thành công, vé sẽ bị khóa trạng thái và không thể sử dụng lại lần thứ hai.
-                                    </Alert>
                                 </Box>
                             )}
 
