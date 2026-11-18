@@ -65,6 +65,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
 import { adminAPI } from '../../services/api';
 import DashboardLayout from '../../layouts/DashboardLayout';
+import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
 
 // Helper: Rút gọn địa chỉ ví và mã băm giao dịch theo chuẩn Section 4.2
 const truncateHash = (hash, start = 6, end = 4) => {
@@ -99,7 +100,6 @@ const INITIAL_TRANSACTIONS = [];
 
 const AUDIT_LOGS = [];
 
-const CATEGORIES_DATA = [];
 
 const normalizePendingEvent = (evt) => {
     const ticketTypes = Array.isArray(evt.ticketTypes) ? evt.ticketTypes : [];
@@ -462,48 +462,8 @@ const AdminDashboardPage = () => {
             topActions={topActions}
         >
             <Box sx={{ width: '100%' }}>
-                {/* ═══════════════════════════════════════════════════════════════════
-                    2. BANNER GIÁM SÁT TUÂN THỦ TRẦN GIÁ (COMPLIANCE NOTICE)
-                ═══════════════════════════════════════════════════════════════════ */}
-                <Alert
-                    severity="info"
-                    icon={<Security sx={{ color: 'primary.main' }} />}
-                    sx={{
-                        mb: 4,
-                        border: 1,
-                        borderColor: 'divider',
-                        bgcolor: 'background.paper',
-                        '& .MuiAlert-message': { width: '100%' },
-                    }}
-                >
-                    <Stack
-                        direction={{ xs: 'column', md: 'row' }}
-                        alignItems={{ xs: 'flex-start', md: 'center' }}
-                        justifyContent="space-between"
-                        spacing={1}
-                    >
-                        <Box>
-                            <Typography variant="subtitle2" color="text.primary" fontWeight={600}>
-                                Giám sát tính toàn vẹn Smart Contract (BR-02: Quy tắc trần giá 120%)
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Hợp đồng <code>TicketMarketplace.sol</code> đang kiểm duyệt 100% giao dịch thứ cấp trên chuỗi Sepolia.
-                                Tỷ lệ tuân thủ: <strong>100%</strong> • 0 giao dịch vi phạm được ghi nhận.
-                            </Typography>
-                        </Box>
-                        <Stack direction="row" spacing={1}>
-                            <Button
-                                size="small"
-                                variant="text"
-                                color="primary"
-                                startIcon={<Launch sx={{ fontSize: 16 }} />}
-                                onClick={() => handleCopy('0x48D11894aB01029384910293849102938491B281', 'Địa chỉ hợp đồng Chợ')}
-                            >
-                                Sao chép Contract Chợ
-                            </Button>
-                        </Stack>
-                    </Stack>
-                </Alert>
+                
+                
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     3. BẢNG CHỈ SỐ KPIs CỐT LÕI (OVERVIEW METRIC CARDS)
@@ -1101,56 +1061,8 @@ const AdminDashboardPage = () => {
                             </Card>
                         </Grid>
 
-                        {/* Cột Phụ: Phân bổ Hạng mục & Sức khỏe Blockchain */}
+                        {/* Cột Phụ: Sức khỏe Hạ tầng & Hợp Đồng Thông Minh */}
                         <Grid item xs={12} lg={4}>
-                            {/* Phân bổ Thể loại Sự kiện */}
-                            <Card sx={{ bgcolor: 'background.paper', mb: 3 }}>
-                                <Box sx={{ p: 2.5, borderBottom: 1, borderColor: 'divider' }}>
-                                    <Typography variant="h3" color="text.primary">
-                                        Phân Bổ Theo Thể Loại
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Tỷ trọng các sự kiện đang hoạt động trên hệ thống
-                                    </Typography>
-                                </Box>
-                                <CardContent sx={{ p: 3 }}>
-                                    {CATEGORIES_DATA.length === 0 ? (
-                                        <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
-                                            Chưa có dữ liệu phân bổ thể loại
-                                        </Typography>
-                                    ) : (
-                                        CATEGORIES_DATA.map((cat) => (
-                                            <Box key={cat.name} sx={{ mb: 2.5, '&:last-child': { mb: 0 } }}>
-                                                <Stack direction="row" justifyContent="space-between" mb={0.5}>
-                                                    <Typography variant="body2" color="text.primary" fontWeight={500}>
-                                                        {cat.name}
-                                                    </Typography>
-                                                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                                                        {cat.percent}% ({cat.events} SK)
-                                                    </Typography>
-                                                </Stack>
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={cat.percent}
-                                                    sx={{
-                                                        height: 8,
-                                                        borderRadius: 4,
-                                                        bgcolor: 'action.hover',
-                                                        '& .MuiLinearProgress-bar': {
-                                                            bgcolor: cat.color,
-                                                            borderRadius: 4,
-                                                        },
-                                                    }}
-                                                />
-                                                <Typography variant="caption" color="text.disabled" mt={0.5} display="block">
-                                                    Tổng vé phát hành: {cat.tickets}
-                                                </Typography>
-                                            </Box>
-                                        ))
-                                    )}
-                                </CardContent>
-                            </Card>
-
                             {/* Sức khỏe Hệ thống & Smart Contract */}
                             <Card sx={{ bgcolor: 'background.paper' }}>
                                 <Box sx={{ p: 2.5, borderBottom: 1, borderColor: 'divider' }}>
@@ -1158,7 +1070,7 @@ const AdminDashboardPage = () => {
                                         Hạ Tầng & Hợp Đồng Thông Minh
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                        Trạng thái kết nối node RPC & cơ sở dữ liệu
+                                        Trạng thái kết nối node RPC Sepolia & Smart Contracts
                                     </Typography>
                                 </Box>
                                 <CardContent sx={{ p: 3 }}>
@@ -1181,15 +1093,17 @@ const AdminDashboardPage = () => {
                                             </Typography>
                                             <Stack direction="row" alignItems="center" justifyContent="space-between" mt={0.5}>
                                                 <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                                    0x71C9482...A319
+                                                    {truncateHash(EVENT_TICKET_ADDRESS, 6, 4)}
                                                 </Typography>
-                                                <IconButton
-                                                    size="small"
-                                                    aria-label="Sao chép Contract Vé"
-                                                    onClick={() => handleCopy('0x71C948261901823901928394819203849102A319', 'Hợp đồng Vé')}
-                                                >
-                                                    <ContentCopy sx={{ fontSize: 14 }} />
-                                                </IconButton>
+                                                <Tooltip title="Sao chép Contract Vé">
+                                                    <IconButton
+                                                        size="small"
+                                                        aria-label="Sao chép Contract Vé"
+                                                        onClick={() => handleCopy(EVENT_TICKET_ADDRESS, 'Hợp đồng Vé')}
+                                                    >
+                                                        <ContentCopy sx={{ fontSize: 14 }} />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </Stack>
                                         </Box>
 
@@ -1199,33 +1113,17 @@ const AdminDashboardPage = () => {
                                             </Typography>
                                             <Stack direction="row" alignItems="center" justifyContent="space-between" mt={0.5}>
                                                 <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                                    0x48D1189...B281
+                                                    {truncateHash(TICKET_MARKETPLACE_ADDRESS, 6, 4)}
                                                 </Typography>
-                                                <IconButton
-                                                    size="small"
-                                                    aria-label="Sao chép Contract Chợ"
-                                                    onClick={() => handleCopy('0x48D11894aB01029384910293849102938491B281', 'Hợp đồng Chợ')}
-                                                >
-                                                    <ContentCopy sx={{ fontSize: 14 }} />
-                                                </IconButton>
-                                            </Stack>
-                                        </Box>
-
-                                        <Box>
-                                            <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                                <Typography variant="body2" color="text.secondary">Cơ sở dữ liệu MongoDB Atlas</Typography>
-                                                <Typography variant="body2" color="status.success" fontWeight={600}>
-                                                    Đã kết nối (Ping: 28ms)
-                                                </Typography>
-                                            </Stack>
-                                        </Box>
-
-                                        <Box>
-                                            <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                                <Typography variant="body2" color="text.secondary">Gas Price trung bình</Typography>
-                                                <Typography variant="body2" color="primary.main" fontWeight={600}>
-                                                    ~18.4 Gwei (Sepolia)
-                                                </Typography>
+                                                <Tooltip title="Sao chép Contract Chợ">
+                                                    <IconButton
+                                                        size="small"
+                                                        aria-label="Sao chép Contract Chợ"
+                                                        onClick={() => handleCopy(TICKET_MARKETPLACE_ADDRESS, 'Hợp đồng Chợ')}
+                                                    >
+                                                        <ContentCopy sx={{ fontSize: 14 }} />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </Stack>
                                         </Box>
                                     </Stack>

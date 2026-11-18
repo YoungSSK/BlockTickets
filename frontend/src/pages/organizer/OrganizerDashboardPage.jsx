@@ -59,6 +59,10 @@ import {
     Armchair,
     Crown,
 } from 'lucide-react';
+import {
+    SwapHoriz,
+    LinkOff,
+} from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { useAppTheme } from '../../context/ThemeContext';
@@ -194,6 +198,9 @@ const OrganizerDashboardPage = () => {
     useEffect(() => {
         let isMounted = true;
         const checkWallet = async () => {
+            if (sessionStorage.getItem('blocktickets_wallet_disconnected') === 'true') {
+                return;
+            }
             if (window.ethereum) {
                 try {
                     const accounts = await window.ethereum.request({ method: 'eth_accounts' });
@@ -226,6 +233,7 @@ const OrganizerDashboardPage = () => {
 
         const handleAccountsChanged = async (accounts) => {
             if (accounts && accounts.length > 0) {
+                sessionStorage.removeItem('blocktickets_wallet_disconnected');
                 setConnectedWallet(accounts[0]);
                 await fetchWalletBalance(accounts[0]);
                 showSnackbar(`Đã chuyển sang ví MetaMask: ${truncateHash(accounts[0], 6, 4)}`, 'info');
@@ -261,6 +269,7 @@ const OrganizerDashboardPage = () => {
 
         setIsConnectingWallet(true);
         try {
+            sessionStorage.removeItem('blocktickets_wallet_disconnected');
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
             if (accounts && accounts[0]) {
                 const addr = accounts[0];
@@ -276,6 +285,72 @@ const OrganizerDashboardPage = () => {
             }
         } finally {
             setIsConnectingWallet(false);
+        }
+    };
+
+    // Đổi tài khoản ví MetaMask bằng EIP-2255 wallet_requestPermissions
+    const handleSwitchWallet = async () => {
+        if (!window.ethereum) {
+            showSnackbar('Vui lòng cài đặt tiện ích mở rộng MetaMask trên trình duyệt!', 'warning');
+            return;
+        }
+
+        setIsConnectingWallet(true);
+        try {
+            sessionStorage.removeItem('blocktickets_wallet_disconnected');
+            // Yêu cầu quyền truy cập tài khoản mới -> MetaMask bắt buộc mở popup chọn tài khoản
+            await window.ethereum.request({
+                method: 'wallet_requestPermissions',
+                params: [{ eth_accounts: {} }],
+            });
+
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts && accounts[0]) {
+                const addr = accounts[0];
+                setConnectedWallet(addr);
+                await fetchWalletBalance(addr);
+                showSnackbar(`Đã chuyển sang ví MetaMask: ${truncateHash(addr, 6, 4)}`, 'success');
+            }
+        } catch (err) {
+            if (err?.code === 4001 || err?.info?.error?.code === 4001) {
+                showSnackbar('Bạn đã đóng popup đổi tài khoản MetaMask.', 'info');
+            } else {
+                console.error('Lỗi khi đổi tài khoản ví MetaMask:', err);
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    if (accounts && accounts[0]) {
+                        const addr = accounts[0];
+                        setConnectedWallet(addr);
+                        await fetchWalletBalance(addr);
+                        showSnackbar(`Đã kết nối ví: ${truncateHash(addr, 6, 4)}`, 'success');
+                    }
+                } catch (fallbackErr) {
+                    showSnackbar(fallbackErr.message || 'Lỗi khi kết nối ví.', 'error');
+                }
+            }
+        } finally {
+            setIsConnectingWallet(false);
+        }
+    };
+
+    // Ngắt kết nối ví MetaMask
+    const handleDisconnectWallet = async () => {
+        sessionStorage.setItem('blocktickets_wallet_disconnected', 'true');
+        try {
+            if (window.ethereum?.request) {
+                try {
+                    await window.ethereum.request({
+                        method: 'wallet_revokePermissions',
+                        params: [{ eth_accounts: {} }],
+                    });
+                } catch {
+                    // ignore
+                }
+            }
+        } finally {
+            setConnectedWallet('');
+            setWalletBalance('');
+            showSnackbar('Đã ngắt kết nối ví MetaMask.', 'info');
         }
     };
 
@@ -605,7 +680,7 @@ const OrganizerDashboardPage = () => {
                                             </Stack>
 
                                             {connectedWallet ? (
-                                                <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap">
+                                                <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap" sx={{ gap: 1 }}>
                                                     <Typography variant="body1" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
                                                         {truncateHash(connectedWallet, 8, 6)}
                                                     </Typography>
@@ -618,7 +693,7 @@ const OrganizerDashboardPage = () => {
                                                             <Copy size={14} />
                                                         </IconButton>
                                                     </Tooltip>
-                                                    <Typography variant="body2" color="primary.main" fontWeight={700} sx={{ ml: 1 }}>
+                                                    <Typography variant="body2" color="primary.main" fontWeight={700} sx={{ ml: 0.5 }}>
                                                         Số dư ví: {walletBalance || '... ETH'}
                                                     </Typography>
                                                     <Tooltip title="Làm mới số dư ví">
@@ -630,16 +705,43 @@ const OrganizerDashboardPage = () => {
                                                             <RefreshCw size={14} />
                                                         </IconButton>
                                                     </Tooltip>
-                                                    {user && !user.walletAddress && (
+
+                                                    {/* Nút Đổi tài khoản ví MetaMask */}
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="primary"
+                                                        disabled={isConnectingWallet}
+                                                        onClick={handleSwitchWallet}
+                                                        startIcon={<SwapHoriz sx={{ fontSize: 14 }} />}
+                                                        sx={{ height: 28, fontSize: '0.72rem', fontWeight: 700, borderRadius: '6px' }}
+                                                    >
+                                                        Đổi ví MetaMask
+                                                    </Button>
+
+                                                    {/* Nút Ngắt kết nối ví */}
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="error"
+                                                        onClick={handleDisconnectWallet}
+                                                        startIcon={<LinkOff sx={{ fontSize: 14 }} />}
+                                                        sx={{ height: 28, fontSize: '0.72rem', fontWeight: 700, borderRadius: '6px' }}
+                                                    >
+                                                        Ngắt kết nối
+                                                    </Button>
+
+                                                    {/* Lưu hoặc Cập nhật ví vào hồ sơ BTC */}
+                                                    {user && (!user.walletAddress || user.walletAddress.toLowerCase() !== connectedWallet.toLowerCase()) && (
                                                         <Button
                                                             size="small"
-                                                            variant="outlined"
+                                                            variant="contained"
                                                             color="success"
                                                             disabled={isLinkingWallet}
                                                             onClick={handleLinkWalletToProfile}
-                                                            sx={{ height: 26, fontSize: '0.68rem', fontWeight: 700, borderRadius: '6px', ml: 1 }}
+                                                            sx={{ height: 28, fontSize: '0.72rem', fontWeight: 700, borderRadius: '6px' }}
                                                         >
-                                                            {isLinkingWallet ? 'Đang lưu...' : 'Lưu vào hồ sơ BTC'}
+                                                            {isLinkingWallet ? 'Đang lưu...' : user.walletAddress ? 'Cập nhật ví vào hồ sơ BTC' : 'Lưu vào hồ sơ BTC'}
                                                         </Button>
                                                     )}
                                                 </Stack>
