@@ -98,20 +98,27 @@ const CheckoutPage = () => {
         }
     }, [eventData, tier, navigate]);
 
+    // Giới hạn tối đa 5 vé trên mỗi lần thanh toán (nằm trong hạn mức MAX_MINT_PER_TX = 10 của Smart Contract)
+    const MAX_TICKETS_PER_TX = 5;
+    const tierRemaining = tier
+        ? (tier.remainingSupply ?? Math.max(0, Number(tier.maxSupply || 0) - Number(tier.currentSupply || 0)))
+        : 0;
+    const maxSelectableQty = Math.max(1, Math.min(tierRemaining || MAX_TICKETS_PER_TX, MAX_TICKETS_PER_TX));
+
     // Form đặt vé
     const initialQuantity = Math.max(
         1,
-        Math.min(4, Number(location.state?.quantity || eventData?.quantity || 1))
+        Math.min(maxSelectableQty, Number(location.state?.quantity || eventData?.quantity || 1))
     );
     const [quantity, setQuantity] = useState(initialQuantity);
 
     // Cập nhật số lượng nếu được truyền từ trang chi tiết sự kiện
     useEffect(() => {
         const passedQty = Number(location.state?.quantity || eventData?.quantity);
-        if (passedQty && passedQty >= 1 && passedQty <= 4) {
-            setQuantity(passedQty);
+        if (passedQty && passedQty >= 1) {
+            setQuantity(Math.min(maxSelectableQty, passedQty));
         }
-    }, [location.state, eventData?.quantity]);
+    }, [location.state, eventData?.quantity, maxSelectableQty]);
 
     const [customerName, setCustomerName] = useState(user?.fullName || '');
     const [customerEmail, setCustomerEmail] = useState(user?.email || '');
@@ -128,8 +135,6 @@ const CheckoutPage = () => {
     const estimatedGasEth = 0.0028;
     const subtotalEth = tier ? tier.originalPrice * quantity : 0;
     const totalEth = Number((subtotalEth + estimatedGasEth).toFixed(4));
-    const ethToUsdRate = 3140; // $3,140 / 1 ETH
-    const totalUsd = Math.round(totalEth * ethToUsdRate);
 
     // Luồng xử lý giao dịch 3 bước theo đúng Mục 7 của docs/theme_specification.md
     // Trạng thái: 'idle' | 'pending_signature' (Bước 1) | 'verifying_block' (Bước 2) | 'confirmed' (Bước 3) | 'error'
@@ -622,7 +627,7 @@ const CheckoutPage = () => {
                                                 Số lượng vé mua
                                             </Typography>
                                             <Typography variant="caption" color="text.secondary">
-                                                Tối đa 4 vé / một ví để tránh nạn đầu cơ
+                                                Còn lại {tierRemaining} vé • Tối đa {MAX_TICKETS_PER_TX} vé / 1 lần thanh toán
                                             </Typography>
                                         </Box>
                                         <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -641,8 +646,8 @@ const CheckoutPage = () => {
                                             <IconButton
                                                 size="small"
                                                 aria-label="Tăng số lượng vé"
-                                                onClick={() => setQuantity((q) => Math.min(4, q + 1))}
-                                                disabled={quantity >= 4}
+                                                onClick={() => setQuantity((q) => Math.min(maxSelectableQty, q + 1))}
+                                                disabled={quantity >= maxSelectableQty}
                                                 sx={{ border: 1, borderColor: 'divider', borderRadius: '6px' }}
                                             >
                                                 <Add fontSize="small" />
@@ -883,15 +888,10 @@ const CheckoutPage = () => {
                                 <Divider sx={{ my: 2 }} />
 
                                 {/* Tổng cộng */}
-                                <Stack direction="row" justifyContent="space-between" alignItems="flex-end" mb={1}>
-                                    <Box>
-                                        <Typography variant="subtitle1" color="text.primary" fontWeight={700}>
-                                            Tổng thanh toán:
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Quy đổi: ~${totalUsd.toLocaleString('en-US')} USD
-                                        </Typography>
-                                    </Box>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                                    <Typography variant="subtitle1" color="text.primary" fontWeight={700}>
+                                        Tổng thanh toán:
+                                    </Typography>
                                     <Typography variant="h2" color="primary.main" fontWeight={700}>
                                         {totalEth} ETH
                                     </Typography>

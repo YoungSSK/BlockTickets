@@ -41,27 +41,6 @@ export const nonceQuerySchema = z.object({
   }),
 });
 
-export const verifyWalletSchema = z.object({
-  body: walletSignatureBody,
-});
-
-export const refreshTokenSchema = z.object({
-  body: z.object({
-    refreshToken: z
-      .string({ error: "Vui lòng cung cấp Refresh Token" })
-      .trim()
-      .min(1, "Vui lòng cung cấp Refresh Token"),
-  }),
-});
-
-export const logoutSchema = z.object({
-  body: z
-    .object({
-      refreshToken: z.string().trim().optional(),
-    })
-    .optional(),
-});
-
 export const updateProfileSchema = z.object({
   body: z.object({
     fullName: z

@@ -429,7 +429,7 @@ const MyTicketsPage = () => {
                 return (
                     <Chip
                         icon={<SwapHoriz sx={{ fontSize: '13px !important', color: 'status.pending' }} />}
-                        label="Đang rao bán trên Chợ 120%"
+                        label="Đang rao bán trên Chợ"
                         size="small"
                         sx={{ bgcolor: 'status.pendingBg', color: 'status.pending', fontWeight: 700 }}
                     />
@@ -474,7 +474,7 @@ const MyTicketsPage = () => {
                         spacing={2}
                     >
                         <Box>
-                            <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
+                            <Stack direction="row" alignItems="center" spacing={1.5}>
                                 <Box
                                     sx={{
                                         width: 36,
@@ -490,18 +490,9 @@ const MyTicketsPage = () => {
                                     <ConfirmationNumber sx={{ fontSize: 20 }} />
                                 </Box>
                                 <Typography variant="h2" color="text.primary">
-                                    Kho Vé Cá Nhân (My NFT Tickets)
+                                    Vé của tôi
                                 </Typography>
-                                <Chip
-                                    label={`${stats.total} Vé NFT`}
-                                    size="small"
-                                    color="primary"
-                                    sx={{ fontWeight: 700, fontSize: '0.72rem', height: 22 }}
-                                />
                             </Stack>
-                            <Typography variant="body2" color="text.secondary">
-                                Quản lý toàn bộ vé NFT thuộc quyền sở hữu của bạn. Mở mã QR động HMAC khi đến cổng hoặc chuyển nhượng trên Chợ thứ cấp
-                            </Typography>
                         </Box>
 
                         <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -558,9 +549,6 @@ const MyTicketsPage = () => {
                                 <Typography variant="h2" color="primary.main" fontWeight={700} mt={0.5}>
                                     {stats.total} Vé
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Được xác thực trên Ethereum Sepolia
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -574,9 +562,6 @@ const MyTicketsPage = () => {
                                 <Typography variant="h2" color="status.success" fontWeight={700} mt={0.5}>
                                     {stats.valid} Vé
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Sẵn sàng mở mã QR check-in tại cổng
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -585,13 +570,10 @@ const MyTicketsPage = () => {
                         <Card sx={{ bgcolor: 'background.paper', height: '100%' }}>
                             <CardContent sx={{ p: 2.5 }}>
                                 <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                    ĐANG RAO BÁN LẠI (CHỢ 120%)
+                                    ĐANG RAO BÁN LẠI
                                 </Typography>
                                 <Typography variant="h2" color="status.pending" fontWeight={700} mt={0.5}>
                                     {stats.resale} Vé
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Đang niêm yết trên TicketMarketplace.sol
                                 </Typography>
                             </CardContent>
                         </Card>
@@ -605,9 +587,6 @@ const MyTicketsPage = () => {
                                 </Typography>
                                 <Typography variant="h2" color="status.checkedIn" fontWeight={700} mt={0.5}>
                                     {stats.used} Vé
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Vé NFT lưu niệm vĩnh viễn trong ví
                                 </Typography>
                             </CardContent>
                         </Card>
@@ -728,24 +707,12 @@ const MyTicketsPage = () => {
 
                                     {/* Nội dung chi tiết vé */}
                                     <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                                            <Chip
-                                                label={ticket.categoryLabel}
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: 'action.selected',
-                                                    color: 'primary.main',
-                                                    fontWeight: 600,
-                                                    fontSize: '0.7rem',
-                                                    height: 20,
-                                                }}
-                                            />
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1} mb={0.5}>
+                                            <Typography variant="h3" color="text.primary" fontWeight={700}>
+                                                {ticket.eventTitle}
+                                            </Typography>
                                             {renderStatusChip(ticket.status)}
                                         </Stack>
-
-                                        <Typography variant="h3" color="text.primary" fontWeight={700} mb={0.5}>
-                                            {ticket.eventTitle}
-                                        </Typography>
 
                                         <Typography variant="subtitle2" color="primary.main" fontWeight={600} mb={1.5}>
                                             {ticket.tierName}
@@ -863,7 +830,7 @@ const MyTicketsPage = () => {
                                                         startIcon={<SwapHoriz />}
                                                         onClick={() => handleOpenResaleModal(ticket)}
                                                     >
-                                                        Bán lại (120%)
+                                                        Bán lại
                                                     </Button>
                                                     <Button
                                                         variant="contained"
@@ -872,7 +839,7 @@ const MyTicketsPage = () => {
                                                         startIcon={<QrCode2 />}
                                                         onClick={() => handleOpenQrModal(ticket)}
                                                     >
-                                                        Mở QR Soát Vé
+                                                        QR
                                                     </Button>
                                                 </>
                                             )}
@@ -1088,7 +1055,7 @@ const MyTicketsPage = () => {
                                 </Stack>
 
                                 <Stack direction="row" justifyContent="space-between">
-                                    <Typography variant="body2" color="text.secondary">Trần giá bán lại tối đa cho phép (+120%):</Typography>
+                                    <Typography variant="body2" color="text.secondary">Trần giá bán lại tối đa cho phép:</Typography>
                                     <Typography variant="body2" color="status.success" fontWeight={700}>
                                         {resaleTicket.maxResalePrice} ETH
                                     </Typography>

@@ -60,6 +60,14 @@ export const createOrder = async (
   const parsedTicketTypeId = Number(ticketTypeId);
   const parsedQuantity = Math.max(1, Number(quantity) || 1);
 
+  const MAX_TICKETS_PER_TX = 5;
+  if (parsedQuantity > MAX_TICKETS_PER_TX) {
+    throw new AppError(
+      `Mỗi lần thanh toán chỉ được mua tối đa ${MAX_TICKETS_PER_TX} vé.`,
+      400,
+    );
+  }
+
   const event = await Event.findByPk(parsedEventId);
   if (!event) throw new AppError("Không tìm thấy sự kiện.", 404);
   if (!["published", "approved"].includes(event.status)) {

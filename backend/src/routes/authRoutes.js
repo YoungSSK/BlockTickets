@@ -3,7 +3,6 @@ import {
   register,
   login,
   getNonce,
-  verifyWallet,
   refreshTokenHandler,
   logoutHandler,
   getProfile,
@@ -15,9 +14,6 @@ import {
   registerSchema,
   loginSchema,
   nonceQuerySchema,
-  verifyWalletSchema,
-  refreshTokenSchema,
-  logoutSchema,
 } from "../validators/authValidator.js";
 
 const router = express.Router();
@@ -25,17 +21,11 @@ const router = express.Router();
 // 1. Nhóm API công khai (Public Routes)
 router.post("/register", authLimiter, validate(registerSchema), register);
 router.post("/login", authLimiter, validate(loginSchema), login);
-router.get("/nonce", authLimiter, validate(nonceQuerySchema), getNonce);
-router.post(
-  "/verify-wallet",
-  authLimiter,
-  validate(verifyWalletSchema),
-  verifyWallet,
-);
-router.post("/refresh-token", validate(refreshTokenSchema), refreshTokenHandler);
-router.post("/logout", validate(logoutSchema), logoutHandler);
+router.post("/refresh-token", refreshTokenHandler);
+router.post("/logout", logoutHandler);
 
 // 2. Nhóm API yêu cầu đăng nhập (Private Routes)
+router.get("/nonce", protect, authLimiter, validate(nonceQuerySchema), getNonce);
 router.get("/profile", protect, getProfile);
 
 export default router;

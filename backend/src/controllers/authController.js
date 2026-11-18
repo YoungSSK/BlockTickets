@@ -2,11 +2,35 @@ import {
   registerUser,
   loginUser,
   issueWalletNonce,
-  loginWithWallet,
   refreshUserTokens,
   logoutSession,
 } from "../services/authService.js";
 import { getUserProfile } from "../services/userService.js";
+import { AppError } from "../utils/AppError.js";
+
+const REFRESH_COOKIE_NAME = "refreshToken";
+const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 ngày
+
+const getRefreshCookieOptions = () => {
+  const isProd = process.env.NODE_ENV === "production";
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    path: "/api/auth",
+    maxAge: REFRESH_COOKIE_MAX_AGE,
+  };
+};
+
+const clearRefreshCookie = (res) => {
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    path: "/api/auth",
+  });
+};
 
 const getRequestMeta = (req) => ({
   userAgent: req.headers["user-agent"] || "Unknown Device",
@@ -16,32 +40,40 @@ const getRequestMeta = (req) => ({
 // POST /api/auth/register - Đăng ký tài khoản
 export const register = async (req, res, next) => {
   try {
-    const data = await registerUser(req.body, getRequestMeta(req));
+    const { refreshToken, ...safeData } = await registerUser(
+      req.body,
+      getRequestMeta(req),
+    );
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
     return res.status(201).json({
       success: true,
       message: "Đăng ký thành công.",
-      data,
+      data: safeData,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// POST /api/auth/login - Đăng nhập
+// POST /api/auth/login - Đăng nhập bằng Email & Mật khẩu
 export const login = async (req, res, next) => {
   try {
-    const data = await loginUser(req.body, getRequestMeta(req));
+    const { refreshToken, ...safeData } = await loginUser(
+      req.body,
+      getRequestMeta(req),
+    );
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
     return res.status(200).json({
       success: true,
       message: "Đăng nhập thành công!",
-      data,
+      data: safeData,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// GET /api/auth/nonce - Lấy nonce cho ví Ethereum
+// GET /api/auth/nonce - Lấy nonce để liên kết ví Ethereum (chỉ dành cho tài khoản đã đăng nhập)
 export const getNonce = async (req, res, next) => {
   try {
     const data = await issueWalletNonce(req.query.wallet);
@@ -55,46 +87,45 @@ export const getNonce = async (req, res, next) => {
   }
 };
 
-// POST /api/auth/verify-wallet - Xác thực ví Ethereum
-export const verifyWallet = async (req, res, next) => {
-  try {
-    const data = await loginWithWallet(req.body, getRequestMeta(req));
-    return res.status(200).json({
-      success: true,
-      message: "Đăng nhập bằng ví MetaMask thành công!",
-      data,
-    });
-  } catch (error) {
-    return next(error);
-  }
-};
-
-// POST /api/auth/refresh-token - Làm mới access token bằng refresh token
+// POST /api/auth/refresh-token - Làm mới access token từ HttpOnly Cookie
 export const refreshTokenHandler = async (req, res, next) => {
   try {
-    const tokens = await refreshUserTokens(
-      req.body.refreshToken,
-      getRequestMeta(req),
-    );
+    const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
+    if (!refreshToken) {
+      clearRefreshCookie(res);
+      throw new AppError(
+        "Không tìm thấy phiên đăng nhập (Refresh Token). Vui lòng đăng nhập lại.",
+        401,
+      );
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } =
+      await refreshUserTokens(refreshToken, getRequestMeta(req));
+
+    res.cookie(REFRESH_COOKIE_NAME, newRefreshToken, getRefreshCookieOptions());
     return res.status(200).json({
       success: true,
       message: "Gia hạn phiên đăng nhập thành công!",
-      data: tokens,
+      data: { accessToken },
     });
   } catch (error) {
+    clearRefreshCookie(res);
     return next(error);
   }
 };
 
-// POST /api/auth/logout - Đăng xuất và hủy Refresh Token
+// POST /api/auth/logout - Đăng xuất, thu hồi Refresh Token và xóa HttpOnly Cookie
 export const logoutHandler = async (req, res, next) => {
   try {
-    await logoutSession(req.body?.refreshToken);
+    const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
+    await logoutSession(refreshToken);
+    clearRefreshCookie(res);
     return res.status(200).json({
       success: true,
       message: "Đăng xuất thành công!",
     });
   } catch (error) {
+    clearRefreshCookie(res);
     return next(error);
   }
 };

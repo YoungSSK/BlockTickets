@@ -390,10 +390,20 @@ const EventDetailPage = () => {
         return event.ticketTypes.find((t) => t.id === selectedTierId) || event.ticketTypes[0] || null;
     }, [event, selectedTierId]);
 
+    // Giới hạn tối đa 5 vé trên mỗi lần thanh toán (nằm trong hạn mức MAX_MINT_PER_TX = 10 của Smart Contract)
+    const MAX_TICKETS_PER_TX = 5;
+    const activeRemaining = activeTier
+        ? (activeTier.remainingSupply ?? Math.max(0, Number(activeTier.maxSupply || 0) - Number(activeTier.currentSupply || 0)))
+        : 0;
+    const maxSelectableQty = Math.max(1, Math.min(activeRemaining || MAX_TICKETS_PER_TX, MAX_TICKETS_PER_TX));
+
+    // Tự động điều chỉnh số lượng nếu chuyển sang hạng vé có số vé còn lại ít hơn
+    useEffect(() => {
+        setQuantity((q) => Math.max(1, Math.min(q, maxSelectableQty)));
+    }, [maxSelectableQty]);
+
     // Tính toán giá tiền
     const subtotalEth = activeTier ? activeTier.originalPrice * quantity : 0;
-    const ethToUsdRate = 3140;
-    const subtotalUsd = Math.round(subtotalEth * ethToUsdRate);
 
     // Kiểm tra trạng thái mở bán của hạng vé đang chọn
     const saleStatus = useMemo(() => {
@@ -763,7 +773,7 @@ const EventDetailPage = () => {
                                                         {prices.length > 0 ? `${minPrice} ETH` : 'Đang cập nhật'}
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        {prices.length > 0 ? `~$${Math.round(minPrice * ethToUsdRate)} USD / vé` : 'Chưa mở bán hạng vé'}
+                                                        {prices.length > 0 ? 'Thanh toán trực tiếp bằng Sepolia ETH' : 'Chưa mở bán hạng vé'}
                                                     </Typography>
                                                 </>
                                             );
@@ -868,9 +878,6 @@ const EventDetailPage = () => {
                                                         <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
                                                             <Typography variant="h2" color="primary.main" fontWeight={700}>
                                                                 {tier.originalPrice} ETH
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                ~${Math.round(tier.originalPrice * ethToUsdRate)} USD
                                                             </Typography>
                                                         </Box>
                                                     </Stack>
@@ -1085,7 +1092,7 @@ const EventDetailPage = () => {
                                                 Số lượng vé
                                             </Typography>
                                             <Typography variant="caption" color="text.secondary">
-                                                Tối đa 4 vé / ví
+                                                Còn {activeRemaining} vé • Tối đa {MAX_TICKETS_PER_TX} vé / 1 lần thanh toán
                                             </Typography>
                                         </Box>
                                         <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -1104,8 +1111,8 @@ const EventDetailPage = () => {
                                             <IconButton
                                                 size="small"
                                                 aria-label="Tăng vé"
-                                                onClick={() => setQuantity((q) => Math.min(4, q + 1))}
-                                                disabled={quantity >= 4}
+                                                onClick={() => setQuantity((q) => Math.min(maxSelectableQty, q + 1))}
+                                                disabled={quantity >= maxSelectableQty}
                                                 sx={{ border: 1, borderColor: 'divider', borderRadius: '6px' }}
                                             >
                                                 <Add fontSize="small" />
@@ -1116,13 +1123,10 @@ const EventDetailPage = () => {
                                     <Divider sx={{ my: 2 }} />
 
                                     {/* Tạm tính */}
-                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-end" mb={2.5}>
-                                        <Box>
-                                            <Typography variant="caption" color="text.secondary">TỔNG TẠM TÍNH</Typography>
-                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                ~${subtotalUsd.toLocaleString('en-US')} USD
-                                            </Typography>
-                                        </Box>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2.5}>
+                                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                            TỔNG TẠM TÍNH
+                                        </Typography>
                                         <Typography variant="h2" color="primary.main" fontWeight={700}>
                                             {subtotalEth.toFixed(4)} ETH
                                         </Typography>

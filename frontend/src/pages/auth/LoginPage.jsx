@@ -4,7 +4,6 @@ import {
     Typography,
     TextField,
     Button,
-    Divider,
     IconButton,
     InputAdornment,
     Alert,
@@ -26,24 +25,9 @@ import {
     QrCode2,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
-import { ethers } from 'ethers';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { authAPI } from '../../services/api';
-
-// MetaMask fox inline SVG
-const MetaMaskIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 318 318" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M274.1 35.5L174.6 108.7L193.5 64.3L274.1 35.5Z" fill="#E2761B" stroke="#E2761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M44.4 35.5L143.1 109.4L125.1 64.3L44.4 35.5Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M238.3 206.8L211.8 248.1L268.5 263.4L284.5 207.7L238.3 206.8Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M34.1 207.7L49.9 263.4L106.6 248.1L80.1 206.8L34.1 207.7Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M103.6 138.2L88.1 161.7L144.4 164.2L142.5 103.8L103.6 138.2Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M214.9 138.2L175.5 103.1L174.6 164.2L230.5 161.7L214.9 138.2Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M106.6 248.1L141 232.7L111.4 208.1L106.6 248.1Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M177.5 232.7L211.8 248.1L207.1 208.1L177.5 232.7Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-);
 
 const FEATURES = [
     { Icon: Verified, text: 'Vé NFT duy nhất, xác thực trên Blockchain' },
@@ -85,7 +69,6 @@ const LoginPage = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState({});
     const [loginLoading, setLoginLoading] = useState(false);
-    const [walletLoading, setWalletLoading] = useState(false);
     const [serverError, setServerError] = useState('');
 
     const validate = () => {
@@ -110,56 +93,13 @@ const LoginPage = () => {
                 email: email.trim(),
                 password,
             });
-            const { user, accessToken, refreshToken } = res.data.data;
-            login(user, accessToken, refreshToken);
+            const { user, accessToken } = res.data.data;
+            login(user, accessToken);
             handleRedirectAfterLogin(user);
         } catch (err) {
             setServerError(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu.');
         } finally {
             setLoginLoading(false);
-        }
-    };
-
-    const handleWalletLogin = async () => {
-        setServerError('');
-        if (!window.ethereum) {
-            setServerError('Trình duyệt chưa cài MetaMask. Vui lòng cài đặt tiện ích MetaMask và thử lại.');
-            return;
-        }
-        setWalletLoading(true);
-        try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
-            const walletAddress = await signer.getAddress();
-
-            // 1. Lấy nonce xác thực từ backend
-            const nonceRes = await authAPI.getNonce(walletAddress);
-            const nonce = nonceRes.data?.data?.nonce;
-            if (!nonce) {
-                throw new Error('Không thể nhận chuỗi xác thực (nonce) từ máy chủ.');
-            }
-
-            // 2. Ký thông điệp xác thực trên MetaMask
-            const signature = await signer.signMessage(nonce);
-
-            // 3. Gửi chữ ký lên backend để xác thực và cấp token
-            const verifyRes = await authAPI.verifyWallet({
-                walletAddress,
-                signature,
-                nonce,
-            });
-
-            const { user, accessToken, refreshToken } = verifyRes.data.data;
-            login(user, accessToken, refreshToken);
-            handleRedirectAfterLogin(user);
-        } catch (err) {
-            if (err?.code === 'ACTION_REJECTED' || err?.code === 4001) {
-                setServerError('Bạn đã từ chối ký xác nhận trên ví MetaMask.');
-            } else {
-                setServerError(err.message || 'Đăng nhập bằng ví thất bại. Vui lòng thử lại.');
-            }
-        } finally {
-            setWalletLoading(false);
         }
     };
 
@@ -379,40 +319,11 @@ const LoginPage = () => {
                             variant="contained"
                             fullWidth
                             disabled={loginLoading}
-                            sx={{ height: 44, mb: 2.5, borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+                            sx={{ height: 44, mb: 3, borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
                         >
                             {loginLoading ? <CircularProgress size={20} sx={{ color: 'primary.contrastText' }} /> : 'Đăng nhập'}
                         </Button>
                     </Box>
-
-                    {/* Divider */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                        <Divider sx={{ flex: 1 }} />
-                        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-                            hoặc đăng nhập bằng
-                        </Typography>
-                        <Divider sx={{ flex: 1 }} />
-                    </Box>
-
-                    {/* MetaMask */}
-                    <Button
-                        id="login-wallet-btn"
-                        variant="outlined"
-                        fullWidth
-                        onClick={handleWalletLogin}
-                        disabled={walletLoading}
-                        startIcon={walletLoading ? <CircularProgress size={16} color="inherit" /> : <MetaMaskIcon />}
-                        sx={{
-                            height: 44, borderRadius: '8px', textTransform: 'none',
-                            fontWeight: 600, borderWidth: '1.5px', mb: 1,
-                        }}
-                    >
-                        {walletLoading ? 'Đang kết nối ví...' : 'Kết nối ví MetaMask'}
-                    </Button>
-
-                    <Typography variant="caption" color="text.disabled" display="block" textAlign="center" mb={3}>
-                        🔗 Yêu cầu mạng Ethereum Sepolia Testnet
-                    </Typography>
 
                     {/* Register link */}
                     <Typography variant="body2" align="center" color="text.secondary">
