@@ -262,79 +262,19 @@ const EventsPage = () => {
                         </Typography>
                     </Breadcrumbs>
 
-                    {/* HERO HEADER SECTION (CHUYÊN BIỆT CHO TRANG KHÁM PHÁ SỰ KIỆN) */}
-                    <Box
+                    {/* TIÊU ĐỀ TRANG */}
+                    <Typography
+                        variant="h1"
+                        color="text.primary"
+                        fontWeight={800}
                         sx={{
-                            p: { xs: 3, md: 4.5 },
-                            borderRadius: '16px',
-                            bgcolor: 'background.paper',
-                            border: 1,
-                            borderColor: 'divider',
-                            mb: 4,
-                            position: 'relative',
-                            overflow: 'hidden',
+                            fontSize: { xs: '1.65rem', sm: '2.1rem' },
+                            lineHeight: 1.25,
+                            mb: 3,
                         }}
                     >
-                        {/* Decorative Radial Background Accent */}
-                        <Box
-                            sx={{
-                                position: 'absolute',
-                                top: -80,
-                                right: -80,
-                                width: 280,
-                                height: 280,
-                                borderRadius: '50%',
-                                background: 'radial-gradient(circle, rgba(37,99,235,0.12) 0%, transparent 70%)',
-                                pointerEvents: 'none',
-                            }}
-                        />
-
-                        <Grid container spacing={3} alignItems="center">
-                            <Grid item xs={12} md={8}>
-                                <Stack direction="row" spacing={1} alignItems="center" mb={1.5} flexWrap="wrap" useFlexGap>
-                                    <Chip
-                                        icon={<EventNote sx={{ fontSize: '1rem !important' }} />}
-                                        label="KHÁM PHÁ SỰ KIỆN • VÉ NFT CHÍNH HÃNG"
-                                        size="small"
-                                        color="primary"
-                                        sx={{ fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.04em' }}
-                                    />
-                                    <Chip
-                                        icon={<VerifiedUser sx={{ fontSize: '1rem !important' }} />}
-                                        label="ETHEREUM SEPOLIA BLOCKCHAIN"
-                                        size="small"
-                                        sx={{
-                                            fontWeight: 700,
-                                            fontSize: '0.75rem',
-                                            bgcolor: 'action.selected',
-                                            color: 'primary.main',
-                                        }}
-                                    />
-                                </Stack>
-
-                                <Typography
-                                    variant="h1"
-                                    color="text.primary"
-                                    fontWeight={800}
-                                    sx={{
-                                        fontSize: { xs: '1.75rem', sm: '2.3rem' },
-                                        lineHeight: 1.25,
-                                        mb: 1.5,
-                                    }}
-                                >
-                                    Tất Cả Sự Kiện Đang Mở Bán
-                                </Typography>
-
-                                <Typography
-                                    variant="body1"
-                                    color="text.secondary"
-                                    sx={{ maxWidth: 720, lineHeight: 1.65, mb: 2 }}
-                                >
-                                    Khám phá và sở hữu vé sự kiện NFT độc bản, bất biến trên Blockchain với trần giá bán lại 120% chống phe vé và mã QR soát vé HMAC động siêu bảo mật.
-                                </Typography>
-                            </Grid>
-                        </Grid>
-                    </Box>
+                        Tất Cả Sự Kiện Đang Mở Bán
+                    </Typography>
 
                     {/* SEARCH & FILTERS CONTROL BAR */}
                     <Card

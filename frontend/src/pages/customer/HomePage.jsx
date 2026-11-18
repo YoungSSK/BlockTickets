@@ -10,137 +10,236 @@ import {
     Button,
     IconButton,
     Chip,
-    TextField,
     Stack,
-    Divider,
-    InputAdornment,
-    MenuItem,
-    Select,
-    FormControl,
-    Tabs,
-    Tab,
-    Tooltip,
+    Skeleton,
     Alert,
     Snackbar,
 } from '@mui/material';
 import {
-    ConfirmationNumber,
-    Search,
-    LocationOn,
-    Schedule,
-    Security,
-    VerifiedUser,
-    QrCode2,
-    SwapHoriz,
-    ArrowForward,
-    CheckCircle,
-    TrendingUp,
-    ElectricBolt,
-    AccountBalanceWallet,
-    EventNote,
-    PeopleAlt,
-    Star,
-    FilterList,
-    FiberManualRecord,
-} from '@mui/icons-material';
+    MapPin,
+    Calendar,
+    ArrowRight,
+    ChevronLeft,
+    ChevronRight,
+    Sparkles,
+    Ticket,
+} from 'lucide-react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { eventAPI } from '../../services/api';
 
-// 4 Trụ cột giá trị cốt lõi của BlockTickets
-const VALUE_PROPOSITIONS = [
+const CATEGORY_SECTIONS = [
     {
-        icon: VerifiedUser,
-        title: 'Vé NFT Độc Bản ERC-721',
-        description: 'Mỗi vé phát hành là một token NFT duy nhất trên mạng Ethereum Sepolia. Tuyệt đối không thể làm giả hoặc sao chép lậu.',
-        color: '#2563EB',
+        key: 'music',
+        title: 'Sự kiện Âm nhạc',
+        label: 'Âm nhạc',
     },
     {
-        icon: SwapHoriz,
-        title: 'Trần Giá Chuyển Nhượng 120%',
-        description: 'Quy tắc BR-02 được Smart Contract kiểm tra bất biến. Ngăn chặn triệt để nạn đầu cơ và phe vé chợ đen đẩy giá cắt cổ.',
-        color: '#10B981',
+        key: 'sports',
+        title: 'Sự kiện Thể thao',
+        label: 'Thể thao',
     },
     {
-        icon: QrCode2,
-        title: 'Soát Vé QR Động HMAC',
-        description: 'Mã QR soát vé tại cổng thay đổi chữ ký số liên tục mỗi 30 giây, loại bỏ hoàn toàn hành vi chụp màn hình vé gửi cho nhiều người.',
-        color: '#8B5CF6',
+        key: 'technology',
+        title: 'Sự kiện Công nghệ',
+        label: 'Công nghệ',
     },
     {
-        icon: ElectricBolt,
-        title: 'Thanh Toán Minh Bạch On-Chain',
-        description: 'Thanh toán ETH an toàn qua ví MetaMask, nhận vé trực tiếp về ví cá nhân và đối soát doanh thu thời gian thực minh bạch.',
-        color: '#F59E0B',
+        key: 'workshop',
+        title: 'Hội thảo & Workshop',
+        label: 'Hội thảo',
     },
 ];
+
+const CATEGORY_MAP = CATEGORY_SECTIONS.reduce((acc, item) => {
+    acc[item.key] = item;
+    return acc;
+}, {});
 
 const normalizeHomeEvent = (evt) => {
     const ticketTypes = Array.isArray(evt.ticketTypes) ? evt.ticketTypes : [];
     const prices = ticketTypes.map((t) => Number(t.originalPrice || 0)).filter((p) => p > 0);
-    const minPrice = prices.length > 0 ? Math.min(...prices) : 0.05;
-    const maxPrice = prices.length > 0 ? Math.max(...prices) : 0.25;
-    const maxSupply = ticketTypes.reduce((s, t) => s + Number(t.maxSupply || 0), 0) || 1000;
+    const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+    const maxSupply = ticketTypes.reduce((s, t) => s + Number(t.maxSupply || 0), 0);
     const minted = ticketTypes.reduce((s, t) => s + Number(t.currentSupply || t.mintedAmount || 0), 0);
     const remainingTickets = Math.max(0, maxSupply - minted);
+    const catMeta = CATEGORY_MAP[evt.category] || { label: 'Sự kiện' };
+
+    const isPublishedOnChain = evt.status === 'published' && Boolean(evt.onChainEventId);
+    const isSoldOut = maxSupply > 0 && remainingTickets === 0;
+    const now = Date.now();
+    const endMs = evt.endTime ? new Date(evt.endTime).getTime() : NaN;
+    const isEnded = Number.isFinite(endMs) && now > endMs;
+
+    let badgeText = 'Đang mở bán';
+    let badgeBg = 'rgba(16, 185, 129, 0.9)';
+    if (isEnded) {
+        badgeText = 'Đã kết thúc';
+        badgeBg = 'rgba(100, 116, 139, 0.9)';
+    } else if (!isPublishedOnChain) {
+        badgeText = 'Sắp mở bán';
+        badgeBg = 'rgba(245, 158, 11, 0.92)';
+    } else if (isSoldOut) {
+        badgeText = 'Hết vé';
+        badgeBg = 'rgba(220, 38, 38, 0.92)';
+    }
 
     return {
         ...evt,
         id: evt.id,
         title: evt.title,
         category: evt.category || 'music',
-        categoryLabel:
-            evt.category === 'technology' ? 'Công nghệ & Web3' :
-            evt.category === 'sports' ? 'Thể thao' :
-            evt.category === 'workshop' ? 'Hội thảo & Khởi nghiệp' : 'Âm nhạc',
-        bannerUrl: evt.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+        categoryLabel: catMeta.label,
+        bannerUrl:
+            evt.bannerUrl ||
+            'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&auto=format&fit=crop&q=80',
         venue: evt.venueName || evt.venue || 'Việt Nam',
-        city: evt.venueCity || evt.city || 'Hà Nội',
-        startTime: evt.startTime ? new Date(evt.startTime).toLocaleDateString('vi-VN') : '',
+        city: evt.venueCity || evt.city || '',
+        dateText: evt.startTime ? new Date(evt.startTime).toLocaleDateString('vi-VN') : '',
+        dateTimeText: evt.startTime
+            ? new Date(evt.startTime).toLocaleString('vi-VN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+              })
+            : '',
+        createdAtMs: evt.createdAt ? new Date(evt.createdAt).getTime() : Number(evt.id || 0),
         minPrice,
-        maxPrice,
         remainingTickets,
         maxSupply,
-        organizer: evt.organizer?.fullName || evt.organizer?.name || 'BlockTickets Partner',
-        featured: Boolean(evt.featured ?? true),
+        badgeText,
+        badgeBg,
     };
 };
 
-const HomePage = () => {
+const EventProductCard = ({ event }) => {
     const navigate = useNavigate();
 
-    // State danh sách sự kiện & bộ lọc
+    return (
+        <Card
+            onClick={() => navigate(`/events/${event.id}`)}
+            sx={{
+                bgcolor: 'background.paper',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: '14px',
+                overflow: 'hidden',
+                border: 1,
+                borderColor: 'divider',
+                cursor: 'pointer',
+                transition: 'transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease',
+                '&:hover': {
+                    transform: 'translateY(-4px)',
+                    borderColor: 'primary.main',
+                    boxShadow: '0 14px 28px -8px rgba(0, 0, 0, 0.22)',
+                    '& .event-card-img': {
+                        transform: 'scale(1.05)',
+                    },
+                },
+            }}
+        >
+            <Box sx={{ position: 'relative', overflow: 'hidden', aspectRatio: '16 / 9', bgcolor: 'background.subtle' }}>
+                <CardMedia
+                    component="img"
+                    image={event.bannerUrl}
+                    alt={event.title}
+                    className="event-card-img"
+                    sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        transition: 'transform 0.35s ease',
+                    }}
+                />
+                <Chip
+                    label={event.badgeText}
+                    size="small"
+                    sx={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 10,
+                        bgcolor: event.badgeBg,
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        fontSize: '0.7rem',
+                        height: 24,
+                    }}
+                />
+            </Box>
+
+            <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography
+                    variant="subtitle1"
+                    color="text.primary"
+                    fontWeight={700}
+                    sx={{
+                        lineHeight: 1.35,
+                        minHeight: '2.7em',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                    }}
+                >
+                    {event.title}
+                </Typography>
+
+                <Typography variant="subtitle1" color="primary.main" fontWeight={800}>
+                    {event.minPrice > 0 ? `Từ ${event.minPrice} ETH` : 'Đang cập nhật'}
+                </Typography>
+
+                <Stack spacing={0.5} sx={{ mt: 'auto', pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                    {event.dateText && (
+                        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: 'text.secondary' }}>
+                            <Calendar size={14} style={{ flexShrink: 0 }} />
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                                {event.dateText}
+                            </Typography>
+                        </Stack>
+                    )}
+                    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: 'text.secondary' }}>
+                        <MapPin size={14} style={{ flexShrink: 0 }} />
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                            {event.city ? `${event.venue}, ${event.city}` : event.venue}
+                        </Typography>
+                    </Stack>
+                </Stack>
+            </CardContent>
+        </Card>
+    );
+};
+
+const HomePage = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCity, setSelectedCity] = useState('all');
-    const [selectedCategoryTab, setSelectedCategoryTab] = useState('all');
+    const [heroIndex, setHeroIndex] = useState(0);
+    const [isHeroPaused, setIsHeroPaused] = useState(false);
 
-    // Snackbar state
     const [snackbar, setSnackbar] = useState({
         open: false,
         message: '',
         severity: 'success',
     });
 
-    const showSnackbar = (message, severity = 'success') => {
-        setSnackbar({ open: true, message, severity });
-    };
-
     const handleCloseSnackbar = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
 
-    // Tải danh sách sự kiện đã duyệt/công khai từ Backend
     useEffect(() => {
         const fetchEvents = async () => {
             setLoading(true);
             try {
-                const res = await eventAPI.getEvents({ limit: 50 });
+                const res = await eventAPI.getEvents({ limit: 60, sort: 'newest' });
                 const backendEvents = res.data?.data?.events;
                 if (Array.isArray(backendEvents)) {
-                    setEvents(backendEvents.map(normalizeHomeEvent));
+                    const normalized = backendEvents
+                        .map(normalizeHomeEvent)
+                        .sort((a, b) => b.createdAtMs - a.createdAtMs);
+                    setEvents(normalized);
                 } else {
                     setEvents([]);
                 }
@@ -154,635 +253,394 @@ const HomePage = () => {
         fetchEvents();
     }, []);
 
-    // Chuyển hướng sang trang Khám phá sự kiện kèm tham số tìm kiếm
-    const handleSearchSubmit = () => {
-        const params = new URLSearchParams();
-        if (searchQuery.trim()) params.set('search', searchQuery.trim());
-        if (selectedCity && selectedCity !== 'all') params.set('city', selectedCity);
-        navigate(`/events?${params.toString()}`);
-    };
+    // Danh sách banner nổi bật lấy từ các sự kiện mới nhất (ưu tiên sự kiện mới nhất ở vị trí đầu tiên)
+    const heroEvents = useMemo(() => events.slice(0, 5), [events]);
 
-    // Cuộn tới danh sách sự kiện
-    const handleScrollToEvents = () => {
-        const section = document.getElementById('events-section');
-        if (section) {
-            section.scrollIntoView({ behavior: 'smooth' });
+    useEffect(() => {
+        if (heroIndex >= heroEvents.length) {
+            setHeroIndex(0);
         }
-    };
+    }, [heroEvents.length, heroIndex]);
 
-    // Lọc danh sách sự kiện theo từ khóa, thành phố và danh mục
-    const filteredEvents = useMemo(() => {
-        return events.filter((evt) => {
-            // Danh mục
-            if (selectedCategoryTab !== 'all' && evt.category !== selectedCategoryTab) return false;
-            // Thành phố
-            if (selectedCity !== 'all' && evt.city !== selectedCity) return false;
-            // Từ khóa tìm kiếm
-            if (searchQuery.trim()) {
-                const q = searchQuery.toLowerCase();
-                const matchTitle = (evt.title || '').toLowerCase().includes(q);
-                const matchVenue = (evt.venue || '').toLowerCase().includes(q);
-                const matchOrg = (evt.organizer || '').toLowerCase().includes(q);
-                if (!matchTitle && !matchVenue && !matchOrg) return false;
-            }
-            return true;
-        });
-    }, [events, selectedCategoryTab, selectedCity, searchQuery]);
+    useEffect(() => {
+        if (heroEvents.length <= 1 || isHeroPaused) return undefined;
+        const timer = setInterval(() => {
+            setHeroIndex((prev) => (prev + 1) % heroEvents.length);
+        }, 6000);
+        return () => clearInterval(timer);
+    }, [heroEvents.length, isHeroPaused]);
+
+    // Sự kiện mới tạo (tối đa 8 sự kiện mới nhất)
+    const newestEvents = useMemo(() => events.slice(0, 8), [events]);
+
+    // Chỉ giữ các đề mục thể loại có ít nhất 1 sự kiện
+    const activeCategorySections = useMemo(() => {
+        return CATEGORY_SECTIONS.map((section) => ({
+            ...section,
+            items: events.filter((evt) => evt.category === section.key).slice(0, 8),
+        })).filter((section) => section.items.length > 0);
+    }, [events]);
+
+    const activeHero = heroEvents[heroIndex] || null;
 
     return (
         <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-            {/* ═══════════════════════════════════════════════════════════════════
-                1. NAVBAR
-            ═══════════════════════════════════════════════════════════════════ */}
             <Navbar />
 
-            {/* ═══════════════════════════════════════════════════════════════════
-                2. HERO SECTION
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Box
-                sx={{
-                    bgcolor: 'background.paper',
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                    pt: { xs: 6, md: 9 },
-                    pb: { xs: 8, md: 10 },
-                    position: 'relative',
-                    overflow: 'hidden',
-                }}
-            >
-                {/* Vòng tròn trang trí nhẹ */}
+            <Container maxWidth="xl" sx={{ pt: { xs: 2.5, md: 3.5 }, pb: 8, flex: 1 }}>
+                {/* ═══════════════════════════════════════════════════════════════════
+                    1. BANNER SỰ KIỆN MỚI NHẤT (E-COMMERCE HERO BANNER)
+                ═══════════════════════════════════════════════════════════════════ */}
                 <Box
-                    sx={{
-                        position: 'absolute',
-                        top: -120,
-                        right: -120,
-                        width: 480,
-                        height: 480,
-                        borderRadius: '50%',
-                        background: 'radial-gradient(circle, rgba(37,99,235,0.08) 0%, rgba(37,99,235,0) 70%)',
-                        pointerEvents: 'none',
-                    }}
-                />
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        bottom: -80,
-                        left: -80,
-                        width: 360,
-                        height: 360,
-                        borderRadius: '50%',
-                        background: 'radial-gradient(circle, rgba(99,102,241,0.07) 0%, rgba(99,102,241,0) 70%)',
-                        pointerEvents: 'none',
-                    }}
-                />
-
-                <Container maxWidth="xl" sx={{ position: 'relative', zIndex: 1 }}>
-                    <Box sx={{ maxWidth: 860, mx: 'auto', textAlign: 'center' }}>
-                        {/* Huy hiệu Sepolia */}
-                        <Chip
-                            icon={<ElectricBolt sx={{ fontSize: '14px !important', color: 'primary.main' }} />}
-                            label="Nền Tảng Vé Sự Kiện NFT Đầu Tiên Trên Ethereum Sepolia"
-                            size="small"
+                    onMouseEnter={() => setIsHeroPaused(true)}
+                    onMouseLeave={() => setIsHeroPaused(false)}
+                    sx={{ mb: 3.5 }}
+                >
+                    {loading ? (
+                        <Skeleton
+                            variant="rectangular"
                             sx={{
-                                bgcolor: 'action.selected',
-                                color: 'primary.main',
-                                fontWeight: 700,
-                                fontSize: '0.78rem',
-                                height: 28,
-                                px: 1,
-                                mb: 2.5,
+                                width: '100%',
+                                height: { xs: 300, sm: 380, md: 440 },
+                                borderRadius: '18px',
                             }}
                         />
-
-                        {/* Tiêu đề chính */}
-                        <Typography
-                            variant="h1"
-                            color="text.primary"
-                            fontWeight={800}
+                    ) : activeHero ? (
+                        <Box
                             sx={{
-                                fontSize: { xs: '2.0rem', sm: '2.8rem', md: '3.4rem' },
-                                lineHeight: 1.18,
-                                letterSpacing: '-0.02em',
-                                mb: 2,
+                                position: 'relative',
+                                width: '100%',
+                                height: { xs: 320, sm: 390, md: 450 },
+                                borderRadius: '18px',
+                                overflow: 'hidden',
+                                border: 1,
+                                borderColor: 'divider',
+                                boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.35)',
                             }}
                         >
-                            Vé Sự Kiện Minh Bạch<br />
-                            <Box component="span" sx={{ color: 'primary.main' }}>
-                                Không Thể Làm Giả
-                            </Box>{' '}
-                            Với Blockchain
-                        </Typography>
-
-                        {/* Phụ đề */}
-                        <Typography
-                            variant="body1"
-                            color="text.secondary"
-                            sx={{
-                                fontSize: { xs: '1.0rem', md: '1.15rem' },
-                                lineHeight: 1.7,
-                                maxWidth: 680,
-                                mx: 'auto',
-                                mb: 4,
-                            }}
-                        >
-                            Đúc vé NFT bất biến vào ví MetaMask, kiểm soát trần giá bán lại 120% chống phe vé, và soát vé tốc độ cao tại cổng với mã QR HMAC động.
-                        </Typography>
-
-                        {/* 2 Nút hành động Hero */}
-                        <Stack
-                            direction={{ xs: 'column', sm: 'row' }}
-                            spacing={2}
-                            justifyContent="center"
-                            alignItems="center"
-                            mb={6}
-                        >
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                size="large"
-                                component={RouterLink}
-                                to="/events"
-                                endIcon={<ArrowForward />}
+                            {/* Ảnh nền Banner */}
+                            <Box
+                                component="img"
+                                src={activeHero.bannerUrl}
+                                alt={activeHero.title}
                                 sx={{
-                                    height: 50,
-                                    px: 4,
-                                    fontSize: '1rem',
-                                    fontWeight: 700,
-                                    borderRadius: '8px',
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    display: 'block',
+                                }}
+                            />
+
+                            {/* Lớp phủ gradient giúp chữ luôn nổi bật trên mọi ảnh */}
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    background:
+                                        'linear-gradient(90deg, rgba(11,15,25,0.92) 0%, rgba(11,15,25,0.72) 48%, rgba(11,15,25,0.22) 100%), linear-gradient(0deg, rgba(11,15,25,0.85) 0%, rgba(11,15,25,0) 55%)',
+                                }}
+                            />
+
+                            {/* Nội dung sự kiện trên Banner */}
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'flex-end',
+                                    p: { xs: 2.5, sm: 4, md: 5 },
+                                    maxWidth: { xs: '100%', md: '68%' },
                                 }}
                             >
-                                Khám Phá Sự Kiện Ngay
-                            </Button>
-                            {events.length > 0 && (
-                                <Button
-                                    variant="outlined"
-                                    color="primary"
-                                    size="large"
-                                    component={RouterLink}
-                                    to={`/events/${events[0].id}`}
+                                <Stack direction="row" spacing={1} alignItems="center" mb={1.5} flexWrap="wrap" useFlexGap>
+                                    {heroIndex === 0 && (
+                                        <Chip
+                                            icon={<Sparkles size={14} style={{ color: '#fff', marginLeft: 6 }} />}
+                                            label="Sự kiện mới nhất"
+                                            size="small"
+                                            sx={{
+                                                bgcolor: 'primary.main',
+                                                color: '#ffffff',
+                                                fontWeight: 700,
+                                                fontSize: '0.75rem',
+                                            }}
+                                        />
+                                    )}
+                                    <Chip
+                                        label={activeHero.categoryLabel}
+                                        size="small"
+                                        sx={{
+                                            bgcolor: 'rgba(255,255,255,0.16)',
+                                            color: '#ffffff',
+                                            backdropFilter: 'blur(6px)',
+                                            fontWeight: 600,
+                                            fontSize: '0.75rem',
+                                        }}
+                                    />
+                                    <Chip
+                                        label={activeHero.badgeText}
+                                        size="small"
+                                        sx={{
+                                            bgcolor: activeHero.badgeBg,
+                                            color: '#ffffff',
+                                            fontWeight: 700,
+                                            fontSize: '0.75rem',
+                                        }}
+                                    />
+                                </Stack>
+
+                                <Typography
+                                    variant="h1"
                                     sx={{
-                                        height: 50,
-                                        px: 3.5,
-                                        fontSize: '1rem',
-                                        fontWeight: 600,
-                                        borderRadius: '8px',
+                                        color: '#ffffff',
+                                        fontWeight: 800,
+                                        fontSize: { xs: '1.5rem', sm: '2.1rem', md: '2.65rem' },
+                                        lineHeight: 1.18,
+                                        mb: 1.5,
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
                                     }}
                                 >
-                                    Xem Sự Kiện ({events[0].title})
-                                </Button>
-                            )}
-                        </Stack>
+                                    {activeHero.title}
+                                </Typography>
 
-                        {/* Thanh tìm kiếm nổi (Floating Search Bar) */}
+                                <Stack
+                                    direction={{ xs: 'column', sm: 'row' }}
+                                    spacing={{ xs: 0.75, sm: 2.5 }}
+                                    sx={{ color: 'rgba(255,255,255,0.88)', mb: 2.5 }}
+                                >
+                                    {activeHero.dateTimeText && (
+                                        <Stack direction="row" spacing={0.75} alignItems="center">
+                                            <Calendar size={16} />
+                                            <Typography variant="body2" fontWeight={500} color="inherit">
+                                                {activeHero.dateTimeText}
+                                            </Typography>
+                                        </Stack>
+                                    )}
+                                    <Stack direction="row" spacing={0.75} alignItems="center">
+                                        <MapPin size={16} />
+                                        <Typography variant="body2" fontWeight={500} color="inherit" noWrap>
+                                            {activeHero.city ? `${activeHero.venue}, ${activeHero.city}` : activeHero.venue}
+                                        </Typography>
+                                    </Stack>
+                                </Stack>
+
+                                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        size="large"
+                                        component={RouterLink}
+                                        to={`/events/${activeHero.id}`}
+                                        endIcon={<ArrowRight size={18} />}
+                                        sx={{
+                                            height: 46,
+                                            px: 3.5,
+                                            borderRadius: '10px',
+                                            fontWeight: 700,
+                                            fontSize: '0.95rem',
+                                        }}
+                                    >
+                                        Mua vé ngay
+                                    </Button>
+
+                                    {activeHero.minPrice > 0 && (
+                                        <Typography
+                                            variant="h3"
+                                            sx={{
+                                                color: '#60A5FA',
+                                                fontWeight: 800,
+                                                fontSize: { xs: '1.1rem', sm: '1.3rem' },
+                                            }}
+                                        >
+                                            Từ {activeHero.minPrice} ETH
+                                        </Typography>
+                                    )}
+                                </Stack>
+                            </Box>
+
+                            {/* Nút chuyển Banner nếu có nhiều sự kiện */}
+                            {heroEvents.length > 1 && (
+                                <>
+                                    <IconButton
+                                        aria-label="Sự kiện trước"
+                                        onClick={() =>
+                                            setHeroIndex((prev) => (prev - 1 + heroEvents.length) % heroEvents.length)
+                                        }
+                                        sx={{
+                                            position: 'absolute',
+                                            left: 14,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            bgcolor: 'rgba(0,0,0,0.45)',
+                                            color: '#fff',
+                                            '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+                                            display: { xs: 'none', sm: 'inline-flex' },
+                                        }}
+                                    >
+                                        <ChevronLeft size={22} />
+                                    </IconButton>
+                                    <IconButton
+                                        aria-label="Sự kiện tiếp theo"
+                                        onClick={() => setHeroIndex((prev) => (prev + 1) % heroEvents.length)}
+                                        sx={{
+                                            position: 'absolute',
+                                            right: 14,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            bgcolor: 'rgba(0,0,0,0.45)',
+                                            color: '#fff',
+                                            '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+                                            display: { xs: 'none', sm: 'inline-flex' },
+                                        }}
+                                    >
+                                        <ChevronRight size={22} />
+                                    </IconButton>
+
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        sx={{
+                                            position: 'absolute',
+                                            bottom: 18,
+                                            right: 24,
+                                        }}
+                                    >
+                                        {heroEvents.map((ev, idx) => (
+                                            <Box
+                                                key={ev.id}
+                                                onClick={() => setHeroIndex(idx)}
+                                                sx={{
+                                                    width: idx === heroIndex ? 26 : 9,
+                                                    height: 9,
+                                                    borderRadius: 5,
+                                                    bgcolor: idx === heroIndex ? 'primary.main' : 'rgba(255,255,255,0.45)',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.25s ease',
+                                                }}
+                                            />
+                                        ))}
+                                    </Stack>
+                                </>
+                            )}
+                        </Box>
+                    ) : (
                         <Card
                             sx={{
                                 bgcolor: 'background.paper',
-                                p: 1.5,
-                                borderRadius: '12px',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+                                py: 8,
+                                textAlign: 'center',
+                                borderRadius: '16px',
                                 border: 1,
                                 borderColor: 'divider',
                             }}
                         >
-                            <Grid container spacing={1.5} alignItems="center">
-                                <Grid item xs={12} md={6}>
-                                    <TextField
-                                        fullWidth
-                                        size="small"
-                                        placeholder="Tìm tên sự kiện, nghệ sĩ, diễn giả..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <Search sx={{ color: 'text.disabled' }} />
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                        sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'background.default' } }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={3}>
-                                    <FormControl fullWidth size="small">
-                                        <Select
-                                            value={selectedCity}
-                                            onChange={(e) => setSelectedCity(e.target.value)}
-                                            displayEmpty
-                                            sx={{ bgcolor: 'background.default' }}
-                                        >
-                                            <MenuItem value="all">Tất cả địa điểm</MenuItem>
-                                            <MenuItem value="Hà Nội">Hà Nội</MenuItem>
-                                            <MenuItem value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</MenuItem>
-                                            <MenuItem value="Quảng Ninh">Quảng Ninh</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={3}>
-                                    <Button
-                                        fullWidth
-                                        variant="contained"
-                                        color="primary"
-                                        onClick={handleSearchSubmit}
-                                        sx={{ height: 40, fontWeight: 700, borderRadius: '8px' }}
-                                    >
-                                        Tìm Kiếm Vé
-                                    </Button>
-                                </Grid>
-                            </Grid>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', color: 'text.disabled', mb: 1.5 }}>
+                                <Ticket size={48} />
+                            </Box>
+                            <Typography variant="h3" color="text.primary" fontWeight={700}>
+                                Hiện chưa có sự kiện nào đang mở bán
+                            </Typography>
                         </Card>
-                    </Box>
-                </Container>
-            </Box>
-
-            {/* ═══════════════════════════════════════════════════════════════════
-                3. SECTION: 4 TRỤ CỘT GIÁ TRỊ CỐT LÕI (VALUE PROPOSITIONS)
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Container maxWidth="xl" sx={{ py: 8 }}>
-                <Box textAlign="center" mb={5}>
-                    <Typography variant="caption" color="primary.main" fontWeight={700} letterSpacing="0.08em">
-                        TẠI SAO CHỌN BLOCKTICKETS?
-                    </Typography>
-                    <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                        Giải Pháp Toàn Diện Cho Vé Sự Kiện Kỷ Nguyên Web3
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" mt={1}>
-                        Xóa bỏ hoàn toàn vé giả mạo, nạn phe vé chợ đen và quy trình soát vé thủ công dễ sai sót.
-                    </Typography>
+                    )}
                 </Box>
 
-                <Grid container spacing={3}>
-                    {VALUE_PROPOSITIONS.map((item, index) => {
-                        const IconComponent = item.icon;
-                        return (
-                            <Grid item xs={12} sm={6} lg={3} key={index}>
-                                <Card sx={{ bgcolor: 'background.paper', height: '100%', p: 1 }}>
-                                    <CardContent sx={{ p: 3 }}>
-                                        <Box
-                                            sx={{
-                                                width: 48,
-                                                height: 48,
-                                                borderRadius: '10px',
-                                                bgcolor: 'action.selected',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: 'primary.main',
-                                                mb: 2,
-                                            }}
-                                        >
-                                            <IconComponent sx={{ fontSize: 26 }} />
-                                        </Box>
-                                        <Typography variant="h3" color="text.primary" fontWeight={600} gutterBottom>
-                                            {item.title}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                                            {item.description}
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
+                {/* ═══════════════════════════════════════════════════════════════════
+                    2. ĐỀ MỤC: SỰ KIỆN MỚI TẠO
+                ═══════════════════════════════════════════════════════════════════ */}
+                {loading ? (
+                    <Grid container spacing={2.5} mb={6}>
+                        {[1, 2, 3, 4].map((i) => (
+                            <Grid item xs={12} sm={6} md={4} lg={3} key={i}>
+                                <Skeleton variant="rectangular" height={260} sx={{ borderRadius: '14px' }} />
                             </Grid>
-                        );
-                    })}
-                </Grid>
-            </Container>
-
-            {/* ═══════════════════════════════════════════════════════════════════
-                4. SECTION: DANH SÁCH SỰ KIỆN NỔI BẬT (FEATURED EVENTS)
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Box id="events-section" sx={{ bgcolor: 'background.subtle', py: 8, borderTop: 1, borderColor: 'divider' }}>
-                <Container maxWidth="xl">
-                    <Stack
-                        direction={{ xs: 'column', md: 'row' }}
-                        justifyContent="space-between"
-                        alignItems={{ xs: 'flex-start', md: 'center' }}
-                        spacing={2}
-                        mb={4}
-                    >
-                        <Box>
-                            <Typography variant="caption" color="primary.main" fontWeight={700} letterSpacing="0.08em">
-                                KHÁM PHÁ SỰ KIỆN
-                            </Typography>
-                            <Typography variant="h2" color="text.primary" fontWeight={700} mt={0.5}>
-                                Sự Kiện Nổi Bật Đang Mở Bán
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Vé NFT chính thức được phát hành trực tiếp bởi các Nhà tổ chức uy tín
-                            </Typography>
-                        </Box>
-
-                        {/* Tabs danh mục sự kiện */}
-                        <Tabs
-                            value={selectedCategoryTab}
-                            onChange={(e, val) => setSelectedCategoryTab(val)}
-                            textColor="primary"
-                            indicatorColor="primary"
-                            variant="scrollable"
-                            scrollButtons="auto"
-                            sx={{ minHeight: 40 }}
-                        >
-                            <Tab value="all" label="Tất cả" sx={{ minHeight: 40, py: 1 }} />
-                            <Tab value="technology" label="Công nghệ & Web3" sx={{ minHeight: 40, py: 1 }} />
-                            <Tab value="music" label="Âm nhạc" sx={{ minHeight: 40, py: 1 }} />
-                            <Tab value="sports" label="Thể thao" sx={{ minHeight: 40, py: 1 }} />
-                            <Tab value="workshop" label="Hội thảo" sx={{ minHeight: 40, py: 1 }} />
-                        </Tabs>
-                    </Stack>
-
-                    {/* Lưới Thẻ Sự Kiện (Grid of Event Cards) */}
-                    {filteredEvents.length === 0 ? (
-                        <Card sx={{ bgcolor: 'background.paper', py: 8, textAlign: 'center' }}>
-                            <Typography variant="h3" color="text.primary">
-                                Không tìm thấy sự kiện phù hợp
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" mt={1}>
-                                Hãy thử xóa từ khóa tìm kiếm hoặc chọn tất cả địa điểm để xem toàn bộ sự kiện.
-                            </Typography>
-                            <Button
-                                variant="outlined"
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setSelectedCity('all');
-                                    setSelectedCategoryTab('all');
-                                }}
-                                sx={{ mt: 3 }}
+                        ))}
+                    </Grid>
+                ) : (
+                    newestEvents.length > 0 && (
+                        <Box id="section-newest" sx={{ mb: 6, scrollMarginTop: '90px' }}>
+                            <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                mb={2.5}
                             >
-                                Đặt lại bộ lọc
-                            </Button>
-                        </Card>
-                    ) : (
-                        <Grid container spacing={3}>
-                            {filteredEvents.map((event) => (
-                                <Grid item xs={12} sm={6} lg={4} key={event.id}>
-                                    <Card
-                                        sx={{
-                                            bgcolor: 'background.paper',
-                                            height: '100%',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            transition: 'transform 0.2s, box-shadow 0.2s',
-                                            '&:hover': {
-                                                transform: 'translateY(-4px)',
-                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                                            },
-                                        }}
-                                    >
-                                        {/* Poster sự kiện tỷ lệ 16:9 */}
-                                        <Box sx={{ position: 'relative' }}>
-                                            <CardMedia
-                                                component="img"
-                                                height="200"
-                                                image={event.bannerUrl}
-                                                alt={event.title}
-                                                sx={{ objectFit: 'cover' }}
-                                            />
-                                            <Box
-                                                sx={{
-                                                    position: 'absolute',
-                                                    top: 12,
-                                                    left: 12,
-                                                }}
-                                            >
-                                                <Chip
-                                                    label={event.categoryLabel}
-                                                    size="small"
-                                                    sx={{
-                                                        bgcolor: 'rgba(0, 0, 0, 0.75)',
-                                                        color: '#fff',
-                                                        backdropFilter: 'blur(4px)',
-                                                        fontWeight: 600,
-                                                        fontSize: '0.72rem',
-                                                    }}
-                                                />
-                                            </Box>
-                                            <Box sx={{ position: 'absolute', top: 12, right: 12 }}>
-                                                <Chip
-                                                    icon={<FiberManualRecord sx={{ color: '#10B981', fontSize: 10 }} />}
-                                                    label="Đang mở bán"
-                                                    size="small"
-                                                    sx={{
-                                                        bgcolor: 'rgba(16, 185, 129, 0.15)',
-                                                        color: '#10B981',
-                                                        backdropFilter: 'blur(4px)',
-                                                        fontWeight: 700,
-                                                        border: '1px solid rgba(16, 185, 129, 0.3)',
-                                                    }}
-                                                />
-                                            </Box>
-                                        </Box>
+                                <Typography variant="h2" color="text.primary" fontWeight={800} sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
+                                    Sự kiện mới tạo
+                                </Typography>
 
-                                        {/* Nội dung Card */}
-                                        <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                            <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-                                                <Schedule sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {event.startTime}
-                                                </Typography>
-                                            </Stack>
-
-                                            <Typography
-                                                variant="h3"
-                                                color="text.primary"
-                                                fontWeight={700}
-                                                sx={{
-                                                    mb: 1.5,
-                                                    lineHeight: 1.35,
-                                                    display: '-webkit-box',
-                                                    WebkitLineClamp: 2,
-                                                    WebkitBoxOrient: 'vertical',
-                                                    overflow: 'hidden',
-                                                }}
-                                            >
-                                                {event.title}
-                                            </Typography>
-
-                                            <Stack direction="row" spacing={1} alignItems="flex-start" mb={2}>
-                                                <LocationOn sx={{ fontSize: 16, color: 'text.secondary', mt: 0.2, flexShrink: 0 }} />
-                                                <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 280 }}>
-                                                    {event.venue}
-                                                </Typography>
-                                            </Stack>
-
-                                            <Box sx={{ mt: 'auto', pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                                                <Stack direction="row" justifyContent="space-between" alignItems="flex-end" mb={2}>
-                                                    <Box>
-                                                        <Typography variant="caption" color="text.secondary">GIÁ TỪ</Typography>
-                                                        <Typography variant="h3" color="primary.main" fontWeight={700}>
-                                                            {event.minPrice} ETH
-                                                        </Typography>
-                                                    </Box>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        Còn {event.remainingTickets} vé
-                                                    </Typography>
-                                                </Stack>
-
-                                                <Button
-                                                    fullWidth
-                                                    variant="contained"
-                                                    color="primary"
-                                                    component={RouterLink}
-                                                    to={`/events/${event.id}`}
-                                                    sx={{ borderRadius: '8px', fontWeight: 600 }}
-                                                >
-                                                    Xem Chi Tiết & Mua Vé
-                                                </Button>
-                                            </Box>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            ))}
-                        </Grid>
-                    )}
-
-                    {filteredEvents.length > 0 && (
-                        <Box textAlign="center" mt={5}>
-                            <Button
-                                variant="outlined"
-                                color="primary"
-                                size="large"
-                                component={RouterLink}
-                                to="/events"
-                                endIcon={<ArrowForward />}
-                                sx={{ borderRadius: '8px', fontWeight: 600, px: 4 }}
-                            >
-                                Khám Phá Toàn Bộ Danh Sách Sự Kiện
-                            </Button>
-                        </Box>
-                    )}
-                </Container>
-            </Box>
-
-            {/* ═══════════════════════════════════════════════════════════════════
-                5. SECTION: GIỚI THIỆU CHỢ THỨ CẤP (RESALE MARKETPLACE BANNER)
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Container maxWidth="xl" sx={{ py: 8 }}>
-                <Card
-                    sx={{
-                        bgcolor: 'background.paper',
-                        borderRadius: '16px',
-                        border: 1,
-                        borderColor: 'divider',
-                        p: { xs: 3, md: 5 },
-                    }}
-                >
-                    <Grid container spacing={4} alignItems="center">
-                        <Grid item xs={12} md={7}>
-                            <Chip
-                                icon={<SwapHoriz sx={{ fontSize: '14px !important', color: 'status.success' }} />}
-                                label="CHỢ VÉ THỨ CẤP MINH BẠCH (MARKETPLACE)"
-                                size="small"
-                                sx={{ bgcolor: 'status.successBg', color: 'status.success', fontWeight: 700, mb: 2 }}
-                            />
-                            <Typography variant="h2" color="text.primary" fontWeight={800} gutterBottom>
-                                Bỏ Lỡ Đợt Mở Bán Ban Đầu? Mua Lại Vé An Toàn Với Trần Giá 120%
-                            </Typography>
-                            <Typography variant="body1" color="text.secondary" paragraph sx={{ lineHeight: 1.7 }}>
-                                Tại BlockTickets, người sở hữu vé được quyền chuyển nhượng lại vé NFT cho người khác khi không thể tham dự.
-                                Smart Contract <code>TicketMarketplace.sol</code> đảm bảo giá bán lại <strong>tuyệt đối không vượt quá 120% giá gốc</strong>.
-                            </Typography>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mt={3}>
                                 <Button
-                                    variant="contained"
-                                    color="primary"
                                     component={RouterLink}
-                                    to="/marketplace"
-                                    sx={{ height: 44, borderRadius: '8px', fontWeight: 600 }}
+                                    to="/events"
+                                    endIcon={<ArrowRight size={17} />}
+                                    sx={{ fontWeight: 700, textTransform: 'none' }}
                                 >
-                                    Khám Phá Vé Đang Rao Bán
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    color="primary"
-                                    onClick={() => showSnackbar('Hợp đồng Chợ thứ cấp đã được kiểm định bảo mật 100% on-chain!', 'info')}
-                                    sx={{ height: 44, borderRadius: '8px', fontWeight: 600 }}
-                                >
-                                    Tìm Hiểu Quy Tắc BR-02
+                                    Xem tất cả
                                 </Button>
                             </Stack>
-                        </Grid>
 
-                        <Grid item xs={12} md={5}>
-                            <Box
-                                sx={{
-                                    p: 3,
-                                    bgcolor: 'background.subtle',
-                                    borderRadius: '12px',
-                                    border: 1,
-                                    borderColor: 'divider',
-                                }}
+                            <Grid container spacing={2.5}>
+                                {newestEvents.map((event) => (
+                                    <Grid item xs={12} sm={6} md={4} lg={3} key={event.id}>
+                                        <EventProductCard event={event} />
+                                    </Grid>
+                                ))}
+                            </Grid>
+                        </Box>
+                    )
+                )}
+
+                {/* ═══════════════════════════════════════════════════════════════════
+                    4. CÁC ĐỀ MỤC THEO THỂ LOẠI (CHỈ HIỂN THỊ KHI CÓ SỰ KIỆN)
+                ═══════════════════════════════════════════════════════════════════ */}
+                {!loading &&
+                    activeCategorySections.map((section) => (
+                        <Box
+                            key={section.key}
+                            id={`section-${section.key}`}
+                            sx={{ mb: 6, scrollMarginTop: '90px' }}
+                        >
+                            <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                mb={2.5}
                             >
-                                <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" mb={1.5}>
-                                    VÍ DỤ VỀ BẢO VỆ NGƯỜI MUA:
+                                <Typography
+                                    variant="h2"
+                                    color="text.primary"
+                                    fontWeight={800}
+                                    sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
+                                >
+                                    {section.title}
                                 </Typography>
-                                <Stack spacing={1.5}>
-                                    <Stack direction="row" justifyContent="space-between">
-                                        <Typography variant="body2" color="text.secondary">Giá vé gốc (originalPrice):</Typography>
-                                        <Typography variant="body2" color="text.primary" fontWeight={600}>0.25 ETH</Typography>
-                                    </Stack>
-                                    <Stack direction="row" justifyContent="space-between">
-                                        <Typography variant="body2" color="text.secondary">Trần tối đa cho phép (+120%):</Typography>
-                                        <Typography variant="body2" color="status.success" fontWeight={700}>0.30 ETH</Typography>
-                                    </Stack>
-                                    <Divider />
-                                    <Typography variant="caption" color="text.secondary">
-                                        ✓ Mọi giao dịch đặt giá bán trên 0.30 ETH đều bị Smart Contract từ chối tự động (Transaction Reverted).
-                                    </Typography>
-                                </Stack>
-                            </Box>
-                        </Grid>
-                    </Grid>
-                </Card>
+
+                                <Button
+                                    component={RouterLink}
+                                    to={`/events?category=${section.key}`}
+                                    endIcon={<ArrowRight size={17} />}
+                                    sx={{ fontWeight: 700, textTransform: 'none' }}
+                                >
+                                    Xem tất cả
+                                </Button>
+                            </Stack>
+
+                            <Grid container spacing={2.5}>
+                                {section.items.map((event) => (
+                                    <Grid item xs={12} sm={6} md={4} lg={3} key={event.id}>
+                                        <EventProductCard event={event} />
+                                    </Grid>
+                                ))}
+                            </Grid>
+                        </Box>
+                    ))}
             </Container>
 
-            {/* ═══════════════════════════════════════════════════════════════════
-                6. SECTION: THỐNG KÊ THỜI GIAN THỰC (LIVE STATS)
-            ═══════════════════════════════════════════════════════════════════ */}
-            <Box sx={{ bgcolor: 'background.paper', py: 6, borderTop: 1, borderColor: 'divider' }}>
-                <Container maxWidth="xl">
-                    <Grid container spacing={3} textAlign="center">
-                        <Grid item xs={6} md={3}>
-                            <Typography variant="h2" color="primary.main" fontWeight={800}>
-                                8,420+
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" fontWeight={500} mt={0.5}>
-                                Vé NFT Đã Mint Trên Sepolia
-                            </Typography>
-                        </Grid>
-                        <Grid item xs={6} md={3}>
-                            <Typography variant="h2" color="status.success" fontWeight={800}>
-                                100%
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" fontWeight={500} mt={0.5}>
-                                Tuân Thủ Trần Giá 120%
-                            </Typography>
-                        </Grid>
-                        <Grid item xs={6} md={3}>
-                            <Typography variant="h2" color="status.onchain" fontWeight={800}>
-                                42
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" fontWeight={500} mt={0.5}>
-                                Sự Kiện Được Phê Duyệt
-                            </Typography>
-                        </Grid>
-                        <Grid item xs={6} md={3}>
-                            <Typography variant="h2" color="text.primary" fontWeight={800}>
-                                0
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" fontWeight={500} mt={0.5}>
-                                Trường Hợp Vé Giả Mạo
-                            </Typography>
-                        </Grid>
-                    </Grid>
-                </Container>
-            </Box>
-
-            {/* ═══════════════════════════════════════════════════════════════════
-                7. FOOTER
-            ═══════════════════════════════════════════════════════════════════ */}
             <Footer />
 
-            {/* ═══════════════════════════════════════════════════════════════════
-                8. SNACKBAR THÔNG BÁO
-            ═══════════════════════════════════════════════════════════════════ */}
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={2000}
@@ -813,4 +671,3 @@ const HomePage = () => {
 };
 
 export default HomePage;
-

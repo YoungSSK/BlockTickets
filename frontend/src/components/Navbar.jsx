@@ -19,6 +19,8 @@ import {
     ListItemIcon,
     ListItemText,
     Paper,
+    TextField,
+    InputAdornment,
 } from '@mui/material';
 import {
     ConfirmationNumber,
@@ -26,6 +28,7 @@ import {
     LightMode,
     Menu as MenuIcon,
     Close as CloseIcon,
+    Search,
     AccountBalanceWallet,
     AdminPanelSettings,
     EventNote,
@@ -81,8 +84,16 @@ const Navbar = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // State menu điều hướng trên thiết bị di động
+    // State menu điều hướng trên thiết bị di động & tìm kiếm trên header
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+    const [headerSearch, setHeaderSearch] = useState('');
+
+    const handleHeaderSearchSubmit = (e) => {
+        if (e) e.preventDefault();
+        const q = headerSearch.trim();
+        setMobileDrawerOpen(false);
+        navigate(q ? `/events?search=${encodeURIComponent(q)}` : '/events');
+    };
 
 
 
@@ -268,6 +279,54 @@ const Navbar = () => {
                             );
                         })}
                     </Stack>
+
+                    {/* Compact Header Search Bar (Dành cho Khách hàng / Khách vãng lai) */}
+                    {user?.role !== 'admin' && user?.role !== 'organizer' && (
+                        <Box
+                            component="form"
+                            onSubmit={handleHeaderSearchSubmit}
+                            sx={{
+                                display: { xs: 'none', md: 'flex' },
+                                alignItems: 'center',
+                                width: { md: 210, lg: 230, xl: 260 },
+                                mx: 1,
+                            }}
+                        >
+                            <TextField
+                                fullWidth
+                                size="small"
+                                placeholder="Tìm sự kiện..."
+                                value={headerSearch}
+                                onChange={(e) => setHeaderSearch(e.target.value)}
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton
+                                                type="submit"
+                                                size="small"
+                                                aria-label="Tìm kiếm sự kiện"
+                                                sx={{ p: 0.4, color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                            >
+                                                <Search sx={{ fontSize: 18 }} />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        height: 36,
+                                        borderRadius: '10px',
+                                        bgcolor: 'background.default',
+                                        fontSize: '0.84rem',
+                                        pr: 0.75,
+                                    },
+                                    '& .MuiOutlinedInput-input': {
+                                        py: 0.5,
+                                    },
+                                }}
+                            />
+                        </Box>
+                    )}
 
                     {/* Right Action Tools: Wallet Capsule, Theme Toggle & Profile Menu */}
                     <Stack direction="row" alignItems="center" spacing={1}>
@@ -642,6 +701,34 @@ const Navbar = () => {
                     </IconButton>
                 </Stack>
                 <Divider sx={{ mb: 2 }} />
+                {user?.role !== 'admin' && user?.role !== 'organizer' && (
+                    <Box component="form" onSubmit={handleHeaderSearchSubmit} sx={{ mb: 1.5 }}>
+                        <TextField
+                            fullWidth
+                            size="small"
+                            placeholder="Tìm sự kiện..."
+                            value={headerSearch}
+                            onChange={(e) => setHeaderSearch(e.target.value)}
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton type="submit" size="small" aria-label="Tìm kiếm">
+                                            <Search sx={{ fontSize: 18 }} />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    height: 38,
+                                    borderRadius: '10px',
+                                    bgcolor: 'background.default',
+                                    fontSize: '0.85rem',
+                                },
+                            }}
+                        />
+                    </Box>
+                )}
                 <List>
                     {navLinks.map((link) => (
                         <ListItem key={link.path} disablePadding sx={{ mb: 0.5 }}>

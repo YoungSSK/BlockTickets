@@ -102,8 +102,10 @@ const EMPTY_ORGANIZER_METRICS = {
     totalTicketsSold: 0,
     totalTicketsMaxSupply: 0,
     totalCheckedInCount: 0,
+    totalEvents: 0,
     activeEventsCount: 0,
     pendingEventsCount: 0,
+    draftEventsCount: 0,
     endedEventsCount: 0,
 };
 
@@ -429,6 +431,7 @@ const OrganizerDashboardPage = () => {
                     totalTicketsSold: Number(s.totalTicketsMinted) || 0,
                     totalTicketsMaxSupply: Number(s.totalTicketsMaxSupply) || Number(s.totalTicketsMinted) || 0,
                     totalCheckedInCount: Number(s.checkedInCount) || 0,
+                    totalEvents: Number(s.totalEvents) || 0,
                     activeEventsCount: Number(s.activeEventsCount) || 0,
                     pendingEventsCount: Number(s.pendingEventsCount) || 0,
                     draftEventsCount: Number(s.draftEventsCount) || 0,
@@ -1011,7 +1014,7 @@ const OrganizerDashboardPage = () => {
                             </Paper>
                         </Grid>
 
-                        {/* 3. Tỷ lệ check-in thực tế */}
+                        {/* 3. Tổng số sự kiện đã tạo */}
                         <Grid item xs={12} sm={6} md={4}>
                             <Paper
                                 elevation={0}
@@ -1025,15 +1028,15 @@ const OrganizerDashboardPage = () => {
                             >
                                 <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
                                     <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                                        HIỆU SUẤT CHECK-IN THỰC TẾ
+                                        TỔNG SỰ KIỆN ĐÃ TẠO
                                     </Typography>
-                                    <CheckCircle2 size={20} color={theme.palette.status?.checkedIn || '#8B5CF6'} />
+                                    <CalendarDays size={20} color={theme.palette.status?.checkedIn || '#8B5CF6'} />
                                 </Stack>
                                 <Typography variant="h2" fontWeight={800} sx={{ color: theme.palette.status?.checkedIn || '#8B5CF6' }} gutterBottom>
-                                    {overallCheckInRate}%
+                                    {metrics.totalEvents || events.length} Sự kiện
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {metrics.totalCheckedInCount} lượt soát vé hợp lệ tại cổng
+                                    {metrics.activeEventsCount} đang hoạt động • {metrics.pendingEventsCount} chờ duyệt
                                 </Typography>
                             </Paper>
                         </Grid>
