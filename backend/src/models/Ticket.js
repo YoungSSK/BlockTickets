@@ -68,6 +68,16 @@ const Ticket = sequelize.define(
       defaultValue: false,
       field: "is_listed_for_resale", // Đang được rao bán trên Marketplace
     },
+    seatNumber: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: "seat_number", // Số ghế vật lý riêng biệt (khác với tokenId on-chain)
+    },
+    entryGate: {
+      type: DataTypes.STRING(100),
+      defaultValue: "Cổng A - Khán Đài Phổ Thông Tầng 1",
+      field: "entry_gate", // Cổng check-in chỉ định cho vé
+    },
   },
   {
     tableName: "tickets",

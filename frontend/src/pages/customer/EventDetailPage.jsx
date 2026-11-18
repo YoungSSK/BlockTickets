@@ -50,6 +50,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAppTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { eventAPI } from '../../services/api';
 import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
 
@@ -241,6 +242,7 @@ Sự kiện diễn ra trong 2 ngày với hơn 30 phiên tham luận chuyên sâ
 
 const EventDetailPage = () => {
     const { mode, toggleTheme } = useAppTheme();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const { id } = useParams();
 
@@ -286,21 +288,27 @@ const EventDetailPage = () => {
                         }
                     }
 
-                    const ticketTypes = uniqueTicketTypes.map((tt, index) => ({
+                    const ticketTypes = uniqueTicketTypes.map((tt) => {
+                        const maxSupply = Number(tt.maxSupply || 0);
+                        const currentSupply = Number(tt.currentSupply || 0);
+                        const remainingSupply = Math.max(0, maxSupply - currentSupply);
+                        return {
                             id: tt.id,
-                            onChainTierId: tt.onChainTierId || (index + 1),
+                            onChainTierId: tt.onChainTierId ? Number(tt.onChainTierId) : null,
                             name: tt.name,
-                            badge: tt.name.toUpperCase().includes('VIP') ? 'VIP' : 'Phổ thông',
+                            badge: tt.tierType === 'vip' || tt.name.toUpperCase().includes('VIP') ? 'VIP' : 'Phổ thông',
                             originalPrice: Number(tt.originalPrice || 0),
                             maxResalePrice: Number(tt.maxResalePrice || (Number(tt.originalPrice || 0) * 1.2).toFixed(4)),
                             currency: tt.currency || 'ETH',
-                            maxSupply: Number(tt.maxSupply || 100),
-                            currentSupply: Number(tt.currentSupply || 0),
+                            maxSupply,
+                            currentSupply,
+                            remainingSupply,
                             saleStartTime: tt.saleStartTime,
                             saleEndTime: tt.saleEndTime,
                             description: tt.description || 'Hạng vé chính thức của sự kiện.',
                             perks: ['Vé NFT độc bản', 'QR Check-in động', 'Bảo hiểm trần giá 120%'],
-                        }));
+                        };
+                    });
 
                     const normalized = {
                         ...backendEvent,
@@ -319,6 +327,8 @@ const EventDetailPage = () => {
                             city: backendEvent.venueCity || 'Việt Nam',
                             notes: 'Vui lòng xuất trình mã QR động tại cổng soát vé.',
                         },
+                        rawStartTime: backendEvent.startTime || null,
+                        rawEndTime: backendEvent.endTime || null,
                         startTime: backendEvent.startTime ? new Date(backendEvent.startTime).toLocaleString('vi-VN') : '',
                         endTime: backendEvent.endTime ? new Date(backendEvent.endTime).toLocaleString('vi-VN') : '',
                         countdownDays: (() => {
@@ -380,19 +390,36 @@ const EventDetailPage = () => {
         return event.ticketTypes.find((t) => t.id === selectedTierId) || event.ticketTypes[0] || null;
     }, [event, selectedTierId]);
 
+    // Giới hạn tối đa 5 vé trên mỗi lần thanh toán (nằm trong hạn mức MAX_MINT_PER_TX = 10 của Smart Contract)
+    const MAX_TICKETS_PER_TX = 5;
+    const activeRemaining = activeTier
+        ? (activeTier.remainingSupply ?? Math.max(0, Number(activeTier.maxSupply || 0) - Number(activeTier.currentSupply || 0)))
+        : 0;
+    const maxSelectableQty = Math.max(1, Math.min(activeRemaining || MAX_TICKETS_PER_TX, MAX_TICKETS_PER_TX));
+
+    // Tự động điều chỉnh số lượng nếu chuyển sang hạng vé có số vé còn lại ít hơn
+    useEffect(() => {
+        setQuantity((q) => Math.max(1, Math.min(q, maxSelectableQty)));
+    }, [maxSelectableQty]);
+
     // Tính toán giá tiền
     const subtotalEth = activeTier ? activeTier.originalPrice * quantity : 0;
-    const ethToUsdRate = 3140;
-    const subtotalUsd = Math.round(subtotalEth * ethToUsdRate);
 
     // Kiểm tra trạng thái mở bán của hạng vé đang chọn
     const saleStatus = useMemo(() => {
         if (!activeTier) return { isBuyDisabled: true, buttonText: 'Chọn hạng vé' };
+        if (event?.status !== 'published' || !event?.onChainEventId) {
+            return { isBuyDisabled: true, buttonText: 'Chờ BTC công bố on-chain' };
+        }
+        if (!activeTier.onChainTierId) {
+            return { isBuyDisabled: true, buttonText: 'Hạng vé chưa đồng bộ on-chain' };
+        }
         const now = new Date();
         const isSoldOut = activeTier.maxSupply > 0 && activeTier.currentSupply >= activeTier.maxSupply;
         if (isSoldOut) return { isBuyDisabled: true, buttonText: 'Hạng vé đã hết' };
 
-        if (event?.endTime && now > new Date(event.endTime)) {
+        const endDate = event?.rawEndTime ? new Date(event.rawEndTime) : null;
+        if (endDate && !isNaN(endDate.getTime()) && now > endDate) {
             return { isBuyDisabled: true, buttonText: 'Sự kiện đã kết thúc' };
         }
 
@@ -405,8 +432,13 @@ const EventDetailPage = () => {
             return { isBuyDisabled: true, buttonText: 'Đã kết thúc đợt mở bán' };
         }
 
+        // Chặn không cho tài khoản Ban tổ chức mua vé
+        if (user && (user.role === 'organizer' || user.id === event?.organizerId)) {
+            return { isBuyDisabled: true, buttonText: 'Tài khoản BTC không thể tự mua vé' };
+        }
+
         return { isBuyDisabled: false, buttonText: 'Mua Vé NFT Ngay' };
-    }, [activeTier, event]);
+    }, [activeTier, event, user]);
 
     // Sao chép clipboard
     const handleCopy = (text, label = 'mã') => {
@@ -423,7 +455,7 @@ const EventDetailPage = () => {
 
     // Chuyển sang trang thanh toán CheckoutPage
     const handleProceedToCheckout = () => {
-        if (!activeTier) return;
+        if (!activeTier || saleStatus.isBuyDisabled) return;
         navigate('/checkout', {
             state: {
                 quantity,
@@ -738,12 +770,20 @@ const EventDetailPage = () => {
                                     </Box>
                                     <Box>
                                         <Typography variant="caption" color="text.secondary" fontWeight={500}>GIÁ PHÁT HÀNH TỪ</Typography>
-                                        <Typography variant="h3" color="primary.main" fontWeight={700}>
-                                            {event.ticketTypes[0]?.originalPrice} ETH
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            ~${Math.round(event.ticketTypes[0]?.originalPrice * ethToUsdRate)} USD / vé
-                                        </Typography>
+                                        {(() => {
+                                            const prices = (event.ticketTypes || []).map((t) => Number(t.originalPrice || 0));
+                                            const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+                                            return (
+                                                <>
+                                                    <Typography variant="h3" color="primary.main" fontWeight={700}>
+                                                        {prices.length > 0 ? `${minPrice} ETH` : 'Đang cập nhật'}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {prices.length > 0 ? 'Thanh toán trực tiếp bằng Sepolia ETH' : 'Chưa mở bán hạng vé'}
+                                                    </Typography>
+                                                </>
+                                            );
+                                        })()}
                                     </Box>
                                 </Stack>
                             </Grid>
@@ -796,7 +836,10 @@ const EventDetailPage = () => {
                                 <Stack spacing={2.5}>
                                     {event.ticketTypes.map((tier) => {
                                         const isSelected = selectedTierId === tier.id;
-                                        const soldPercentage = Math.round(((tier.maxSupply - tier.remainingSupply) / tier.maxSupply) * 100);
+                                        const remaining = tier.remainingSupply ?? Math.max(0, (tier.maxSupply || 0) - (tier.currentSupply || 0));
+                                        const soldPercentage = tier.maxSupply > 0
+                                            ? Math.min(100, Math.max(0, Math.round(((tier.maxSupply - remaining) / tier.maxSupply) * 100)))
+                                            : 0;
 
                                         return (
                                             <Card
@@ -841,9 +884,6 @@ const EventDetailPage = () => {
                                                         <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
                                                             <Typography variant="h2" color="primary.main" fontWeight={700}>
                                                                 {tier.originalPrice} ETH
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                ~${Math.round(tier.originalPrice * ethToUsdRate)} USD
                                                             </Typography>
                                                         </Box>
                                                     </Stack>
@@ -1041,10 +1081,10 @@ const EventDetailPage = () => {
                                     <Box sx={{ p: 2, bgcolor: 'background.subtle', borderRadius: '8px', mb: 2.5 }}>
                                         <Typography variant="caption" color="text.secondary">HẠNG VÉ ĐANG CHỌN</Typography>
                                         <Typography variant="subtitle1" color="text.primary" fontWeight={700} mt={0.5}>
-                                            {activeTier.name}
+                                            {activeTier?.name || 'Chưa có hạng vé'}
                                         </Typography>
                                         <Typography variant="h3" color="primary.main" fontWeight={700} mt={0.5}>
-                                            {activeTier.originalPrice} ETH{' '}
+                                            {activeTier ? `${activeTier.originalPrice} ETH` : '—'}{' '}
                                             <Typography component="span" variant="body2" color="text.secondary">
                                                 / vé
                                             </Typography>
@@ -1058,7 +1098,7 @@ const EventDetailPage = () => {
                                                 Số lượng vé
                                             </Typography>
                                             <Typography variant="caption" color="text.secondary">
-                                                Tối đa 4 vé / ví
+                                                Còn {activeRemaining} vé • Tối đa {MAX_TICKETS_PER_TX} vé / 1 lần thanh toán
                                             </Typography>
                                         </Box>
                                         <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -1077,8 +1117,8 @@ const EventDetailPage = () => {
                                             <IconButton
                                                 size="small"
                                                 aria-label="Tăng vé"
-                                                onClick={() => setQuantity((q) => Math.min(4, q + 1))}
-                                                disabled={quantity >= 4}
+                                                onClick={() => setQuantity((q) => Math.min(maxSelectableQty, q + 1))}
+                                                disabled={quantity >= maxSelectableQty}
                                                 sx={{ border: 1, borderColor: 'divider', borderRadius: '6px' }}
                                             >
                                                 <Add fontSize="small" />
@@ -1089,13 +1129,10 @@ const EventDetailPage = () => {
                                     <Divider sx={{ my: 2 }} />
 
                                     {/* Tạm tính */}
-                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-end" mb={2.5}>
-                                        <Box>
-                                            <Typography variant="caption" color="text.secondary">TỔNG TẠM TÍNH</Typography>
-                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                ~${subtotalUsd.toLocaleString('en-US')} USD
-                                            </Typography>
-                                        </Box>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2.5}>
+                                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                            TỔNG TẠM TÍNH
+                                        </Typography>
                                         <Typography variant="h2" color="primary.main" fontWeight={700}>
                                             {subtotalEth.toFixed(4)} ETH
                                         </Typography>
@@ -1119,6 +1156,12 @@ const EventDetailPage = () => {
                                     >
                                         {saleStatus.buttonText}
                                     </Button>
+
+                                    {user && (user.role === 'organizer' || user.id === event?.organizerId) && (
+                                        <Alert severity="warning" sx={{ mb: 2, fontSize: '0.78rem', borderRadius: '8px' }}>
+                                            Bạn đang đăng nhập với vai trò Ban tổ chức. Chức năng mua vé bị vô hiệu hóa để bảo vệ tính toàn vẹn doanh thu. Vui lòng truy cập <RouterLink to="/organizer" style={{ color: 'inherit', fontWeight: 700 }}>Trang Quản Trị</RouterLink> để xem chi tiết sự kiện.
+                                        </Alert>
+                                    )}
 
                                     <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
                                         <Shield sx={{ fontSize: 16, color: 'status.success' }} />
@@ -1192,15 +1235,25 @@ const EventDetailPage = () => {
             ═══════════════════════════════════════════════════════════════════ */}
             <Snackbar
                 open={snackbar.open}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={handleCloseSnackbar}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                sx={{ zIndex: 99999 }}
             >
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity={snackbar.severity}
                     variant="filled"
-                    sx={{ width: '100%', borderRadius: '8px', color: '#fff' }}
+                    elevation={8}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                    }}
                 >
                     {snackbar.message}
                 </Alert>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Drawer,
@@ -22,36 +22,28 @@ import {
     DialogActions,
     Snackbar,
     Alert,
-    CircularProgress,
     useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
-    Dashboard as DashboardIcon,
+    LayoutDashboard,
     TrendingUp,
-    EventNote,
-    CheckCircle,
-    PeopleAlt,
-    QrCodeScanner,
-    AddCircleOutline,
-    Logout,
-    DarkMode,
-    LightMode,
+    CalendarDays,
+    CalendarPlus,
+    Users,
+    QrCode,
+    LogOut,
+    Moon,
+    Sun,
     Menu as MenuIcon,
-    Close as CloseIcon,
-    ConfirmationNumber,
-    Shield,
-    AdminPanelSettings,
-    FiberManualRecord,
-    AccountBalanceWallet,
-    ContentCopy,
-    Refresh,
-} from '@mui/icons-material';
+    X,
+    Ticket,
+    ShieldCheck,
+    Circle,
+} from 'lucide-react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
-import { ethers } from 'ethers';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
-import { authAPI, userAPI } from '../services/api';
 
 const SIDEBAR_WIDTH = 270;
 
@@ -62,18 +54,7 @@ const truncateHash = (hash, start = 6, end = 4) => {
 };
 
 // MetaMask Fox inline SVG
-const MetaMaskIcon = ({ size = 18 }) => (
-    <svg width={size} height={size} viewBox="0 0 318 318" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M274.1 35.5L174.6 108.7L193.5 64.3L274.1 35.5Z" fill="#E2761B" stroke="#E2761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M44.4 35.5L143.1 109.4L125.1 64.3L44.4 35.5Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M238.3 206.8L211.8 248.1L268.5 263.4L284.5 207.7L238.3 206.8Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M34.1 207.7L49.9 263.4L106.6 248.1L80.1 206.8L34.1 207.7Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M103.6 138.2L88.1 161.7L144.4 164.2L142.5 103.8L103.6 138.2Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M214.9 138.2L175.5 103.1L174.6 164.2L230.5 161.7L214.9 138.2Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M106.6 248.1L141 232.7L111.4 208.1L106.6 248.1Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M177.5 232.7L211.8 248.1L207.1 208.1L177.5 232.7Z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-);
+
 
 /**
  * DashboardLayout - Chuẩn giao diện quản trị có bộ tab điều khiển bên trái
@@ -90,6 +71,7 @@ const DashboardLayout = ({
     title,
     subtitle,
     topActions,
+    hideHeaderActions = true,
     children,
 }) => {
     const theme = useTheme();
@@ -102,161 +84,16 @@ const DashboardLayout = ({
     const navigate = useNavigate();
     const location = useLocation();
 
-    // State ví Web3 MetaMask
-    const [walletAddress, setWalletAddress] = useState(user?.walletAddress || '');
-    const [walletBalance, setWalletBalance] = useState('');
-    const [isConnecting, setIsConnecting] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
 
     const showSnackbar = (message, severity = 'info') => {
         setSnackbar({ open: true, message, severity });
     };
 
-    const handleCopy = (text, label = 'địa chỉ ví') => {
+    const handleCopy = (text, label = 'nội dung') => {
         if (!text) return;
         navigator.clipboard.writeText(text);
         showSnackbar(`Đã sao chép ${label} vào bộ nhớ tạm: ${truncateHash(text, 6, 4)}`, 'success');
-    };
-
-    // Lấy số dư Sepolia ETH thật từ MetaMask
-    const fetchWalletBalance = useCallback(async (address) => {
-        if (!address) {
-            setWalletBalance('');
-            return;
-        }
-        try {
-            if (window.ethereum) {
-                const browserProvider = new ethers.BrowserProvider(window.ethereum);
-                const balanceBigInt = await browserProvider.getBalance(address);
-                const ethStr = ethers.formatEther(balanceBigInt);
-                const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
-                setWalletBalance(`${ethNum} ETH`);
-            } else {
-                try {
-                    const rpcProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
-                    const balanceBigInt = await rpcProvider.getBalance(address);
-                    const ethStr = ethers.formatEther(balanceBigInt);
-                    const ethNum = parseFloat(parseFloat(ethStr).toFixed(4));
-                    setWalletBalance(`${ethNum} ETH`);
-                } catch {
-                    setWalletBalance('');
-                }
-            }
-        } catch (err) {
-            console.error('Lỗi khi lấy số dư ví DashboardLayout:', err);
-        }
-    }, []);
-
-    // Tự động kiểm tra ví đã kết nối trong MetaMask
-    useEffect(() => {
-        let isMounted = true;
-        const checkWallet = async () => {
-            if (window.ethereum) {
-                try {
-                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                    if (accounts && accounts[0]) {
-                        if (isMounted) {
-                            setWalletAddress(accounts[0]);
-                            await fetchWalletBalance(accounts[0]);
-                        }
-                        return;
-                    }
-                } catch (err) {
-                    console.error('Lỗi eth_accounts DashboardLayout:', err);
-                }
-            }
-            if (user?.walletAddress) {
-                setWalletAddress(user.walletAddress);
-                fetchWalletBalance(user.walletAddress);
-            }
-        };
-
-        checkWallet();
-        return () => {
-            isMounted = false;
-        };
-    }, [user, fetchWalletBalance]);
-
-    // Lắng nghe sự kiện chuyển đổi tài khoản ví hoặc đổi mạng
-    useEffect(() => {
-        if (!window.ethereum) return;
-
-        const handleAccountsChanged = async (accounts) => {
-            if (accounts && accounts.length > 0) {
-                setWalletAddress(accounts[0]);
-                await fetchWalletBalance(accounts[0]);
-                showSnackbar(`Đã chuyển sang ví: ${truncateHash(accounts[0], 6, 4)}`, 'info');
-            } else {
-                setWalletAddress('');
-                setWalletBalance('');
-            }
-        };
-
-        const handleChainChanged = () => {
-            if (walletAddress) {
-                fetchWalletBalance(walletAddress);
-            }
-        };
-
-        window.ethereum.on('accountsChanged', handleAccountsChanged);
-        window.ethereum.on('chainChanged', handleChainChanged);
-
-        return () => {
-            if (window.ethereum?.removeListener) {
-                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-                window.ethereum.removeListener('chainChanged', handleChainChanged);
-            }
-        };
-    }, [walletAddress, fetchWalletBalance]);
-
-    // Xử lý kết nối ví MetaMask
-    const handleConnectWallet = async () => {
-        if (!window.ethereum) {
-            showSnackbar('Trình duyệt chưa cài MetaMask. Vui lòng cài đặt tiện ích MetaMask!', 'warning');
-            return;
-        }
-
-        setIsConnecting(true);
-        try {
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            if (accounts && accounts[0]) {
-                const addr = accounts[0];
-                setWalletAddress(addr);
-                await fetchWalletBalance(addr);
-                showSnackbar(`Đã kết nối ví MetaMask: ${truncateHash(addr, 6, 4)}`, 'success');
-
-                // Nếu tài khoản Organizer chưa lưu ví trong profile, tự động đồng bộ vào database
-                if (user && !user.walletAddress) {
-                    try {
-                        const provider = new ethers.BrowserProvider(window.ethereum);
-                        const signer = await provider.getSigner();
-                        const nonceRes = await authAPI.getNonce(addr);
-                        const nonce = nonceRes.data?.data?.nonce;
-                        if (nonce) {
-                            const signature = await signer.signMessage(nonce);
-                            await userAPI.linkWallet({
-                                walletAddress: addr,
-                                signature,
-                                nonce,
-                            });
-                            showSnackbar('Đã liên kết ví MetaMask vào hồ sơ Ban Tổ Chức thành công!', 'success');
-                            const updatedUser = { ...user, walletAddress: addr };
-                            localStorage.setItem('blocktickets_user', JSON.stringify(updatedUser));
-                        }
-                    } catch (linkErr) {
-                        console.log('Bỏ qua liên kết profile nếu người dùng không ký nonce:', linkErr.message);
-                    }
-                }
-            }
-        } catch (err) {
-            if (err?.code === 4001 || err?.info?.error?.code === 4001) {
-                showSnackbar('Bạn đã từ chối yêu cầu kết nối ví MetaMask.', 'warning');
-            } else {
-                showSnackbar(err.message || 'Lỗi khi kết nối ví MetaMask.', 'error');
-            }
-        } finally {
-            setIsConnecting(false);
-        }
     };
 
     const handleDrawerToggle = () => {
@@ -276,21 +113,21 @@ const DashboardLayout = ({
                 key: 'dashboard',
                 label: 'Bảng Điều Khiển',
                 path: '/admin/dashboard',
-                icon: <TrendingUp />,
+                icon: <TrendingUp size={19} />,
                 desc: 'Tổng quan chỉ số & audit log',
             },
             {
                 key: 'events',
                 label: 'Duyệt Sự Kiện',
                 path: '/admin/events',
-                icon: <EventNote />,
+                icon: <CalendarDays size={19} />,
                 desc: 'Phê duyệt & kiểm tra smart contract',
             },
             {
                 key: 'users',
                 label: 'Quản Lý Người Dùng',
                 path: '/admin/users',
-                icon: <PeopleAlt />,
+                icon: <Users size={19} />,
                 desc: 'Phân quyền & giám sát ví Web3',
             },
         ]
@@ -299,21 +136,21 @@ const DashboardLayout = ({
                 key: 'dashboard',
                 label: 'Bảng Điều Khiển',
                 path: '/organizer/dashboard',
-                icon: <TrendingUp />,
+                icon: <LayoutDashboard size={19} />,
                 desc: 'Doanh số vé & rút tiền on-chain',
             },
             {
                 key: 'create-event',
-                label: 'Tạo Sự Kiện Mới',
-                path: '/organizer/create-event',
-                icon: <AddCircleOutline />,
-                desc: 'Khởi tạo sự kiện & cấu hình vé NFT',
+                label: 'Tạo sự kiện',
+                path: '/organizer/events',
+                icon: <CalendarPlus size={19} />,
+                desc: 'Danh sách sự kiện & khởi tạo mới',
             },
             {
                 key: 'check-in',
                 label: 'Soát Vé Tại Cổng',
                 path: '/organizer/check-in',
-                icon: <QrCodeScanner />,
+                icon: <QrCode size={19} />,
                 desc: 'Quét mã QR HMAC bảo mật',
             },
         ];
@@ -349,7 +186,7 @@ const DashboardLayout = ({
                             boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
                         }}
                     >
-                        {role === 'admin' ? <AdminPanelSettings sx={{ fontSize: 24 }} /> : <ConfirmationNumber sx={{ fontSize: 24 }} />}
+                        {role === 'admin' ? <ShieldCheck size={22} /> : <Ticket size={22} />}
                     </Box>
                     <Box sx={{ overflow: 'hidden' }}>
                         <Typography variant="h6" fontWeight={800} color="text.primary" sx={{ lineHeight: 1.1, fontSize: '1.1rem' }}>
@@ -363,7 +200,7 @@ const DashboardLayout = ({
 
                 <Stack direction="row" spacing={1} alignItems="center" mt={1.5}>
                     <Chip
-                        icon={<FiberManualRecord sx={{ fontSize: '10px !important', color: 'status.success' }} />}
+                        icon={<Circle size={8} fill="currentColor" style={{ color: '#10B981', marginRight: 4 }} />}
                         label="Sepolia Testnet #11155111"
                         size="small"
                         sx={{
@@ -395,7 +232,8 @@ const DashboardLayout = ({
                     {menuItems.map((item) => {
                         const isActive = location.pathname === item.path ||
                             (item.path === '/admin/events' && location.pathname.startsWith('/admin/events')) ||
-                            (item.path === '/admin/users' && location.pathname.startsWith('/admin/users'));
+                            (item.path === '/admin/users' && location.pathname.startsWith('/admin/users')) ||
+                            (item.key === 'create-event' && (location.pathname.startsWith('/organizer/events') || location.pathname.startsWith('/organizer/create-event')));
 
                         return (
                             <ListItem key={item.key} disablePadding sx={{ mb: 0.8 }}>
@@ -461,80 +299,22 @@ const DashboardLayout = ({
                         <Typography variant="body2" fontWeight={700} noWrap color="text.primary">
                             {user?.fullName || (role === 'admin' ? 'Quản trị viên' : 'Ban tổ chức')}
                         </Typography>
-                        <Stack direction="row" spacing={0.5} alignItems="center">
-                            <Chip
-                                label={portalBadge}
-                                size="small"
-                                sx={{
-                                    height: 18,
-                                    fontSize: '0.62rem',
-                                    fontWeight: 700,
-                                    bgcolor: role === 'admin' ? 'error.light' : 'primary.light',
-                                    color: role === 'admin' ? 'error.main' : 'primary.main',
-                                    px: 0.5,
-                                }}
-                            />
-                            {user?.walletAddress && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: 'text.secondary' }}>
-                                    {truncateHash(user.walletAddress, 4, 3)}
-                                </Typography>
-                            )}
-                        </Stack>
+                        <Chip
+                            label={portalBadge}
+                            size="small"
+                            sx={{
+                                height: 20,
+                                fontSize: '0.65rem',
+                                fontWeight: 800,
+                                bgcolor: role === 'admin' ? '#EF4444' : '#2563EB',
+                                color: '#ffffff',
+                                px: 0.8,
+                                letterSpacing: '0.04em',
+                                mt: 0.3,
+                            }}
+                        />
                     </Box>
                 </Stack>
-
-                {/* Khối hiển thị & kết nối ví Web3 cho Organizer / Admin */}
-                <Box
-                    sx={{
-                        mb: 2,
-                        p: 1.2,
-                        borderRadius: '10px',
-                        bgcolor: walletAddress ? 'rgba(16, 185, 129, 0.08)' : 'background.paper',
-                        border: 1,
-                        borderColor: walletAddress ? 'status.success' : 'divider',
-                    }}
-                >
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" mb={0.5}>
-                        <Stack direction="row" alignItems="center" spacing={0.8}>
-                            <MetaMaskIcon size={16} />
-                            <Typography variant="caption" fontWeight={700} color={walletAddress ? 'status.success' : 'text.secondary'}>
-                                {walletAddress ? 'Ví MetaMask Sepolia' : 'Chưa kết nối ví'}
-                            </Typography>
-                        </Stack>
-                        {walletAddress && (
-                            <Chip label="Sepolia" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700, bgcolor: 'status.successBg', color: 'status.success' }} />
-                        )}
-                    </Stack>
-                    {walletAddress ? (
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                            <Tooltip title="Nhấp để sao chép địa chỉ ví">
-                                <Typography
-                                    variant="caption"
-                                    sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-                                    onClick={() => handleCopy(walletAddress, 'địa chỉ ví')}
-                                >
-                                    {truncateHash(walletAddress, 6, 4)}
-                                </Typography>
-                            </Tooltip>
-                            <Typography variant="caption" fontWeight={700} color="primary.main">
-                                {walletBalance || '... ETH'}
-                            </Typography>
-                        </Stack>
-                    ) : (
-                        <Button
-                            fullWidth
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            onClick={handleConnectWallet}
-                            disabled={isConnecting}
-                            startIcon={isConnecting ? <CircularProgress size={12} color="inherit" /> : <MetaMaskIcon size={14} />}
-                            sx={{ mt: 0.8, height: 28, fontSize: '0.72rem', fontWeight: 700, borderRadius: '6px' }}
-                        >
-                            {isConnecting ? 'Đang kết nối...' : 'Kết nối ví MetaMask'}
-                        </Button>
-                    )}
-                </Box>
 
                 {/* Hàng nút công cụ: Chuyển theme & Đăng xuất */}
                 <Stack direction="row" spacing={1}>
@@ -553,7 +333,7 @@ const DashboardLayout = ({
                                 height: 38,
                             }}
                         >
-                            {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
+                            {mode === 'light' ? <Moon size={18} /> : <Sun size={18} />}
                         </IconButton>
                     </Tooltip>
 
@@ -563,7 +343,7 @@ const DashboardLayout = ({
                         variant="outlined"
                         color="error"
                         size="small"
-                        startIcon={<Logout />}
+                        startIcon={<LogOut size={16} />}
                         onClick={() => setLogoutDialogOpen(true)}
                         sx={{
                             height: 38,
@@ -671,7 +451,7 @@ const DashboardLayout = ({
                                 onClick={handleDrawerToggle}
                                 sx={{ display: { lg: 'none' } }}
                             >
-                                <MenuIcon />
+                                <MenuIcon size={22} />
                             </IconButton>
 
                             <Box>
@@ -688,75 +468,12 @@ const DashboardLayout = ({
                             </Box>
                         </Stack>
 
-                        {/* Top Actions & Quick Logout Button */}
-                        <Stack direction="row" alignItems="center" spacing={1.5}>
-                            {/* Nút Kết nối ví MetaMask trên Header */}
-                            {walletAddress ? (
-                                <Tooltip title={`Ví MetaMask đang kết nối: ${walletAddress} (Bấm để sao chép)`}>
-                                    <Box
-                                        onClick={() => handleCopy(walletAddress, 'địa chỉ ví')}
-                                        sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 1,
-                                            px: 1.5,
-                                            py: 0.5,
-                                            borderRadius: '8px',
-                                            border: 1,
-                                            borderColor: 'divider',
-                                            bgcolor: 'background.subtle',
-                                            cursor: 'pointer',
-                                            '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                        }}
-                                    >
-                                        <MetaMaskIcon size={18} />
-                                        <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                                            <Stack direction="row" spacing={0.5} alignItems="center">
-                                                <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, lineHeight: 1.1 }}>
-                                                    {truncateHash(walletAddress, 6, 4)}
-                                                </Typography>
-                                                <FiberManualRecord sx={{ fontSize: 8, color: 'status.success' }} />
-                                            </Stack>
-                                            <Typography variant="caption" color="primary.main" fontWeight={700} sx={{ fontSize: '0.68rem', display: 'block' }}>
-                                                {walletBalance || 'Sepolia'}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                </Tooltip>
-                            ) : (
-                                <Button
-                                    variant="outlined"
-                                    color="primary"
-                                    size="small"
-                                    onClick={handleConnectWallet}
-                                    disabled={isConnecting}
-                                    startIcon={isConnecting ? <CircularProgress size={14} color="inherit" /> : <MetaMaskIcon />}
-                                    sx={{ height: 38, borderRadius: '8px', fontWeight: 700 }}
-                                >
-                                    {isConnecting ? 'Đang kết nối...' : 'Kết nối ví'}
-                                </Button>
-                            )}
-
-                            {topActions}
-
-                            {/* Nút Đăng xuất nhanh trên Header */}
-                            <Tooltip title="Đăng xuất khỏi hệ thống">
-                                <Button
-                                    variant="outlined"
-                                    color="error"
-                                    size="small"
-                                    onClick={() => setLogoutDialogOpen(true)}
-                                    startIcon={<Logout />}
-                                    sx={{
-                                        height: 38,
-                                        borderRadius: '8px',
-                                        display: { xs: 'none', sm: 'inline-flex' },
-                                    }}
-                                >
-                                    Đăng xuất
-                                </Button>
-                            </Tooltip>
-                        </Stack>
+                        {/* Top Actions (chỉ hiển thị khi có và không bị ẩn) */}
+                        {!hideHeaderActions && topActions && (
+                            <Stack direction="row" alignItems="center" spacing={1.5}>
+                                {topActions}
+                            </Stack>
+                        )}
                     </Stack>
                 </Box>
 
@@ -788,7 +505,7 @@ const DashboardLayout = ({
                     <Button onClick={() => setLogoutDialogOpen(false)} variant="outlined" color="inherit" sx={{ borderRadius: '8px' }}>
                         Hủy
                     </Button>
-                    <Button onClick={handleLogout} variant="contained" color="error" startIcon={<Logout />} sx={{ borderRadius: '8px' }}>
+                    <Button onClick={handleLogout} variant="contained" color="error" startIcon={<LogOut size={18} />} sx={{ borderRadius: '8px' }}>
                         Đăng xuất ngay
                     </Button>
                 </DialogActions>
@@ -797,15 +514,25 @@ const DashboardLayout = ({
             {/* Snackbar thông báo ví Web3 */}
             <Snackbar
                 open={snackbar.open}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                sx={{ zIndex: 99999 }}
             >
                 <Alert
                     severity={snackbar.severity}
                     onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
                     variant="filled"
-                    sx={{ width: '100%', borderRadius: '8px', fontWeight: 600 }}
+                    elevation={8}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                    }}
                 >
                     {snackbar.message}
                 </Alert>

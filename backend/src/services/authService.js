@@ -214,43 +214,6 @@ export const verifyAndConsumeWalletNonce = async ({
   return { normalizedWallet, walletUser };
 };
 
-export const loginWithWallet = async (
-  { walletAddress, signature, nonce },
-  meta,
-) => {
-  const { normalizedWallet, walletUser } = await verifyAndConsumeWalletNonce({
-    walletAddress,
-    signature,
-    nonce,
-  });
-
-  let user = walletUser;
-  if (!user) {
-    let walletFullName = `Wallet User ${normalizedWallet.substring(0, 6)}`;
-    const existingName = await User.findOne({ where: { fullName: walletFullName } });
-    if (existingName) {
-      walletFullName = `Wallet User ${normalizedWallet.substring(2, 8)}`;
-    }
-    user = await User.create({
-      email: `${normalizedWallet}@wallet.blocktickets.local`,
-      fullName: walletFullName,
-      walletAddress: normalizedWallet,
-      role: "customer",
-      nonce: null,
-    });
-  }
-
-  if (user.status === "suspended") {
-    throw new AppError("Tài khoản liên kết với ví này đã bị khóa.", 403);
-  }
-
-  const tokens = await generateTokensAndSession(user, meta);
-  return {
-    ...tokens,
-    user: serializeUser(user),
-  };
-};
-
 export const refreshUserTokens = async (refreshToken, meta) => {
   let decoded;
   try {

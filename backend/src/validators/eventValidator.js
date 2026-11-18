@@ -59,11 +59,33 @@ export const createEventSchema = z.object({
       venueCity: z.string({ error: "Thiếu thành phố" }).trim().min(2).max(100),
       startTime: z.coerce.date({ error: "Thời gian bắt đầu không hợp lệ" }),
       endTime: z.coerce.date({ error: "Thời gian kết thúc không hợp lệ" }),
+      saleStartTime: z.coerce.date().optional(),
+      saleEndTime: z.coerce.date().optional(),
       ticketTypes: z.array(z.any()).optional(),
+      checkInGates: z.array(z.string()).optional(),
+      seatingMap: z.any().optional(),
     })
     .refine((data) => data.endTime > data.startTime, {
-      message: "Thời gian kết thúc phải sau thời gian bắt đầu",
+      message: "Thời gian kết thúc sự kiện phải sau thời gian bắt đầu",
       path: ["endTime"],
+    })
+    .refine((data) => {
+      if (data.saleStartTime && data.saleEndTime) {
+        return data.saleEndTime > data.saleStartTime;
+      }
+      return true;
+    }, {
+      message: "Thời gian kết thúc bán vé phải sau thời gian bắt đầu mở bán",
+      path: ["saleEndTime"],
+    })
+    .refine((data) => {
+      if (data.saleEndTime && data.startTime) {
+        return data.saleEndTime <= data.startTime;
+      }
+      return true;
+    }, {
+      message: "Thời gian kết thúc bán vé phải trước hoặc bằng thời gian sự kiện bắt đầu",
+      path: ["saleEndTime"],
     }),
 });
 
@@ -80,9 +102,44 @@ export const updateEventSchema = z.object({
       venueCity: z.string().trim().min(2).max(100).optional(),
       startTime: z.coerce.date().optional(),
       endTime: z.coerce.date().optional(),
+      saleStartTime: z.coerce.date().optional(),
+      saleEndTime: z.coerce.date().optional(),
+      checkInGates: z.array(z.string()).optional(),
+      seatingMap: z.any().optional(),
+      ticketTypes: z.array(z.any()).optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: "Cần ít nhất một trường để cập nhật",
+    }),
+});
+
+export const updateTicketTypeSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive("Mã sự kiện không hợp lệ"),
+    ticketTypeId: z.coerce.number().int().positive("Mã hạng vé không hợp lệ"),
+  }),
+  body: z
+    .object({
+      name: z.string().trim().min(2).max(100).optional(),
+      description: z.string().trim().optional(),
+      originalPrice: z.coerce
+        .number()
+        .positive("Giá vé phải lớn hơn 0 ETH")
+        .optional(),
+      currency: z.string().trim().max(10).optional(),
+      maxSupply: z.coerce.number().int().min(1).optional(),
+      entryGate: z.string().trim().max(100).optional(),
+      tierType: z.enum(["vip", "standard"]).optional(),
+      seatZone: z.string().trim().max(100).optional(),
+      seatRow: z.string().trim().max(100).optional(),
+      seatStart: z.coerce.number().int().min(1).optional(),
+      seatEnd: z.coerce.number().int().min(1).optional(),
+      seatConfig: z.any().optional(),
+      saleStartTime: z.coerce.date().optional(),
+      saleEndTime: z.coerce.date().optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, {
+      message: "Cần ít nhất một trường để cập nhật hạng vé",
     }),
 });
 
@@ -100,6 +157,13 @@ export const createTicketTypeSchema = z.object({
         .number({ error: "Số lượng tối đa không hợp lệ" })
         .int("maxSupply phải là số nguyên")
         .min(1, "Số lượng vé tối thiểu là 1"),
+      entryGate: z.string().trim().max(100).optional().default("Cổng A - Khán Đài Phổ Thông Tầng 1"),
+      tierType: z.enum(["vip", "standard"]).optional().default("standard"),
+      seatZone: z.string().trim().max(100).optional(),
+      seatRow: z.string().trim().max(100).optional(),
+      seatStart: z.coerce.number().int().min(1).optional().default(1),
+      seatEnd: z.coerce.number().int().min(1).optional(),
+      seatConfig: z.any().optional(),
       saleStartTime: z.coerce.date({ error: "Thời điểm mở bán không hợp lệ" }).optional(),
       saleEndTime: z.coerce.date({ error: "Thời điểm đóng bán không hợp lệ" }).optional(),
     })
@@ -118,7 +182,15 @@ export const publishEventSchema = z.object({
   params: eventIdParam,
   body: z
     .object({
-      onChainEventId: z.coerce.number().int().nonnegative().optional(),
+      onChainEventId: z.coerce.number().int().positive().optional(),
+      tierMappings: z
+        .array(
+          z.object({
+            ticketTypeId: z.coerce.number().int().positive(),
+            onChainTierId: z.coerce.number().int().positive(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 });

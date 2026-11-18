@@ -220,19 +220,11 @@ const EventApprovalPage = () => {
                 )
             );
             showSnackbar(`Đã phê duyệt sự kiện "${selectedEvent.title}" thành công! Sự kiện đã sẵn sàng mở bán trên Sepolia.`, 'success');
-        } catch (err) {
-            // Cập nhật UI optimistic kèm thông báo
-            setEvents((prev) =>
-                prev.map((evt) =>
-                    evt.id === selectedEvent.id
-                        ? { ...evt, status: 'approved', rejectionReason: '' }
-                        : evt
-                )
-            );
-            showSnackbar(err.message || `Đã phê duyệt sự kiện "${selectedEvent.title}" (chế độ demo).`, 'info');
-        } finally {
             setApproveModalOpen(false);
             if (detailModalOpen) setDetailModalOpen(false);
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || `Không thể phê duyệt sự kiện "${selectedEvent.title}".`;
+            showSnackbar(msg, 'error');
         }
     };
 
@@ -250,6 +242,10 @@ const EventApprovalPage = () => {
             setRejectError('Vui lòng nhập lý do từ chối để gửi thông báo cho Nhà tổ chức.');
             return;
         }
+        if (rejectionReason.trim().length < 5) {
+            setRejectError('Lý do từ chối cần có ít nhất 5 ký tự.');
+            return;
+        }
 
         try {
             await adminAPI.rejectEvent(selectedEvent.id, rejectionReason.trim());
@@ -261,25 +257,19 @@ const EventApprovalPage = () => {
                 )
             );
             showSnackbar(`Đã từ chối sự kiện "${selectedEvent.title}". Lý do giải thích đã lưu vết kiểm toán.`, 'info');
-        } catch (err) {
-            setEvents((prev) =>
-                prev.map((evt) =>
-                    evt.id === selectedEvent.id
-                        ? { ...evt, status: 'rejected', rejectionReason: rejectionReason.trim() }
-                        : evt
-                )
-            );
-            showSnackbar(err.message || `Đã từ chối sự kiện "${selectedEvent.title}".`, 'info');
-        } finally {
             setRejectModalOpen(false);
             if (detailModalOpen) setDetailModalOpen(false);
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || `Không thể từ chối sự kiện "${selectedEvent.title}".`;
+            setRejectError(msg);
+            showSnackbar(msg, 'error');
         }
     };
 
     // Thống kê nhanh
     const stats = useMemo(() => {
         const pendingCount = events.filter((e) => e.status === 'pending').length;
-        const approvedCount = events.filter((e) => e.status === 'approved').length;
+        const approvedCount = events.filter((e) => e.status === 'approved' || e.status === 'published').length;
         const rejectedCount = events.filter((e) => e.status === 'rejected').length;
         const totalTickets = events
             .filter((e) => e.status === 'pending')
@@ -297,10 +287,10 @@ const EventApprovalPage = () => {
             // Lọc theo từ khóa tìm kiếm
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
-                const matchTitle = event.title.toLowerCase().includes(q);
-                const matchOrg = event.organizer.name.toLowerCase().includes(q);
-                const matchCity = event.venue.city.toLowerCase().includes(q);
-                const matchId = event.id.toLowerCase().includes(q);
+                const matchTitle = String(event.title || '').toLowerCase().includes(q);
+                const matchOrg = String(event.organizer?.name || '').toLowerCase().includes(q);
+                const matchCity = String(event.venue?.city || '').toLowerCase().includes(q);
+                const matchId = String(event.id ?? '').toLowerCase().includes(q);
                 if (!matchTitle && !matchOrg && !matchCity && !matchId) return false;
             }
             return true;
@@ -392,6 +382,7 @@ const EventApprovalPage = () => {
             title="Duyệt Sự Kiện"
             subtitle="Thẩm định nội dung, địa điểm, bản quyền và hạn mức nguồn cung vé NFT"
             topActions={topActions}
+            hideHeaderActions={false}
         >
             <Box sx={{ width: '100%' }}>
                 {/* ═══════════════════════════════════════════════════════════════════
@@ -1356,15 +1347,25 @@ const EventApprovalPage = () => {
             ═══════════════════════════════════════════════════════════════════ */}
             <Snackbar
                 open={snackbar.open}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={handleCloseSnackbar}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                sx={{ zIndex: 99999 }}
             >
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity={snackbar.severity}
                     variant="filled"
-                    sx={{ width: '100%', borderRadius: '8px', color: '#fff' }}
+                    elevation={8}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                    }}
                 >
                     {snackbar.message}
                 </Alert>

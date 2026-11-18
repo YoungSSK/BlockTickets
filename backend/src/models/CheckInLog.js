@@ -47,6 +47,11 @@ const CheckInLog = sequelize.define(
       allowNull: false,
       field: "qr_nonce", // Chuỗi HMAC bảo mật trong mã QR
     },
+    gate: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: "gate", // Cổng nhân viên thực hiện soát vé
+    },
     scannedAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

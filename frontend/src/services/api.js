@@ -34,36 +34,32 @@ api.interceptors.response.use(
             originalRequest &&
             !originalRequest._retry &&
             !originalRequest.url?.includes('/auth/login') &&
-            !originalRequest.url?.includes('/auth/refresh-token')
+            !originalRequest.url?.includes('/auth/register') &&
+            !originalRequest.url?.includes('/auth/refresh-token') &&
+            !originalRequest.url?.includes('/auth/logout')
         ) {
             originalRequest._retry = true;
-            const refreshToken = localStorage.getItem('blocktickets_refresh_token');
+            try {
+                // Trình duyệt tự động đính kèm HttpOnly Cookie refreshToken nhờ withCredentials: true
+                const refreshRes = await axios.post(
+                    `${API_BASE_URL}/auth/refresh-token`,
+                    {},
+                    { withCredentials: true }
+                );
 
-            if (refreshToken) {
-                try {
-                    const refreshRes = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
-                        refreshToken,
-                    });
-
-                    const newAccessToken = refreshRes.data?.data?.accessToken;
-                    if (newAccessToken) {
-                        localStorage.setItem('blocktickets_token', newAccessToken);
-                        if (refreshRes.data?.data?.refreshToken) {
-                            localStorage.setItem('blocktickets_refresh_token', refreshRes.data.data.refreshToken);
-                        }
-                        // Gắn token mới và thực hiện lại request ban đầu
-                        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-                        return api(originalRequest);
-                    }
-                } catch (refreshErr) {
-                    console.warn('Phiên đăng nhập đã hết hạn hoàn toàn, cần đăng nhập lại:', refreshErr);
-                    localStorage.removeItem('blocktickets_token');
-                    localStorage.removeItem('blocktickets_user');
-                    localStorage.removeItem('blocktickets_refresh_token');
+                const newAccessToken = refreshRes.data?.data?.accessToken;
+                if (newAccessToken) {
+                    localStorage.setItem('blocktickets_token', newAccessToken);
+                    // Gắn token mới và thực hiện lại request ban đầu
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                    return api(originalRequest);
                 }
-            } else {
+            } catch (refreshErr) {
+                console.warn('Phiên đăng nhập đã hết hạn hoàn toàn, cần đăng nhập lại:', refreshErr);
                 localStorage.removeItem('blocktickets_token');
                 localStorage.removeItem('blocktickets_user');
+                localStorage.removeItem('blocktickets_refresh_token');
+                window.dispatchEvent(new Event('blocktickets:auth-expired'));
             }
         }
 
@@ -87,17 +83,14 @@ export const authAPI = {
     // Đăng nhập bằng Email & Mật khẩu
     login: (credentials) => api.post('/auth/login', credentials),
 
-    // Lấy nonce ngẫu nhiên để ký trên ví MetaMask
+    // Lấy nonce ngẫu nhiên để liên kết ví MetaMask (chỉ sau khi đã đăng nhập)
     getNonce: (wallet) => api.get('/auth/nonce', { params: { wallet } }),
 
-    // Xác thực chữ ký ví MetaMask
-    verifyWallet: (walletData) => api.post('/auth/verify-wallet', walletData),
+    // Làm mới Access Token thông qua HttpOnly Cookie
+    refreshToken: () => api.post('/auth/refresh-token'),
 
-    // Làm mới Access Token khi hết hạn
-    refreshToken: (refreshToken) => api.post('/auth/refresh-token', { refreshToken }),
-
-    // Đăng xuất thu hồi session
-    logout: (refreshToken) => api.post('/auth/logout', { refreshToken }),
+    // Đăng xuất thu hồi session & xóa HttpOnly Cookie
+    logout: () => api.post('/auth/logout'),
 
     // Lấy thông tin cá nhân hiện tại
     getProfile: () => api.get('/auth/profile'),
@@ -193,8 +186,20 @@ export const organizerAPI = {
     // Cập nhật sự kiện
     updateEvent: (id, data) => api.put(`/events/${id}`, data),
 
+    // Hủy sự kiện
+    cancelEvent: (id, reason) => api.patch(`/events/${id}/cancel`, { reason }),
+
+    // Xóa vĩnh viễn sự kiện (nếu chưa phát sinh vé bán ra)
+    deleteEvent: (id) => api.delete(`/events/${id}`),
+
     // Thêm hạng vé cho sự kiện
     addTicketType: (eventId, data) => api.post(`/events/${eventId}/ticket-types`, data),
+
+    // Cập nhật một hạng vé (khi chưa có người mua)
+    updateTicketType: (eventId, ticketTypeId, data) => api.put(`/events/${eventId}/ticket-types/${ticketTypeId}`, data),
+
+    // Xóa một hạng vé (khi chưa có người mua)
+    deleteTicketType: (eventId, ticketTypeId) => api.delete(`/events/${eventId}/ticket-types/${ticketTypeId}`),
 
     // Gửi sự kiện cho Admin xét duyệt (draft -> pending)
     submitReview: (eventId) => api.post(`/events/${eventId}/submit-review`),

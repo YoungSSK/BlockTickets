@@ -82,6 +82,16 @@ const Event = sequelize.define(
       allowNull: true,
       field: "on_chain_event_id",
     },
+    checkInGates: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: "check_in_gates",
+    },
+    seatingMap: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: "seating_map",
+    },
   },
   {
     tableName: "events",

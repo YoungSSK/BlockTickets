@@ -50,11 +50,13 @@ import {
     Storefront,
     ArrowBack,
 } from '@mui/icons-material';
+import { DoorOpen, Armchair } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAuth } from '../../context/AuthContext';
+import { useWallet } from '../../context/WalletContext';
 import { ticketAPI } from '../../services/api';
 import { ethers } from 'ethers';
 import { EVENT_TICKET_ADDRESS, TICKET_MARKETPLACE_ADDRESS } from '../../constants/contracts';
@@ -75,19 +77,26 @@ const normalizeTicket = (t) => {
     const maxResale = +(origPrice * 1.2).toFixed(4);
     const status = t.isUsed ? 'used' : t.isListedForResale ? 'resale' : 'valid';
 
+    const categoryMap = {
+        technology: 'Công nghệ & Web3',
+        sports: 'Thể thao',
+        music: 'Âm nhạc',
+        workshop: 'Hội thảo',
+    };
+
+    const eventCategory = t.event?.category || 'sports';
+
     return {
         id: t.id,
         tokenId: t.tokenId,
         eventTitle: t.event?.title || 'Sự kiện BlockTickets',
-        category: t.event?.category || 'technology',
-        categoryLabel:
-            t.event?.category === 'technology' ? 'Công nghệ & Web3' :
-            t.event?.category === 'sports' ? 'Thể thao' :
-            t.event?.category === 'workshop' ? 'Hội thảo' : 'Âm nhạc cổ điển',
+        category: eventCategory,
+        categoryLabel: categoryMap[t.event?.category] || (t.event?.category ? t.event.category : 'Thể thao'),
         tierName: t.ticketType?.name || 'Vé tham dự chính thức',
         bannerUrl: t.event?.bannerUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
         venue: t.event?.venueName ? `${t.event.venueName}, ${t.event.venueAddress || ''}` : 'Trung tâm sự kiện',
-        gate: 'Cửa kiểm soát vé chính',
+        gate: t.entryGate || t.ticketType?.entryGate || 'Cổng A - Khán Đài Phổ Thông Tầng 1',
+        seatNumber: t.seatNumber || `Khu ${t.ticketType?.name || 'A'} - Ghế ${t.id}`,
         startTime: t.event?.startTime ? new Date(t.event.startTime).toLocaleString('vi-VN') : '',
         attendeeName: 'Khách hàng BlockTickets',
         originalPrice: origPrice,
@@ -106,6 +115,7 @@ const normalizeTicket = (t) => {
 const MyTicketsPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { walletAddress } = useWallet();
 
     // Data state
     const [tickets, setTickets] = useState([]);
@@ -118,6 +128,7 @@ const MyTicketsPage = () => {
     const [activeTicket, setActiveTicket] = useState(null);
     const [qrCountdown, setQrCountdown] = useState(30);
     const [qrNonce, setQrNonce] = useState('');
+    const [serverQrPayload, setServerQrPayload] = useState('');
 
     // Modal Rao bán lại (Resale Modal)
     const [resaleModalOpen, setResaleModalOpen] = useState(false);
@@ -154,7 +165,13 @@ const MyTicketsPage = () => {
                 } catch (_) {}
             }
 
-            const res = await ticketAPI.getMyTickets(activeWallet ? { wallet: activeWallet } : undefined);
+            if (!activeWallet) {
+                setTickets([]);
+                setIsRefreshing(false);
+                return;
+            }
+
+            const res = await ticketAPI.getMyTickets({ wallet: activeWallet });
             const backendTickets = res.data?.data?.tickets;
             if (Array.isArray(backendTickets)) {
                 setTickets(backendTickets.map(normalizeTicket));
@@ -198,12 +215,28 @@ const MyTicketsPage = () => {
         showSnackbar('Đã đồng bộ dữ liệu vé NFT mới nhất từ hệ thống!', 'success');
     };
 
+    // Lấy mã QR động có chữ ký HMAC thật từ Backend
+    const fetchDynamicQr = useCallback(async (ticketId) => {
+        if (!ticketId) return;
+        try {
+            const res = await ticketAPI.getQRCode(ticketId);
+            const payloadStr = res.data?.data?.qrPayload;
+            if (payloadStr) {
+                setServerQrPayload(payloadStr);
+            }
+        } catch (err) {
+            console.warn('Không lấy được mã QR HMAC từ backend:', err?.message || err);
+        }
+    }, []);
+
     // Mở Modal QR động
     const handleOpenQrModal = (ticket) => {
         setActiveTicket(ticket);
         setQrCountdown(30);
         setQrNonce(Math.random().toString(36).substring(2, 10));
+        setServerQrPayload('');
         setQrModalOpen(true);
+        fetchDynamicQr(ticket.id);
     };
 
     // Đồng hồ đếm ngược 30 giây cho mã QR động HMAC (Mục 1.3 Business Requirements)
@@ -213,8 +246,9 @@ const MyTicketsPage = () => {
             timer = setInterval(() => {
                 setQrCountdown((prev) => {
                     if (prev <= 1) {
-                        // Tự động xoay mã nonce mới sau 30s
+                        // Tự động xoay mã HMAC mới từ backend sau mỗi 30s (hiệu lực 60s)
                         setQrNonce(Math.random().toString(36).substring(2, 10));
+                        fetchDynamicQr(activeTicket.id);
                         return 30;
                     }
                     return prev - 1;
@@ -224,19 +258,20 @@ const MyTicketsPage = () => {
         return () => {
             if (timer) clearInterval(timer);
         };
-    }, [qrModalOpen, activeTicket]);
+    }, [qrModalOpen, activeTicket, fetchDynamicQr]);
 
-    // Tạo payload mã QR HMAC động
+    // Tạo payload mã QR HMAC động (ưu tiên chữ ký HMAC thật từ Backend)
     const qrPayload = useMemo(() => {
         if (!activeTicket) return '';
+        if (serverQrPayload) return serverQrPayload;
         return JSON.stringify({
+            ticketId: activeTicket.id,
             tokenId: activeTicket.tokenId,
-            contract: '0x71C948261901823901928394819203849102A319',
             owner: activeTicket.ownerWallet,
             nonce: qrNonce,
             timestamp: Date.now(),
         });
-    }, [activeTicket, qrNonce]);
+    }, [activeTicket, qrNonce, serverQrPayload]);
 
     // Mở Modal Rao bán lại
     const handleOpenResaleModal = (ticket) => {
@@ -394,7 +429,7 @@ const MyTicketsPage = () => {
                 return (
                     <Chip
                         icon={<SwapHoriz sx={{ fontSize: '13px !important', color: 'status.pending' }} />}
-                        label="Đang rao bán trên Chợ 120%"
+                        label="Đang rao bán trên Chợ"
                         size="small"
                         sx={{ bgcolor: 'status.pendingBg', color: 'status.pending', fontWeight: 700 }}
                     />
@@ -439,7 +474,7 @@ const MyTicketsPage = () => {
                         spacing={2}
                     >
                         <Box>
-                            <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
+                            <Stack direction="row" alignItems="center" spacing={1.5}>
                                 <Box
                                     sx={{
                                         width: 36,
@@ -455,18 +490,9 @@ const MyTicketsPage = () => {
                                     <ConfirmationNumber sx={{ fontSize: 20 }} />
                                 </Box>
                                 <Typography variant="h2" color="text.primary">
-                                    Kho Vé Cá Nhân (My NFT Tickets)
+                                    Vé của tôi
                                 </Typography>
-                                <Chip
-                                    label={`${stats.total} Vé NFT`}
-                                    size="small"
-                                    color="primary"
-                                    sx={{ fontWeight: 700, fontSize: '0.72rem', height: 22 }}
-                                />
                             </Stack>
-                            <Typography variant="body2" color="text.secondary">
-                                Quản lý toàn bộ vé NFT thuộc quyền sở hữu của bạn. Mở mã QR động HMAC khi đến cổng hoặc chuyển nhượng trên Chợ thứ cấp
-                            </Typography>
                         </Box>
 
                         <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -523,9 +549,6 @@ const MyTicketsPage = () => {
                                 <Typography variant="h2" color="primary.main" fontWeight={700} mt={0.5}>
                                     {stats.total} Vé
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Được xác thực trên Ethereum Sepolia
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -539,9 +562,6 @@ const MyTicketsPage = () => {
                                 <Typography variant="h2" color="status.success" fontWeight={700} mt={0.5}>
                                     {stats.valid} Vé
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Sẵn sàng mở mã QR check-in tại cổng
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -550,13 +570,10 @@ const MyTicketsPage = () => {
                         <Card sx={{ bgcolor: 'background.paper', height: '100%' }}>
                             <CardContent sx={{ p: 2.5 }}>
                                 <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                    ĐANG RAO BÁN LẠI (CHỢ 120%)
+                                    ĐANG RAO BÁN LẠI
                                 </Typography>
                                 <Typography variant="h2" color="status.pending" fontWeight={700} mt={0.5}>
                                     {stats.resale} Vé
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Đang niêm yết trên TicketMarketplace.sol
                                 </Typography>
                             </CardContent>
                         </Card>
@@ -570,9 +587,6 @@ const MyTicketsPage = () => {
                                 </Typography>
                                 <Typography variant="h2" color="status.checkedIn" fontWeight={700} mt={0.5}>
                                     {stats.used} Vé
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                                    Vé NFT lưu niệm vĩnh viễn trong ví
                                 </Typography>
                             </CardContent>
                         </Card>
@@ -693,24 +707,12 @@ const MyTicketsPage = () => {
 
                                     {/* Nội dung chi tiết vé */}
                                     <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                                            <Chip
-                                                label={ticket.categoryLabel}
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: 'action.selected',
-                                                    color: 'primary.main',
-                                                    fontWeight: 600,
-                                                    fontSize: '0.7rem',
-                                                    height: 20,
-                                                }}
-                                            />
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1} mb={0.5}>
+                                            <Typography variant="h3" color="text.primary" fontWeight={700}>
+                                                {ticket.eventTitle}
+                                            </Typography>
                                             {renderStatusChip(ticket.status)}
                                         </Stack>
-
-                                        <Typography variant="h3" color="text.primary" fontWeight={700} mb={0.5}>
-                                            {ticket.eventTitle}
-                                        </Typography>
 
                                         <Typography variant="subtitle2" color="primary.main" fontWeight={600} mb={1.5}>
                                             {ticket.tierName}
@@ -732,6 +734,32 @@ const MyTicketsPage = () => {
                                             <Typography variant="caption" color="text.secondary" display="block">
                                                 Người tham dự: <strong>{ticket.attendeeName}</strong>
                                             </Typography>
+                                            <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap" gap={0.5}>
+                                                <Chip
+                                                    size="small"
+                                                    icon={<DoorOpen size={13} style={{ marginLeft: 6, color: 'inherit' }} />}
+                                                    label={ticket.gate}
+                                                    sx={{
+                                                        fontWeight: 700,
+                                                        fontSize: '0.72rem',
+                                                        bgcolor: 'primary.subtle',
+                                                        color: 'primary.main',
+                                                        '& .MuiChip-icon': { color: 'inherit' },
+                                                    }}
+                                                />
+                                                <Chip
+                                                    size="small"
+                                                    icon={<Armchair size={13} style={{ marginLeft: 6, color: 'inherit' }} />}
+                                                    label={`Ghế: ${ticket.seatNumber}`}
+                                                    sx={{
+                                                        fontWeight: 700,
+                                                        fontSize: '0.72rem',
+                                                        bgcolor: 'background.subtle',
+                                                        color: 'text.secondary',
+                                                        '& .MuiChip-icon': { color: 'inherit' },
+                                                    }}
+                                                />
+                                            </Stack>
                                         </Stack>
 
                                         {/* Thông tin giá & On-chain Hash */}
@@ -802,7 +830,7 @@ const MyTicketsPage = () => {
                                                         startIcon={<SwapHoriz />}
                                                         onClick={() => handleOpenResaleModal(ticket)}
                                                     >
-                                                        Bán lại (120%)
+                                                        Bán lại
                                                     </Button>
                                                     <Button
                                                         variant="contained"
@@ -811,7 +839,7 @@ const MyTicketsPage = () => {
                                                         startIcon={<QrCode2 />}
                                                         onClick={() => handleOpenQrModal(ticket)}
                                                     >
-                                                        Mở QR Soát Vé
+                                                        QR
                                                     </Button>
                                                 </>
                                             )}
@@ -831,7 +859,7 @@ const MyTicketsPage = () => {
                                                         color="primary"
                                                         size="small"
                                                         component={RouterLink}
-                                                        to={`/events/${ticket.tokenId === 1422 ? 'EVT-2026-002' : 'EVT-2026-001'}`}
+                                                        to="/marketplace"
                                                     >
                                                         Xem trên chợ
                                                     </Button>
@@ -846,7 +874,7 @@ const MyTicketsPage = () => {
                                                     startIcon={<CheckCircle />}
                                                     sx={{ '&.Mui-disabled': { color: 'status.checkedIn' } }}
                                                 >
-                                                    Đã quét tại cổng ({ticket.usedAt})
+                                                    Đã quét tại cổng{ticket.usedAt ? ` (${new Date(ticket.usedAt).toLocaleString('vi-VN')})` : ''}
                                                 </Button>
                                             )}
                                         </Stack>
@@ -931,16 +959,37 @@ const MyTicketsPage = () => {
                                 </Typography>
                             </Alert>
 
-                            {/* Thông tin vị trí cổng soát vé */}
+                            {/* Thông tin vị trí cổng soát vé và số ghế */}
                             <Box sx={{ p: 2, bgcolor: 'background.subtle', borderRadius: '8px', textAlign: 'left' }}>
-                                <Typography variant="caption" color="text.secondary">HẠNG VÉ:</Typography>
-                                <Typography variant="subtitle2" color="primary.main" fontWeight={700} mb={0.5}>
-                                    {activeTicket.tierName}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">LỐI VÀO SOÁT VÉ:</Typography>
-                                <Typography variant="body2" color="text.primary" fontWeight={600}>
-                                    {activeTicket.gate}
-                                </Typography>
+                                <Grid container spacing={1.5}>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="text.secondary">HẠNG VÉ:</Typography>
+                                        <Typography variant="subtitle2" color="primary.main" fontWeight={700}>
+                                            {activeTicket.tierName}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="text.secondary">SỐ GHẾ NGỒI:</Typography>
+                                        <Typography variant="subtitle2" fontWeight={700} color="text.primary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                                            <Armchair size={15} style={{ color: 'inherit' }} /> {activeTicket.seatNumber}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <Divider sx={{ my: 0.5 }} />
+                                    </Grid>
+                                    <Grid item xs={8}>
+                                        <Typography variant="caption" color="text.secondary">CỔNG SOÁT VÉ CHỈ ĐỊNH:</Typography>
+                                        <Typography variant="body2" color="text.primary" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                                            <DoorOpen size={16} style={{ color: '#3B82F6' }} /> {activeTicket.gate}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={4} textAlign="right">
+                                        <Typography variant="caption" color="text.secondary">MÃ TOKEN NFT:</Typography>
+                                        <Typography variant="body2" color="primary.main" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
+                                            Token #{activeTicket.tokenId}
+                                        </Typography>
+                                    </Grid>
+                                </Grid>
                             </Box>
                         </DialogContent>
 
@@ -1006,7 +1055,7 @@ const MyTicketsPage = () => {
                                 </Stack>
 
                                 <Stack direction="row" justifyContent="space-between">
-                                    <Typography variant="body2" color="text.secondary">Trần giá bán lại tối đa cho phép (+120%):</Typography>
+                                    <Typography variant="body2" color="text.secondary">Trần giá bán lại tối đa cho phép:</Typography>
                                     <Typography variant="body2" color="status.success" fontWeight={700}>
                                         {resaleTicket.maxResalePrice} ETH
                                     </Typography>
@@ -1062,15 +1111,25 @@ const MyTicketsPage = () => {
             ═══════════════════════════════════════════════════════════════════ */}
             <Snackbar
                 open={snackbar.open}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={handleCloseSnackbar}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                sx={{ zIndex: 99999 }}
             >
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity={snackbar.severity}
                     variant="filled"
-                    sx={{ width: '100%', borderRadius: '8px', color: '#fff' }}
+                    elevation={8}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                    }}
                 >
                     {snackbar.message}
                 </Alert>

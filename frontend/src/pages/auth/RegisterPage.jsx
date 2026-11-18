@@ -98,8 +98,8 @@ const RegisterPage = () => {
                 password: form.password,
                 role: role,
             });
-            const { user, accessToken, refreshToken } = res.data.data;
-            login(user, accessToken, refreshToken);
+            const { user, accessToken } = res.data.data;
+            login(user, accessToken);
 
             // Chuyển hướng theo vai trò đã đăng ký
             if (role === 'organizer') {

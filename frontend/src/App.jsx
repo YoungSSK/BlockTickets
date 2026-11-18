@@ -12,6 +12,7 @@ import EventDetailPage from './pages/customer/EventDetailPage';
 import EventsPage from './pages/customer/EventsPage';
 import HomePage from './pages/customer/HomePage';
 import MyTicketsPage from './pages/customer/MyTicketsPage';
+import CustomerProfilePage from './pages/customer/CustomerProfilePage';
 import MarketplacePage from './pages/marketplace/MarketplacePage';
 import CheckInScannerPage from './pages/organizer/CheckInScannerPage';
 import CreateEventPage from './pages/organizer/CreateEventPage';
@@ -70,6 +71,10 @@ const App = () => {
             <Route path="/customer/tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
             <Route path="/customer/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
 
+            {/* Trang Hồ sơ người dùng (Profile) */}
+            <Route path="/profile" element={<ProtectedRoute><CustomerProfilePage /></ProtectedRoute>} />
+            <Route path="/customer/profile" element={<ProtectedRoute><CustomerProfilePage /></ProtectedRoute>} />
+
             {/* Phân hệ Chợ vé thứ cấp (Marketplace - BR-02 Trần giá 120%) */}
             <Route path="/marketplace" element={<MarketplacePage />} />
             <Route path="/resale" element={<MarketplacePage />} />
@@ -84,6 +89,7 @@ const App = () => {
             <Route path="/check-in" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CheckInScannerPage /></ProtectedRoute>} />
             <Route path="/scanner" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CheckInScannerPage /></ProtectedRoute>} />
             <Route path="/organizer/scanner" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CheckInScannerPage /></ProtectedRoute>} />
+            <Route path="/organizer/events" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />
             <Route path="/organizer/create-event" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />
             <Route path="/create-event" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />
             <Route path="/events/create" element={<ProtectedRoute allowedRoles={['organizer', 'admin']}><CreateEventPage /></ProtectedRoute>} />

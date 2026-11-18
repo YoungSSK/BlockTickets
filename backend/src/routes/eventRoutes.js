@@ -12,6 +12,7 @@ import {
   createEventSchema,
   updateEventSchema,
   createTicketTypeSchema,
+  updateTicketTypeSchema,
   publishEventSchema,
 } from "../validators/eventValidator.js";
 import {
@@ -20,7 +21,11 @@ import {
   getEventById,
   createEvent,
   updateEvent,
+  cancelEvent,
+  deleteEvent,
   createTicketType,
+  updateTicketType,
+  deleteTicketType,
   submitForReview,
   publishEvent,
   getOrganizerStats,
@@ -53,10 +58,21 @@ router.get("/:id", optionalProtect, validate(eventIdParamSchema), getEventById);
 router.use(protect, authorize("organizer", "admin"));
 router.post("/", validate(createEventSchema), createEvent);
 router.put("/:id", validate(updateEventSchema), updateEvent);
+router.patch("/:id/cancel", validate(eventIdParamSchema), cancelEvent);
+router.delete("/:id", validate(eventIdParamSchema), deleteEvent);
 router.post(
   "/:id/ticket-types",
   validate(createTicketTypeSchema),
   createTicketType,
+);
+router.put(
+  "/:id/ticket-types/:ticketTypeId",
+  validate(updateTicketTypeSchema),
+  updateTicketType,
+);
+router.delete(
+  "/:id/ticket-types/:ticketTypeId",
+  deleteTicketType,
 );
 router.post(
   "/:id/submit-review",

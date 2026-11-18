@@ -55,6 +55,46 @@ const TicketType = sequelize.define(
       allowNull: false,
       field: "sale_end_time",
     },
+    entryGate: {
+      type: DataTypes.STRING(100),
+      defaultValue: "Cổng A - Khán Đài Phổ Thông Tầng 1",
+      field: "entry_gate",
+    },
+    tierType: {
+      type: DataTypes.STRING(50),
+      defaultValue: "standard",
+      field: "tier_type",
+    },
+    seatZone: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: "seat_zone",
+    },
+    seatRow: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: "seat_row",
+    },
+    seatStart: {
+      type: DataTypes.INTEGER,
+      defaultValue: 1,
+      field: "seat_start",
+    },
+    seatEnd: {
+      type: DataTypes.INTEGER,
+      defaultValue: 100,
+      field: "seat_end",
+    },
+    seatConfig: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: "seat_config",
+    },
+    onChainTierId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: "on_chain_tier_id",
+    },
   },
   {
     tableName: "ticket_types",

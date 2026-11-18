@@ -12,6 +12,45 @@ import {
 } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
 import * as blockchainService from "./blockchainService.js";
+// Helper phân bổ số ghế theo seatConfig (hỗ trợ nhiều zone & dãy) hoặc dải ghế đơn
+export const getAssignedSeatFromConfig = (ticketType, ticketIndex) => {
+  let allocations = [];
+  if (Array.isArray(ticketType.seatConfig) && ticketType.seatConfig.length > 0) {
+    allocations = ticketType.seatConfig;
+  } else if (ticketType.seatConfig && Array.isArray(ticketType.seatConfig.allocations)) {
+    allocations = ticketType.seatConfig.allocations;
+  }
+
+  if (allocations.length > 0) {
+    let accumulated = 0;
+    for (const alloc of allocations) {
+      const start = Number(alloc.seatStart) || 1;
+      const end = Number(alloc.seatEnd) || (start + (Number(alloc.seatCount) || 1) - 1);
+      const count = Math.max(1, end - start + 1);
+
+      if (ticketIndex < accumulated + count) {
+        const offset = ticketIndex - accumulated;
+        const seatNo = start + offset;
+        return `${alloc.zone} • ${alloc.row} • Ghế ${String(seatNo).padStart(2, "0")}`;
+      }
+      accumulated += count;
+    }
+  }
+
+  // Fallback về 1 zone và 1 dãy duy nhất
+  if (ticketType.seatZone && ticketType.seatRow) {
+    const start = Number(ticketType.seatStart) || 1;
+    const currentSeatNum = start + ticketIndex;
+    return `${ticketType.seatZone} • ${ticketType.seatRow} • Ghế ${String(currentSeatNum).padStart(2, "0")}`;
+  }
+
+  const tierPrefix = (ticketType.name || "VE")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 4)
+    .toUpperCase();
+  return `${tierPrefix}-${String(ticketIndex + 1).padStart(2, "0")}`;
+};
+
 // 1. Tạo đơn đặt vé mới (Order Intent)
 export const createOrder = async (
   { eventId, ticketTypeId, quantity, buyerWallet, idempotencyKey },
@@ -21,10 +60,21 @@ export const createOrder = async (
   const parsedTicketTypeId = Number(ticketTypeId);
   const parsedQuantity = Math.max(1, Number(quantity) || 1);
 
+  const MAX_TICKETS_PER_TX = 5;
+  if (parsedQuantity > MAX_TICKETS_PER_TX) {
+    throw new AppError(
+      `Mỗi lần thanh toán chỉ được mua tối đa ${MAX_TICKETS_PER_TX} vé.`,
+      400,
+    );
+  }
+
   const event = await Event.findByPk(parsedEventId);
   if (!event) throw new AppError("Không tìm thấy sự kiện.", 404);
-  if (!["published", "approved"].includes(event.status)) {
-    throw new AppError("Sự kiện chưa được mở bán vé.", 400);
+  if (event.status !== "published" || !event.onChainEventId) {
+    throw new AppError(
+      "Sự kiện chưa được Ban tổ chức công bố mở bán on-chain trên Blockchain.",
+      400,
+    );
   }
 
   const ticketType = await TicketType.findOne({
@@ -32,6 +82,13 @@ export const createOrder = async (
   });
   if (!ticketType)
     throw new AppError("Hạng vé không tồn tại trong sự kiện.", 404);
+
+  if (!ticketType.onChainTierId) {
+    throw new AppError(
+      `Hạng vé "${ticketType.name}" chưa được đồng bộ mã Tier on-chain. Vui lòng liên hệ Ban tổ chức.`,
+      400,
+    );
+  }
 
   const currentSupply = Number(ticketType.currentSupply || 0);
   const maxSupply = Number(ticketType.maxSupply || 0);
@@ -139,6 +196,11 @@ export const verifyAndConfirmOrder = async (orderId, { txHash }, user) => {
     const tokenIds = verification.tokenIds;
     for (let i = 0; i < order.quantity; i++) {
       const assignedTokenId = tokenIds[i] ?? Math.floor(Date.now() / 1000) + i;
+      // Sinh số ghế riêng biệt từ seatConfig (hỗ trợ nhiều zone & dãy ghế) hoặc cấu hình đơn
+      const seatIndex = Number(ticketType.currentSupply || 0) + i;
+      const seatNumber = getAssignedSeatFromConfig(ticketType, seatIndex);
+      const entryGate = ticketType.entryGate || "Cổng A - Khán Đài Phổ Thông Tầng 1";
+
       const ticket = await Ticket.create(
         {
           tokenId: assignedTokenId,
@@ -150,6 +212,8 @@ export const verifyAndConfirmOrder = async (orderId, { txHash }, user) => {
           txHash: order.txHash,
           isUsed: false,
           isListedForResale: false,
+          seatNumber,
+          entryGate,
         },
         { transaction: t },
       );
@@ -177,12 +241,20 @@ export const getOrderDetail = async (orderId) => {
 
 // 4. Lấy danh sách Vé NFT của tôi
 export const getMyTickets = async (user, walletQuery) => {
-  const targetWallet = (walletQuery || user?.walletAddress || "").toLowerCase();
+  const targetWallet = (walletQuery || user?.walletAddress || "").trim();
 
-  const where = {};
-  if (targetWallet) {
-    where.ownerWallet = targetWallet;
+  // Bắt buộc phải có địa chỉ ví của khách hàng (qua query hoặc tài khoản đã liên kết)
+  // Nếu chưa có ví, không trả về toàn bộ vé trong hệ thống mà trả về danh sách rỗng
+  if (!targetWallet) {
+    return [];
   }
+
+  const where = {
+    [Op.or]: [
+      { ownerWallet: targetWallet },
+      { ownerWallet: targetWallet.toLowerCase() },
+    ],
+  };
 
   const tickets = await Ticket.findAll({
     where,
@@ -194,6 +266,7 @@ export const getMyTickets = async (user, walletQuery) => {
           "id",
           "title",
           "description",
+          "category",
           "bannerUrl",
           "venueName",
           "venueAddress",

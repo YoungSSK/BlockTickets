@@ -77,49 +77,72 @@ export const getMarketplaceContract = (customProvider) => {
 };
 
 // 4. Xác minh sự kiện tồn tại thật trên Smart Contract (Dùng cho BE-04, BE-06)
+// Có cơ chế retry ngắn để tránh độ trễ đồng bộ 1-2 block giữa MetaMask RPC và Backend RPC ngay sau khi tx vừa mine
 export const verifyOnChainEvent = async (onChainEventId, expectedOrganizer) => {
   if (process.env.MOCK_BLOCKCHAIN === "true") {
     return { eventId: onChainEventId, isActive: true, isCancelled: false };
   }
 
   const contract = getEventTicketContract();
-  try {
-    const eventInfo = await contract.getEventInfo(BigInt(onChainEventId));
+  const maxAttempts = 5;
+  const retryDelayMs = 2000;
+  let lastError = null;
 
-    if (eventInfo.isCancelled) {
-      throw new AppError("Sự kiện trên Smart Contract đã bị hủy bỏ.", 400);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const eventInfo = await contract.getEventInfo(BigInt(onChainEventId));
+
+      if (eventInfo.isCancelled) {
+        throw new AppError("Sự kiện trên Smart Contract đã bị hủy bỏ.", 400);
+      }
+
+      const isZeroOrganizer =
+        !eventInfo.organizer ||
+        eventInfo.organizer === ethers.ZeroAddress;
+
+      // Nếu block chưa kịp đồng bộ tới RPC của Backend, chờ rồi thử lại
+      if ((isZeroOrganizer || !eventInfo.isActive) && attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        continue;
+      }
+
+      if (!eventInfo.isActive || isZeroOrganizer) {
+        throw new AppError("Sự kiện trên Smart Contract đang không kích hoạt.", 400);
+      }
+
+      if (
+        expectedOrganizer &&
+        eventInfo.organizer.toLowerCase() !== expectedOrganizer.toLowerCase()
+      ) {
+        throw new AppError(
+          `Ví tạo sự kiện on-chain (${eventInfo.organizer}) không khớp với ví Organizer của bạn (${expectedOrganizer}).`,
+          403,
+        );
+      }
+
+      return {
+        eventId: Number(eventInfo.eventId),
+        organizer: eventInfo.organizer,
+        startTime: Number(eventInfo.startTime),
+        endTime: Number(eventInfo.endTime),
+        isActive: eventInfo.isActive,
+        isCancelled: eventInfo.isCancelled,
+        totalMinted: Number(eventInfo.totalMinted),
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      lastError = error;
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        continue;
+      }
     }
-
-    if (!eventInfo.isActive) {
-      throw new AppError("Sự kiện trên Smart Contract đang không kích hoạt.", 400);
-    }
-
-    if (
-      expectedOrganizer &&
-      eventInfo.organizer.toLowerCase() !== expectedOrganizer.toLowerCase()
-    ) {
-      throw new AppError(
-        `Ví tạo sự kiện on-chain (${eventInfo.organizer}) không khớp với ví Organizer của bạn (${expectedOrganizer}).`,
-        403,
-      );
-    }
-
-    return {
-      eventId: Number(eventInfo.eventId),
-      organizer: eventInfo.organizer,
-      startTime: Number(eventInfo.startTime),
-      endTime: Number(eventInfo.endTime),
-      isActive: eventInfo.isActive,
-      isCancelled: eventInfo.isCancelled,
-      totalMinted: Number(eventInfo.totalMinted),
-    };
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError(
-      `Không tìm thấy sự kiện on-chain ID ${onChainEventId} trên Smart Contract: ${error.message}`,
-      400,
-    );
   }
+
+  throw new AppError(
+    `Không tìm thấy sự kiện on-chain ID ${onChainEventId} trên Smart Contract: ${lastError?.message || "Lỗi kết nối RPC"}`,
+    400,
+  );
 };
 
 // 5. Xác minh Transaction mua vé và bóc tách danh sách tokenId thật (Dùng cho BE-07)

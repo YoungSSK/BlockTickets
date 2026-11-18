@@ -7,13 +7,9 @@ import {
     Stack,
     Link,
     Divider,
-    Chip,
 } from '@mui/material';
 import {
     ConfirmationNumber,
-    Security,
-    Shield,
-    FiberManualRecord,
     Launch,
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
@@ -26,7 +22,7 @@ const Footer = () => {
                 bgcolor: 'background.paper',
                 borderTop: 1,
                 borderColor: 'divider',
-                pt: 6,
+                pt: 5,
                 pb: 4,
                 mt: 'auto',
             }}
@@ -55,19 +51,10 @@ const Footer = () => {
                             </Typography>
                         </Stack>
 
-                        <Typography variant="body2" color="text.secondary" paragraph sx={{ maxWidth: 360, lineHeight: 1.6 }}>
-                            Nền tảng phân phối & chuyển nhượng vé sự kiện ứng dụng công nghệ Blockchain & NFT trên Ethereum Sepolia.
-                            Chống vé giả, triệt tiêu phe vé với trần giá bất biến 120%.
+                        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 360, lineHeight: 1.65 }}>
+                            Nền tảng đặt vé & chuyển nhượng vé sự kiện NFT minh bạch trên Blockchain.
+                            Đặt vé nhanh chóng, chống giả mạo và sang nhượng an toàn.
                         </Typography>
-
-                        <Stack direction="row" alignItems="center" spacing={1} mt={2}>
-                            <Chip
-                                icon={<FiberManualRecord sx={{ color: 'status.success', fontSize: 10 }} />}
-                                label="Sepolia Testnet #11155111"
-                                size="small"
-                                sx={{ bgcolor: 'status.successBg', color: 'status.success', fontWeight: 600 }}
-                            />
-                        </Stack>
                     </Grid>
 
                     {/* Cột 2: Khám phá */}
@@ -80,52 +67,46 @@ const Footer = () => {
                                 Trang chủ
                             </Link>
                             <Link component={RouterLink} to="/events" color="text.secondary" variant="body2" underline="hover">
-                                Sự kiện nổi bật
+                                Tất cả sự kiện
                             </Link>
                             <Link component={RouterLink} to="/marketplace" color="text.secondary" variant="body2" underline="hover">
                                 Chợ vé thứ cấp
                             </Link>
                             <Link component={RouterLink} to="/my-tickets" color="text.secondary" variant="body2" underline="hover">
-                                Kho vé của tôi
+                                Vé của tôi
                             </Link>
                         </Stack>
                     </Grid>
 
-                    {/* Cột 3: Quản trị & Nhà tổ chức */}
+                    {/* Cột 3: Danh mục sự kiện */}
                     <Grid item xs={6} sm={4} md={3}>
                         <Typography variant="subtitle2" color="text.primary" fontWeight={700} mb={2}>
-                            QUẢN TRỊ & HỆ THỐNG
+                            DANH MỤC SỰ KIỆN
                         </Typography>
                         <Stack spacing={1.2}>
-                            <Link component={RouterLink} to="/admin/dashboard" color="text.secondary" variant="body2" underline="hover">
-                                Bảng điều khiển Quản trị
+                            <Link component={RouterLink} to="/events?category=music" color="text.secondary" variant="body2" underline="hover">
+                                Sự kiện Âm nhạc
                             </Link>
-                            <Link component={RouterLink} to="/admin/events" color="text.secondary" variant="body2" underline="hover">
-                                Phê duyệt sự kiện
+                            <Link component={RouterLink} to="/events?category=sports" color="text.secondary" variant="body2" underline="hover">
+                                Sự kiện Thể thao
                             </Link>
-                            <Link component={RouterLink} to="/admin/users" color="text.secondary" variant="body2" underline="hover">
-                                Quản lý người dùng & ví
+                            <Link component={RouterLink} to="/events?category=technology" color="text.secondary" variant="body2" underline="hover">
+                                Sự kiện Công nghệ
                             </Link>
-                            <Link component={RouterLink} to="/login" color="text.secondary" variant="body2" underline="hover">
-                                Đăng nhập tài khoản
+                            <Link component={RouterLink} to="/events?category=workshop" color="text.secondary" variant="body2" underline="hover">
+                                Hội thảo & Workshop
                             </Link>
                         </Stack>
                     </Grid>
 
-                    {/* Cột 4: Bảo mật & Chuỗi khối */}
+                    {/* Cột 4: Smart Contract */}
                     <Grid item xs={12} sm={4} md={3}>
                         <Typography variant="subtitle2" color="text.primary" fontWeight={700} mb={2}>
-                            SMART CONTRACT & BẢO MẬT
+                            SMART CONTRACT
                         </Typography>
                         <Stack spacing={1.2}>
                             <Typography variant="caption" color="text.secondary" display="block">
                                 Chuẩn Token: <strong>ERC-721 (Non-Fungible Token)</strong>
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                                Quy tắc bất biến: <strong>Trần giá bán lại 120% (BR-02)</strong>
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                                Soát vé: <strong>Mã QR động ký số HMAC</strong>
                             </Typography>
                             <Link
                                 href="https://sepolia.etherscan.io"
@@ -142,25 +123,14 @@ const Footer = () => {
                     </Grid>
                 </Grid>
 
-                <Divider sx={{ my: 3 }} />
+                <Divider sx={{ my: 2.5 }} />
 
-                <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    justifyContent="space-between"
-                    alignItems="center"
-                    spacing={1}
-                >
-                    <Typography variant="caption" color="text.secondary">
-                        © 2026 BlockTickets System. Bảo lưu mọi quyền. Nền tảng vé sự kiện Blockchain.
-                    </Typography>
-                    <Typography variant="caption" color="text.disabled">
-                        Thiết kế theo chuẩn Modern SaaS Design System (docs/theme_specification.md)
-                    </Typography>
-                </Stack>
+                <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
+                    © 2026 BlockTickets. Bảo lưu mọi quyền.
+                </Typography>
             </Container>
         </Box>
     );
 };
 
 export default Footer;
-
