@@ -416,9 +416,6 @@ const EventApprovalPage = () => {
                                         <HourglassEmpty />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                                    Thời gian chờ trung bình: ~1.2 giờ
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -450,9 +447,6 @@ const EventApprovalPage = () => {
                                         <CheckCircle />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                                    Sẵn sàng mở bán trên Smart Contract
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -484,9 +478,6 @@ const EventApprovalPage = () => {
                                         <Cancel />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                                    Đã gửi lý do chi tiết cho Organizer
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -518,9 +509,6 @@ const EventApprovalPage = () => {
                                         <ConfirmationNumber />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                                    Tổng vé NFT từ các sự kiện chờ duyệt
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
