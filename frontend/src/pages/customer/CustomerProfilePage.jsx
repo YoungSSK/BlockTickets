@@ -32,7 +32,6 @@ import {
     OpenInNew,
     Refresh,
     SwapHoriz,
-    Security,
     Storefront,
     Save,
     QrCodeScanner,
@@ -496,12 +495,7 @@ const CustomerProfilePage = () => {
                             label="Ví Web3 & Blockchain"
                             sx={{ fontWeight: 600, textTransform: 'none', minHeight: 48 }}
                         />
-                        <Tab
-                            icon={<Security sx={{ fontSize: 18 }} />}
-                            iconPosition="start"
-                            label="Lối Tắt & Bảo Mật"
-                            sx={{ fontWeight: 600, textTransform: 'none', minHeight: 48 }}
-                        />
+
                     </Tabs>
 
                     <Box sx={{ p: { xs: 2.5, md: 4 } }}>
@@ -796,131 +790,6 @@ const CustomerProfilePage = () => {
                                         </Box>
                                     )}
                                 </Paper>
-                            </Box>
-                        )}
-
-                        {/* TAB 3: LỐI TẮT & BẢO MẬT */}
-                        {activeTab === 2 && (
-                            <Box sx={{ maxWidth: 700 }}>
-                                <Typography variant="h3" fontWeight={700} color="text.primary" mb={1}>
-                                    Quản Lý Lối Tắt & Bảo Mật Vé Sự Kiện
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary" mb={3}>
-                                    Truy cập nhanh kho vé cá nhân và các quy định an toàn khi tham dự sự kiện hoặc chuyển nhượng vé.
-                                </Typography>
-
-                                <Grid container spacing={2} sx={{ mb: 4 }}>
-                                    <Grid item xs={12} sm={6}>
-                                        <Paper
-                                            variant="outlined"
-                                            sx={{
-                                                p: 2.5,
-                                                borderRadius: '12px',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                            }}
-                                            onClick={() => navigate('/my-tickets')}
-                                        >
-                                            <Stack direction="row" spacing={1.5} alignItems="center" mb={1}>
-                                                <ConfirmationNumber color="primary" />
-                                                <Typography variant="subtitle1" fontWeight={700}>
-                                                    Kho Vé Của Tôi
-                                                </Typography>
-                                            </Stack>
-                                            <Typography variant="body2" color="text.secondary" mb={1.5}>
-                                                Xem danh sách vé NFT đã sở hữu, mở mã QR HMAC bảo mật để vào cổng sự kiện.
-                                            </Typography>
-                                            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: 'primary.main', fontWeight: 600, fontSize: '0.85rem' }}>
-                                                <span>Mở Kho vé</span>
-                                                <ArrowForward fontSize="small" />
-                                            </Stack>
-                                        </Paper>
-                                    </Grid>
-
-                                    <Grid item xs={12} sm={6}>
-                                        <Paper
-                                            variant="outlined"
-                                            sx={{
-                                                p: 2.5,
-                                                borderRadius: '12px',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                            }}
-                                            onClick={() => navigate('/marketplace')}
-                                        >
-                                            <Stack direction="row" spacing={1.5} alignItems="center" mb={1}>
-                                                <Storefront color="primary" />
-                                                <Typography variant="subtitle1" fontWeight={700}>
-                                                    Chợ Vé Thứ Cấp
-                                                </Typography>
-                                            </Stack>
-                                            <Typography variant="body2" color="text.secondary" mb={1.5}>
-                                                Mua bán lại vé chính hãng với thuật toán kiểm soát trần giá tối đa 120% chống phe vé.
-                                            </Typography>
-                                            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: 'primary.main', fontWeight: 600, fontSize: '0.85rem' }}>
-                                                <span>Khám phá Chợ vé</span>
-                                                <ArrowForward fontSize="small" />
-                                            </Stack>
-                                        </Paper>
-                                    </Grid>
-                                </Grid>
-
-                                <Paper
-                                    variant="outlined"
-                                    sx={{
-                                        p: 2.5,
-                                        borderRadius: '12px',
-                                        mb: 3,
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        bgcolor: 'background.subtle',
-                                    }}
-                                >
-                                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} gap={2}>
-                                        <Box>
-                                            <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-                                                Phiên Đăng Nhập & Bảo Mật Tài Khoản
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Đăng xuất khỏi tài khoản trên thiết bị này để đảm bảo an toàn cho ví và vé NFT của bạn.
-                                            </Typography>
-                                        </Box>
-                                        <Button
-                                            variant="outlined"
-                                            color="error"
-                                            size="medium"
-                                            startIcon={<Logout />}
-                                            onClick={() => {
-                                                logout();
-                                                navigate('/login');
-                                            }}
-                                            sx={{
-                                                borderRadius: '8px',
-                                                textTransform: 'none',
-                                                fontWeight: 600,
-                                                height: 38,
-                                                px: 2.5,
-                                                width: { xs: '100%', sm: 'auto' },
-                                            }}
-                                        >
-                                            Đăng xuất
-                                        </Button>
-                                    </Stack>
-                                </Paper>
-
-                                <Alert severity="info" sx={{ borderRadius: '10px' }}>
-                                    <Typography variant="subtitle2" fontWeight={700} mb={0.5}>
-                                        Chính sách bảo mật Blockchain & QR Động
-                                    </Typography>
-                                    <Typography variant="caption" display="block">
-                                        • Mã QR soát vé được bảo vệ bởi chữ ký HMAC và tự động làm mới liên tục mỗi 30-60 giây để chống chụp ảnh màn hình bán lại trái phép.
-                                    </Typography>
-                                    <Typography variant="caption" display="block" mt={0.5}>
-                                        • Tuyệt đối không chia sẻ mã QR bí mật hoặc cụm từ khôi phục (Seed phrase) của ví MetaMask cho người khác.
-                                    </Typography>
-                                </Alert>
                             </Box>
                         )}
                     </Box>
