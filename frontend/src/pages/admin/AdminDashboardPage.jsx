@@ -33,9 +33,13 @@ import {
     MenuItem,
     Select,
     FormControl,
+    ToggleButton,
+    ToggleButtonGroup,
 } from '@mui/material';
 import {
     ConfirmationNumber,
+    BarChart,
+    ScatterPlot,
     AccountBalanceWallet,
     TrendingUp,
     PeopleAlt,
@@ -90,6 +94,7 @@ const EMPTY_METRICS = {
     totalUsers: 0,
     connectedWallets: 0,
     complianceScore: 100,
+    revenueByEvent: [],
 };
 
 const INITIAL_METRICS = EMPTY_METRICS;
@@ -151,7 +156,8 @@ const AdminDashboardPage = () => {
 
     // States
     const [currentTab, setCurrentTab] = useState(0);
-    const [timeRange, setTimeRange] = useState('30days');
+    const [revenueUnit, setRevenueUnit] = useState('ETH');
+    const [hoveredEventId, setHoveredEventId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastSyncTime, setLastSyncTime] = useState('15:02:10');
@@ -406,55 +412,13 @@ const AdminDashboardPage = () => {
         }
     };
 
-    const topActions = (
-        <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
-            <FormControl size="small" sx={{ minWidth: 130 }}>
-                <Select
-                    value={timeRange}
-                    onChange={(e) => setTimeRange(e.target.value)}
-                    sx={{ height: 38, bgcolor: 'background.paper', borderRadius: '8px' }}
-                >
-                    <MenuItem value="today">Hôm nay</MenuItem>
-                    <MenuItem value="7days">7 ngày qua</MenuItem>
-                    <MenuItem value="30days">30 ngày qua</MenuItem>
-                    <MenuItem value="all">Toàn thời gian</MenuItem>
-                </Select>
-            </FormControl>
-
-            <Tooltip title="Làm mới dữ liệu từ Sepolia & Database">
-                <span>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={handleRefreshData}
-                        disabled={isRefreshing}
-                        startIcon={
-                            <Refresh
-                                sx={{
-                                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-                                    '@keyframes spin': {
-                                        '0%': { transform: 'rotate(0deg)' },
-                                        '100%': { transform: 'rotate(360deg)' },
-                                    },
-                                }}
-                            />
-                        }
-                        sx={{ height: 38, borderRadius: '8px' }}
-                    >
-                        Đồng bộ
-                    </Button>
-                </span>
-            </Tooltip>
-        </Stack>
-    );
-
+    
     return (
         <DashboardLayout
             role="admin"
             title="Bảng Điều Khiển Quản Trị"
             subtitle={`Sepolia Testnet #11155111 • Đồng bộ gần nhất: ${lastSyncTime}`}
-            topActions={topActions}
-            hideHeaderActions={false}
+            hideHeaderActions={true}
         >
             <Box sx={{ width: '100%' }}>
                 
@@ -750,7 +714,8 @@ const AdminDashboardPage = () => {
                 {/* ═══════════════════════════════════════════════════════════════════
                     TAB 0: TỔNG QUAN & GIÁM SÁT (OVERVIEW DASHBOARD)
                 ═══════════════════════════════════════════════════════════════════ */}
-                {currentTab === 0 && (
+                
+{currentTab === 0 && (
                     <Grid container spacing={3}>
                         {/* Hàng đợi duyệt sự kiện khẩn cấp */}
                         <Grid item xs={12} lg={8}>
@@ -1056,8 +1021,442 @@ const AdminDashboardPage = () => {
                             </Card>
                         </Grid>
 
-                        {/* Cột Phụ: Sức khỏe Hạ tầng & Hợp Đồng Thông Minh */}
+                        {/* Cột Phụ: Doanh Thu Sự Kiện & Sức khỏe Hạ tầng */}
                         <Grid item xs={12} lg={4}>
+                            {/* ═══════════════════════════════════════════════════════════════════
+                                BIỂU ĐỒ DOANH THU THEO SỰ KIỆN - BIỂU ĐỒ ĐIỂM (SCATTER PLOT)
+                            ═══════════════════════════════════════════════════════════════════ */}
+                            <Card sx={{ bgcolor: 'background.paper', mb: 3 }}>
+                                <Box sx={{ p: 2.5, borderBottom: 1, borderColor: 'divider' }}>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                        <Box>
+                                            <Stack direction="row" alignItems="center" spacing={1}>
+                                                <ScatterPlot sx={{ color: 'primary.main', fontSize: 22 }} />
+                                                <Typography variant="h3" color="text.primary">
+                                                    Doanh Thu Theo Sự Kiện
+                                                </Typography>
+                                            </Stack>
+                                            <Typography variant="body2" color="text.secondary" mt={0.25}>
+                                                Tương quan Vé bán (Trục X) & Doanh thu (Trục Y)
+                                            </Typography>
+                                        </Box>
+                                        <ToggleButtonGroup
+                                            size="small"
+                                            value={revenueUnit}
+                                            exclusive
+                                            onChange={(e, val) => val && setRevenueUnit(val)}
+                                            sx={{
+                                                height: 30,
+                                                '& .MuiToggleButton-root': {
+                                                    px: 1.2,
+                                                    py: 0.25,
+                                                    fontWeight: 600,
+                                                    fontSize: '0.75rem',
+                                                },
+                                            }}
+                                        >
+                                            <ToggleButton value="ETH">ETH</ToggleButton>
+                                            <ToggleButton value="USD">USD</ToggleButton>
+                                        </ToggleButtonGroup>
+                                    </Stack>
+                                </Box>
+
+                                <CardContent sx={{ p: 2.5 }}>
+                                    {(() => {
+                                        const eventsList = Array.isArray(metrics.revenueByEvent) ? metrics.revenueByEvent : [];
+                                        const chartColors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#06B6D4'];
+
+                                        if (eventsList.length === 0) {
+                                            return (
+                                                <Box sx={{ py: 4, textAlign: 'center' }}>
+                                                    <ScatterPlot sx={{ fontSize: 44, color: 'text.disabled', mb: 1, opacity: 0.6 }} />
+                                                    <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                                        Chưa có dữ liệu sự kiện
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.disabled" display="block" mt={0.5}>
+                                                        Mỗi sự kiện sẽ hiển thị thành một điểm trên biểu đồ khi phát sinh giao dịch
+                                                    </Typography>
+                                                </Box>
+                                            );
+                                        }
+
+                                        // Hàm tính toán các vạch chia (ticks) tối ưu chuẩn xác, loại bỏ hoàn toàn sai số đọc trục
+                                        const getNiceTicks = (rawMax, isCurrencyUsd = false, desiredTicks = 4) => {
+                                            const minVal = isCurrencyUsd ? 50 : 0.01;
+                                            const max = Math.max(rawMax, minVal);
+                                            const range = max * 1.15;
+                                            const rawStep = range / desiredTicks;
+                                            const exponent = Math.floor(Math.log10(rawStep));
+                                            const fraction = rawStep / Math.pow(10, exponent);
+
+                                            let niceFraction;
+                                            if (fraction < 1.5) niceFraction = 1;
+                                            else if (fraction < 3) niceFraction = 2;
+                                            else if (fraction < 7) niceFraction = 5;
+                                            else niceFraction = 10;
+
+                                            const step = Number((niceFraction * Math.pow(10, exponent)).toFixed(6));
+                                            let ceiling = Math.ceil(range / step) * step;
+                                            if (ceiling <= max) ceiling += step;
+                                            ceiling = Number(ceiling.toFixed(6));
+
+                                            const ticks = [];
+                                            for (let val = 0; val <= ceiling + step * 0.01; val += step) {
+                                                ticks.push(Number(val.toFixed(6)));
+                                            }
+                                            return { step, ceiling, ticks };
+                                        };
+
+                                        // Định dạng nhãn trục Y
+                                        const formatYTick = (val, step, unit) => {
+                                            if (val === 0) return '0';
+                                            if (unit === 'USD') {
+                                                if (val >= 1000) {
+                                                    return (val / 1000) % 1 === 0 ? `${val / 1000}k` : `${(val / 1000).toFixed(1)}k`;
+                                                }
+                                                return `${val}`;
+                                            }
+                                            // ETH
+                                            if (step < 0.01) return val.toFixed(3);
+                                            if (step < 0.1) return val.toFixed(2);
+                                            if (step < 1) return (val * 10) % 1 === 0 ? val.toFixed(1) : val.toFixed(2);
+                                            return val % 1 === 0 ? `${val}` : val.toFixed(1);
+                                        };
+
+                                        // Trục Y (Doanh thu)
+                                        const rawMaxY = Math.max(...eventsList.map((e) => (revenueUnit === 'ETH' ? (e.revenueEth || 0) : (e.revenueUsd || 0))), 0.01);
+                                        const yAxis = getNiceTicks(rawMaxY, revenueUnit === 'USD', 4);
+                                        const ceilingY = yAxis.ceiling;
+                                        const yTicks = yAxis.ticks;
+
+                                        // Trục X (Số vé)
+                                        const rawMaxX = Math.max(...eventsList.map((e) => Number(e.ticketsSold || 0)), 5);
+                                        const xAxis = getNiceTicks(rawMaxX, false, 3);
+                                        const ceilingX = Math.max(10, xAxis.ceiling);
+                                        const xTicks = xAxis.ticks;
+
+                                        // Kích thước hệ trục SVG
+                                        const svgW = 340;
+                                        const svgH = 200;
+                                        const pLeft = 48;
+                                        const pRight = 20;
+                                        const pTop = 18;
+                                        const pBottom = 30;
+                                        const plotW = svgW - pLeft - pRight;
+                                        const plotH = svgH - pTop - pBottom;
+
+                                        // Tính tọa độ cho từng sự kiện
+                                        const points = eventsList.map((item, idx) => {
+                                            const valY = revenueUnit === 'ETH' ? (item.revenueEth || 0) : (item.revenueUsd || 0);
+                                            const valX = Number(item.ticketsSold || 0);
+                                            const cx = pLeft + Math.min(plotW, Math.max(0, (valX / ceilingX) * plotW));
+                                            const cy = pTop + plotH - Math.min(plotH, Math.max(0, (valY / ceilingY) * plotH));
+                                            const color = chartColors[idx % chartColors.length];
+                                            return { ...item, valX, valY, cx, cy, color, index: idx + 1 };
+                                        });
+
+                                        return (
+                                            <Stack spacing={2}>
+                                                {/* Thống kê nhanh & Hướng dẫn trục */}
+                                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                                                        Trục Y: Doanh thu ({revenueUnit}) • Bước chia: {formatYTick(yAxis.step, yAxis.step, revenueUnit)}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.primary" fontWeight={700} sx={{ fontSize: '0.72rem' }}>
+                                                        {eventsList.length} sự kiện
+                                                    </Typography>
+                                                </Stack>
+
+                                                {/* Canvas Biểu Đồ Điểm (Scatter Plot SVG) */}
+                                                <Box
+                                                    sx={{
+                                                        width: '100%',
+                                                        bgcolor: 'background.subtle',
+                                                        borderRadius: 2,
+                                                        p: 1,
+                                                        border: 1,
+                                                        borderColor: 'divider',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    <svg
+                                                        viewBox={`0 0 ${svgW} ${svgH}`}
+                                                        style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
+                                                    >
+                                                        {/* Lưới ngang (Grid lines Y) */}
+                                                        {yTicks.map((tickVal) => {
+                                                            const ratio = ceilingY > 0 ? tickVal / ceilingY : 0;
+                                                            const y = pTop + plotH - ratio * plotH;
+                                                            const label = formatYTick(tickVal, yAxis.step, revenueUnit);
+                                                            return (
+                                                                <g key={`grid-y-${tickVal}`}>
+                                                                    <line
+                                                                        x1={pLeft}
+                                                                        y1={y}
+                                                                        x2={pLeft + plotW}
+                                                                        y2={y}
+                                                                        stroke="currentColor"
+                                                                        strokeOpacity={0.12}
+                                                                        strokeDasharray="3 3"
+                                                                    />
+                                                                    <text
+                                                                        x={pLeft - 6}
+                                                                        y={y + 3}
+                                                                        textAnchor="end"
+                                                                        fontSize="9"
+                                                                        fontWeight="500"
+                                                                        fill="currentColor"
+                                                                        opacity={0.65}
+                                                                        fontFamily="inherit"
+                                                                    >
+                                                                        {label}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+
+                                                        {/* Lưới dọc (Grid lines X) */}
+                                                        {xTicks.map((tickVal, idx) => {
+                                                            const ratio = ceilingX > 0 ? tickVal / ceilingX : 0;
+                                                            const x = pLeft + ratio * plotW;
+                                                            const label = tickVal === 0 ? '0' : `${tickVal}v`;
+                                                            return (
+                                                                <g key={`grid-x-${tickVal}`}>
+                                                                    <line
+                                                                        x1={x}
+                                                                        y1={pTop}
+                                                                        x2={x}
+                                                                        y2={pTop + plotH}
+                                                                        stroke="currentColor"
+                                                                        strokeOpacity={0.08}
+                                                                        strokeDasharray="3 3"
+                                                                    />
+                                                                    <text
+                                                                        x={x}
+                                                                        y={pTop + plotH + 16}
+                                                                        textAnchor={idx === 0 ? 'start' : idx === xTicks.length - 1 ? 'end' : 'middle'}
+                                                                        fontSize="9"
+                                                                        fill="currentColor"
+                                                                        opacity={0.6}
+                                                                        fontFamily="inherit"
+                                                                    >
+                                                                        {label}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+
+                                                        {/* Trục chính X và Y */}
+                                                        <line
+                                                            x1={pLeft}
+                                                            y1={pTop}
+                                                            x2={pLeft}
+                                                            y2={pTop + plotH}
+                                                            stroke="currentColor"
+                                                            strokeOpacity={0.3}
+                                                            strokeWidth={1.5}
+                                                        />
+                                                        <line
+                                                            x1={pLeft}
+                                                            y1={pTop + plotH}
+                                                            x2={pLeft + plotW}
+                                                            y2={pTop + plotH}
+                                                            stroke="currentColor"
+                                                            strokeOpacity={0.3}
+                                                            strokeWidth={1.5}
+                                                        />
+
+                                                        {/* Đường gióng tới trục & Nhãn giá trị chuẩn xác khi hover vào điểm */}
+                                                        {points.map((pt) => {
+                                                            if (hoveredEventId !== pt.eventId) return null;
+                                                            const exactYLabel = revenueUnit === 'ETH' ? `${pt.revenueEth} ETH` : `${pt.revenueUsd.toLocaleString()}`;
+                                                            return (
+                                                                <g key={`guide-${pt.eventId}`}>
+                                                                    <line
+                                                                        x1={pLeft}
+                                                                        y1={pt.cy}
+                                                                        x2={pt.cx}
+                                                                        y2={pt.cy}
+                                                                        stroke={pt.color}
+                                                                        strokeWidth={1.2}
+                                                                        strokeDasharray="3 3"
+                                                                        opacity={0.8}
+                                                                    />
+                                                                    <line
+                                                                        x1={pt.cx}
+                                                                        y1={pt.cy}
+                                                                        x2={pt.cx}
+                                                                        y2={pTop + plotH}
+                                                                        stroke={pt.color}
+                                                                        strokeWidth={1.2}
+                                                                        strokeDasharray="3 3"
+                                                                        opacity={0.8}
+                                                                    />
+                                                                    {/* Tag hiển thị giá trị chuẩn xác ngay tại trục OY để loại bỏ hoàn toàn sai số */}
+                                                                    <rect
+                                                                        x={pLeft - 44}
+                                                                        y={pt.cy - 7}
+                                                                        width={40}
+                                                                        height={14}
+                                                                        rx={3}
+                                                                        fill={pt.color}
+                                                                    />
+                                                                    <text
+                                                                        x={pLeft - 24}
+                                                                        y={pt.cy + 3.5}
+                                                                        textAnchor="middle"
+                                                                        fontSize="8"
+                                                                        fontWeight="bold"
+                                                                        fill="#ffffff"
+                                                                        fontFamily="inherit"
+                                                                    >
+                                                                        {exactYLabel}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+
+                                                        {/* Các Điểm Sự Kiện (Dots) */}
+                                                        {points.map((pt) => {
+                                                            const isHovered = hoveredEventId === pt.eventId;
+                                                            return (
+                                                                <g
+                                                                    key={`dot-${pt.eventId}`}
+                                                                    style={{ cursor: 'pointer' }}
+                                                                    onMouseEnter={() => setHoveredEventId(pt.eventId)}
+                                                                    onMouseLeave={() => setHoveredEventId(null)}
+                                                                >
+                                                                    <title>
+                                                                        {`#${pt.index}: ${pt.title} (${pt.category || 'Chung'})` +
+                                                                        `\nDoanh thu: ${revenueUnit === 'ETH' ? `${pt.revenueEth} ETH` : `${pt.revenueUsd.toLocaleString()}`} (~${revenueUnit === 'ETH' ? `${pt.revenueUsd.toLocaleString()}` : `${pt.revenueEth} ETH`})` +
+                                                                        `\nSố vé đã bán: ${pt.ticketsSold} vé`}
+                                                                    </title>
+
+                                                                    {/* Aura phát sáng khi hover */}
+                                                                    {isHovered && (
+                                                                        <circle
+                                                                            cx={pt.cx}
+                                                                            cy={pt.cy}
+                                                                            r={15}
+                                                                            fill={pt.color}
+                                                                            opacity={0.25}
+                                                                        />
+                                                                    )}
+
+                                                                    {/* Vòng tròn điểm chính */}
+                                                                    <circle
+                                                                        cx={pt.cx}
+                                                                        cy={pt.cy}
+                                                                        r={isHovered ? 8 : 6}
+                                                                        fill={pt.color}
+                                                                        stroke="#ffffff"
+                                                                        strokeWidth={2}
+                                                                        style={{
+                                                                            transition: 'r 0.2s ease, opacity 0.2s ease',
+                                                                            filter: isHovered ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))' : 'none',
+                                                                        }}
+                                                                    />
+
+                                                                    {/* Nhãn số thứ tự trên điểm */}
+                                                                    <text
+                                                                        x={pt.cx + (pt.cx > pLeft + plotW - 20 ? -10 : 9)}
+                                                                        y={pt.cy - 7}
+                                                                        fontSize="9"
+                                                                        fontWeight="bold"
+                                                                        fill={pt.color}
+                                                                        fontFamily="inherit"
+                                                                        style={{ pointerEvents: 'none', userSelect: 'none' }}
+                                                                    >
+                                                                        #{pt.index}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+                                                    </svg>
+                                                </Box>
+
+                                                {/* Danh Sách Chú Thích Tương Tác (Interactive Point Legend) */}
+                                                <Stack spacing={1}>
+                                                    <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ fontSize: '0.7rem' }}>
+                                                        DANH SÁCH ĐIỂM SỰ KIỆN:
+                                                    </Typography>
+                                                    {points.map((pt) => {
+                                                        const isHovered = hoveredEventId === pt.eventId;
+                                                        return (
+                                                            <Box
+                                                                key={`legend-${pt.eventId}`}
+                                                                onMouseEnter={() => setHoveredEventId(pt.eventId)}
+                                                                onMouseLeave={() => setHoveredEventId(null)}
+                                                                sx={{
+                                                                    p: 1,
+                                                                    borderRadius: 1.5,
+                                                                    bgcolor: isHovered ? `${pt.color}15` : 'background.subtle',
+                                                                    border: 1,
+                                                                    borderColor: isHovered ? pt.color : 'divider',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.2s ease',
+                                                                    transform: isHovered ? 'translateX(2px)' : 'none',
+                                                                }}
+                                                            >
+                                                                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                                                                    <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+                                                                        <Box
+                                                                            sx={{
+                                                                                width: 18,
+                                                                                height: 18,
+                                                                                minWidth: 18,
+                                                                                borderRadius: '50%',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                fontSize: '0.65rem',
+                                                                                fontWeight: 800,
+                                                                                bgcolor: pt.color,
+                                                                                color: '#ffffff',
+                                                                            }}
+                                                                        >
+                                                                            {pt.index}
+                                                                        </Box>
+                                                                        <Typography
+                                                                            variant="body2"
+                                                                            color="text.primary"
+                                                                            fontWeight={isHovered ? 700 : 600}
+                                                                            noWrap
+                                                                            title={pt.title}
+                                                                            sx={{ fontSize: '0.8rem' }}
+                                                                        >
+                                                                            {pt.title}
+                                                                        </Typography>
+                                                                    </Stack>
+
+                                                                    <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
+                                                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                                                                            {pt.ticketsSold} vé
+                                                                        </Typography>
+                                                                        <Chip
+                                                                            label={revenueUnit === 'ETH' ? `${pt.revenueEth} ETH` : `${pt.revenueUsd.toLocaleString()}`}
+                                                                            size="small"
+                                                                            sx={{
+                                                                                height: 20,
+                                                                                fontSize: '0.7rem',
+                                                                                fontWeight: 700,
+                                                                                bgcolor: `${pt.color}20`,
+                                                                                color: pt.color,
+                                                                                border: `1px solid ${pt.color}40`,
+                                                                            }}
+                                                                        />
+                                                                    </Stack>
+                                                                </Stack>
+                                                            </Box>
+                                                        );
+                                                    })}
+                                                </Stack>
+                                            </Stack>
+                                        );
+                                    })()}
+                                </CardContent>
+                            </Card>
+
                             {/* Sức khỏe Hệ thống & Smart Contract */}
                             <Card sx={{ bgcolor: 'background.paper' }}>
                                 <Box sx={{ p: 2.5, borderBottom: 1, borderColor: 'divider' }}>

@@ -186,6 +186,76 @@ export const getAdminMetrics = async () => {
   const totalRevenueEth = Number(orderStats[0]?.totalRevenueEth || 0);
   const totalRevenueUsd = Math.round(totalRevenueEth * 3150);
 
+  // Lấy doanh thu theo từng sự kiện từ các đơn hàng đã xác nhận
+  const eventRevenueRaw = await Order.findAll({
+    attributes: [
+      "eventId",
+      [sequelize.fn("SUM", sequelize.col("total_price")), "revenueEth"],
+      [sequelize.fn("SUM", sequelize.col("quantity")), "ticketsSold"],
+    ],
+    where: { status: "confirmed" },
+    include: [
+      {
+        model: Event,
+        as: "event",
+        attributes: ["id", "title", "bannerUrl", "category"],
+      },
+    ],
+    group: ["eventId", "event.id"],
+    order: [[sequelize.literal("revenueEth"), "DESC"]],
+    limit: 6,
+  }).catch(() => []);
+
+  let revenueByEvent = eventRevenueRaw.map((row) => {
+    const json = typeof row.toJSON === "function" ? row.toJSON() : row;
+    const rev = parseFloat(Number(json.revenueEth || 0).toFixed(4));
+    return {
+      eventId: json.eventId,
+      title: json.event?.title || `Sự kiện #${json.eventId}`,
+      bannerUrl: json.event?.bannerUrl || null,
+      category: json.event?.category || "Chung",
+      revenueEth: rev,
+      revenueUsd: Math.round(rev * 3150),
+      ticketsSold: Number(json.ticketsSold || 0),
+    };
+  });
+
+  // Nếu số sự kiện có đơn hàng ít hơn 4, bổ sung thêm các sự kiện đã phê duyệt/mở bán
+  if (revenueByEvent.length < 4) {
+    const existingIds = new Set(revenueByEvent.map((r) => r.eventId));
+    const otherEvents = await Event.findAll({
+      where: {
+        id: { [Op.notIn]: Array.from(existingIds) },
+        status: ["approved", "published", "ended"],
+      },
+      include: [{ model: TicketType, as: "ticketTypes" }],
+      limit: 6 - revenueByEvent.length,
+      order: [["createdAt", "DESC"]],
+    }).catch(() => []);
+
+    for (const evt of otherEvents) {
+      const ticketsSold = (evt.ticketTypes || []).reduce(
+        (acc, tt) => acc + Number(tt.currentSupply || 0),
+        0
+      );
+      const estRev = (evt.ticketTypes || []).reduce(
+        (acc, tt) =>
+          acc + Number(tt.currentSupply || 0) * Number(tt.originalPrice || 0),
+        0
+      );
+      const rev = parseFloat(estRev.toFixed(4));
+      revenueByEvent.push({
+        eventId: evt.id,
+        title: evt.title || `Sự kiện #${evt.id}`,
+        bannerUrl: evt.bannerUrl || null,
+        category: evt.category || "Chung",
+        revenueEth: rev,
+        revenueUsd: Math.round(rev * 3150),
+        ticketsSold,
+      });
+    }
+  }
+
   return {
     totalRevenueEth,
     totalRevenueUsd,
@@ -202,6 +272,7 @@ export const getAdminMetrics = async () => {
     connectedWallets,
     totalOrganizers: totalOrganizers || 0,
     complianceScore: 100,
+    revenueByEvent,
   };
 };
 
