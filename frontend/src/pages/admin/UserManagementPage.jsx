@@ -500,9 +500,6 @@ const UserManagementPage = () => {
                                         <PeopleAlt />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="status.success" mt={1} display="block" fontWeight={600}>
-                                    +124 tài khoản mới trong tuần này
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -534,9 +531,6 @@ const UserManagementPage = () => {
                                         <AccountBalanceWallet />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                                    Tỷ lệ kết nối Web3: <strong>{((stats.totalWallets / stats.totalUsers) * 100).toFixed(1)}%</strong>
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -568,9 +562,6 @@ const UserManagementPage = () => {
                                         <EventNote />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                                    Đang vận hành 42 sự kiện hệ thống
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -602,9 +593,6 @@ const UserManagementPage = () => {
                                         <Block />
                                     </Box>
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                                    Vi phạm quy tắc trần giá hoặc bot spam
-                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>

@@ -34,6 +34,8 @@ import {
     SwapHoriz,
     Storefront,
     Save,
+    Edit,
+    Close,
     QrCodeScanner,
     VerifiedUser,
     ArrowForward,
@@ -90,7 +92,17 @@ const CustomerProfilePage = () => {
 
     // Form thông tin cá nhân
     const [fullName, setFullName] = useState(user?.fullName || '');
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+    // Đồng bộ tên hiển thị khi user thay đổi ở chế độ xem
+    useEffect(() => {
+        if (!isEditingProfile) {
+            setFullName(user?.fullName || '');
+        }
+    }, [user?.fullName, isEditingProfile]);
+
+    const hasProfileChanges = fullName.trim() !== (user?.fullName || '').trim();
 
     // Thống kê vé NFT
     const [ticketStats, setTicketStats] = useState({
@@ -166,12 +178,31 @@ const CustomerProfilePage = () => {
         };
     }, [user?.walletAddress, walletAddress]);
 
+    // Bắt đầu chỉnh sửa hồ sơ cá nhân
+    const handleStartEditProfile = () => {
+        setFullName(user?.fullName || '');
+        setIsEditingProfile(true);
+    };
+
+    // Hủy chỉnh sửa hồ sơ cá nhân
+    const handleCancelEditProfile = () => {
+        setFullName(user?.fullName || '');
+        setIsEditingProfile(false);
+    };
+
     // Cập nhật họ tên hồ sơ cá nhân
     const handleSaveProfile = async (e) => {
         e.preventDefault();
+        if (!isEditingProfile) return;
+
         const trimmed = fullName.trim();
         if (!trimmed || trimmed.length < 2) {
             showSnackbar('Họ và tên phải có ít nhất 2 ký tự.', 'warning');
+            return;
+        }
+
+        if (trimmed === (user?.fullName || '').trim()) {
+            setIsEditingProfile(false);
             return;
         }
 
@@ -181,9 +212,12 @@ const CustomerProfilePage = () => {
             const updatedUser = res.data?.data?.user || res.data?.user;
             if (updatedUser) {
                 updateUser({ fullName: updatedUser.fullName });
+                setFullName(updatedUser.fullName);
             } else {
                 updateUser({ fullName: trimmed });
+                setFullName(trimmed);
             }
+            setIsEditingProfile(false);
             showSnackbar('Cập nhật hồ sơ thành công!', 'success');
         } catch (err) {
             showSnackbar(err?.response?.data?.message || 'Không thể cập nhật hồ sơ.', 'error');
@@ -298,12 +332,6 @@ const CustomerProfilePage = () => {
                                 <Typography variant="h2" fontWeight={700} color="text.primary">
                                     {user?.fullName || 'Người dùng'}
                                 </Typography>
-                                <Chip
-                                    label="Khách hàng"
-                                    size="small"
-                                    color="primary"
-                                    sx={{ fontWeight: 600, height: 22 }}
-                                />
                                 <Chip
                                     icon={<CheckCircle sx={{ fontSize: '14px !important' }} />}
                                     label="Tài khoản hợp lệ"
@@ -474,7 +502,12 @@ const CustomerProfilePage = () => {
                 >
                     <Tabs
                         value={activeTab}
-                        onChange={(e, val) => setActiveTab(val)}
+                        onChange={(e, val) => {
+                            setActiveTab(val);
+                            if (val !== 0 && isEditingProfile) {
+                                handleCancelEditProfile();
+                            }
+                        }}
                         sx={{
                             borderBottom: 1,
                             borderColor: 'divider',
@@ -503,7 +536,7 @@ const CustomerProfilePage = () => {
                         {activeTab === 0 && (
                             <Box component="form" onSubmit={handleSaveProfile} sx={{ maxWidth: 600 }}>
                                 <Typography variant="h3" fontWeight={700} color="text.primary" mb={1}>
-                                    Chỉnh Sửa Hồ Sơ Khách Hàng
+                                    {isEditingProfile ? 'Chỉnh Sửa Hồ Sơ Khách Hàng' : 'Hồ Sơ Khách Hàng'}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" mb={3}>
                                     Thông tin này được hiển thị trên hệ thống và sử dụng khi xác minh chủ sở hữu vé NFT.
@@ -516,8 +549,9 @@ const CustomerProfilePage = () => {
                                         value={fullName}
                                         onChange={(e) => setFullName(e.target.value)}
                                         placeholder="Nhập họ và tên đầy đủ..."
-                                        helperText="Họ tên phải có ít nhất 2 ký tự"
-                                        required
+                                        helperText={isEditingProfile ? 'Họ tên phải có ít nhất 2 ký tự' : undefined}
+                                        disabled={!isEditingProfile || isSavingProfile}
+                                        required={isEditingProfile}
                                     />
 
                                     <TextField
@@ -528,25 +562,49 @@ const CustomerProfilePage = () => {
                                         helperText="Email dùng làm định danh đăng nhập bảo mật và không thể thay đổi trực tiếp"
                                     />
 
-                                    <TextField
-                                        label="Vai trò tài khoản"
-                                        fullWidth
-                                        value="Khách hàng (Customer)"
-                                        disabled
-                                    />
-
                                     <Box sx={{ pt: 1 }}>
-                                        <Button
-                                            type="submit"
-                                            variant="contained"
-                                            color="primary"
-                                            size="medium"
-                                            disabled={isSavingProfile}
-                                            startIcon={isSavingProfile ? <CircularProgress size={16} color="inherit" /> : <Save />}
-                                            sx={{ height: 42, px: 3, borderRadius: '8px', fontWeight: 600 }}
-                                        >
-                                            {isSavingProfile ? 'Đang lưu...' : 'Lưu Thay Đổi'}
-                                        </Button>
+                                        {!isEditingProfile ? (
+                                            <Button
+                                                key="edit-profile-btn"
+                                                type="button"
+                                                variant="contained"
+                                                color="primary"
+                                                size="medium"
+                                                onClick={handleStartEditProfile}
+                                                startIcon={<Edit />}
+                                                sx={{ height: 42, px: 3, borderRadius: '8px', fontWeight: 600, textTransform: 'none' }}
+                                            >
+                                                Chỉnh Sửa
+                                            </Button>
+                                        ) : (
+                                            <Stack direction="row" spacing={1.5}>
+                                                <Button
+                                                    key="save-profile-btn"
+                                                    type="submit"
+                                                    variant="contained"
+                                                    color="primary"
+                                                    size="medium"
+                                                    disabled={isSavingProfile || !hasProfileChanges || fullName.trim().length < 2}
+                                                    startIcon={isSavingProfile ? <CircularProgress size={16} color="inherit" /> : <Save />}
+                                                    sx={{ height: 42, px: 3, borderRadius: '8px', fontWeight: 600, textTransform: 'none' }}
+                                                >
+                                                    {isSavingProfile ? 'Đang lưu...' : 'Lưu Thay Đổi'}
+                                                </Button>
+                                                <Button
+                                                    key="cancel-profile-btn"
+                                                    type="button"
+                                                    variant="outlined"
+                                                    color="inherit"
+                                                    size="medium"
+                                                    disabled={isSavingProfile}
+                                                    onClick={handleCancelEditProfile}
+                                                    startIcon={<Close />}
+                                                    sx={{ height: 42, px: 2.5, borderRadius: '8px', fontWeight: 600, textTransform: 'none', borderColor: 'divider' }}
+                                                >
+                                                    Hủy
+                                                </Button>
+                                            </Stack>
+                                        )}
                                     </Box>
                                 </Stack>
                             </Box>
