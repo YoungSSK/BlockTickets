@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
     Box,
     Container,
@@ -155,6 +155,20 @@ const OrganizerDashboardPage = () => {
     // Snackbar thông báo
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
     const [loading, setLoading] = useState(false);
+
+    // Khóa chống bấm trùng & hộp thoại tiến trình công bố sự kiện on-chain
+    const isPublishingRef = useRef(false);
+    const [publishProgress, setPublishProgress] = useState({
+        open: false,
+        eventId: null,
+        eventTitle: '',
+        status: 'idle', // 'running' | 'success' | 'error'
+        currentStep: 0,
+        totalSteps: 0,
+        stepLabel: '',
+        detail: '',
+        error: '',
+    });
 
     const showSnackbar = (message, severity = 'info') => {
         setSnackbar({ open: true, message, severity });
@@ -487,62 +501,118 @@ const OrganizerDashboardPage = () => {
         loadOrganizerData();
     }, []);
 
-    // Xử lý công bố sự kiện đã được duyệt
+    // Xử lý công bố sự kiện đã được duyệt (có khóa chống gọi trùng + lưu checkpoint để không ký lại giao dịch đã thành công)
     const handlePublishEvent = async (eventId) => {
+        if (isPublishingRef.current) {
+            showSnackbar('Đang có giao dịch công bố sự kiện đang chạy, vui lòng chờ hoàn tất!', 'warning');
+            return;
+        }
+
+        const targetEvt = events.find((e) => e.id === eventId);
+        if (!targetEvt) {
+            showSnackbar('Không tìm thấy sự kiện cần công bố.', 'error');
+            return;
+        }
+
+        const tiers = Array.isArray(targetEvt.ticketTypes) ? targetEvt.ticketTypes : [];
+        const totalSteps = 1 + tiers.length + 1; // 1 createEvent + N addTicketTier + 1 sync DB
+        const cpKey = `blocktickets_publish_cp_${eventId}`;
+
+        // Khôi phục checkpoint nếu lần trước đã tạo dở trên Sepolia để KHÔNG tạo trùng & KHÔNG mất thêm gas
+        let checkpoint = { onChainEventId: targetEvt.onChainEventId || null, tierMappings: [] };
         try {
-            const targetEvt = events.find((e) => e.id === eventId);
-            if (!targetEvt) {
-                showSnackbar('Không tìm thấy sự kiện cần công bố.', 'error');
-                return;
+            const saved = sessionStorage.getItem(cpKey);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && parsed.onChainEventId) {
+                    checkpoint = {
+                        onChainEventId: Number(parsed.onChainEventId),
+                        tierMappings: Array.isArray(parsed.tierMappings) ? parsed.tierMappings : [],
+                    };
+                }
             }
+        } catch (_) {}
 
-            let onChainEventId = targetEvt.onChainEventId || null;
-            const tierMappings = [];
+        const saveCheckpoint = (cp) => {
+            try {
+                sessionStorage.setItem(cpKey, JSON.stringify(cp));
+            } catch (_) {}
+        };
 
-            // Nếu sự kiện chưa có trên Smart Contract, bắt buộc phải kết nối MetaMask để tạo on-chain
-            if (!onChainEventId) {
+        isPublishingRef.current = true;
+        setOpenDetailModal(false);
+        setPublishProgress({
+            open: true,
+            eventId,
+            eventTitle: targetEvt.title,
+            status: 'running',
+            currentStep: 1,
+            totalSteps,
+            stepLabel: checkpoint.onChainEventId
+                ? `Đã có sự kiện on-chain #${checkpoint.onChainEventId}, đang tiếp tục các bước còn lại...`
+                : 'Đang kết nối ví MetaMask để khởi tạo sự kiện trên Sepolia...',
+            detail: `Tổng cộng cần ký tối đa ${1 + tiers.length} giao dịch MetaMask (1 tạo sự kiện + ${tiers.length} hạng vé). Không đóng trình duyệt cho đến khi hoàn tất.`,
+            error: '',
+        });
+
+        try {
+            let onChainEventId = checkpoint.onChainEventId;
+            const tierMappings = [...checkpoint.tierMappings];
+
+            // Kiểm tra hạng vé nào chưa có onChainTierId
+            const tiersNeedingOnChain = tiers.filter(
+                (t) => !t.onChainTierId && !tierMappings.some((m) => Number(m.ticketTypeId) === Number(t.id))
+            );
+
+            // Chỉ gọi MetaMask nếu chưa có onChainEventId HOẶC còn hạng vé chưa đẩy lên Sepolia
+            if (!onChainEventId || tiersNeedingOnChain.length > 0) {
                 if (!window.ethereum) {
-                    showSnackbar('Vui lòng cài đặt và kết nối ví MetaMask để đưa sự kiện lên Blockchain Sepolia!', 'warning');
-                    return;
+                    throw new Error('Vui lòng cài đặt và kết nối ví MetaMask để đưa sự kiện lên Blockchain Sepolia!');
                 }
 
-                try {
-                    const browserProvider = new ethers.BrowserProvider(window.ethereum);
-                    const accounts = await browserProvider.send('eth_requestAccounts', []);
-                    if (!accounts || accounts.length === 0) {
-                        showSnackbar('Vui lòng mở và kết nối ví MetaMask để tiếp tục.', 'warning');
-                        return;
-                    }
+                const browserProvider = new ethers.BrowserProvider(window.ethereum);
+                const accounts = await browserProvider.send('eth_requestAccounts', []);
+                if (!accounts || accounts.length === 0) {
+                    throw new Error('Vui lòng mở và kết nối ví MetaMask để tiếp tục.');
+                }
 
-                    const signer = await browserProvider.getSigner();
-                    const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
+                const signer = await browserProvider.getSigner();
+                const contract = new ethers.Contract(EVENT_TICKET_ADDRESS, EventTicketABI, signer);
+                const iface = new ethers.Interface(EventTicketABI);
 
-                    showSnackbar('Đang mở popup MetaMask để ký khởi tạo sự kiện trên Sepolia...', 'info');
-                    const rawStart = targetEvt.raw?.startTime;
-                    const rawEnd = targetEvt.raw?.endTime;
-                    const parsedStartMs = rawStart ? new Date(rawStart).getTime() : NaN;
-                    const parsedEndMs = rawEnd ? new Date(rawEnd).getTime() : NaN;
-                    const nowUnix = Math.floor(Date.now() / 1000);
-                    const startTimeUnix = Number.isFinite(parsedStartMs)
-                        ? Math.floor(parsedStartMs / 1000)
-                        : nowUnix + 3600;
-                    let endTimeUnix = Number.isFinite(parsedEndMs)
-                        ? Math.floor(parsedEndMs / 1000)
-                        : startTimeUnix + 86400;
-                    if (endTimeUnix <= startTimeUnix) {
-                        endTimeUnix = startTimeUnix + 3600;
-                    }
-                    if (endTimeUnix <= nowUnix) {
-                        throw new Error('Thời gian kết thúc sự kiện phải ở tương lai để có thể công bố lên Blockchain.');
-                    }
+                const rawStart = targetEvt.raw?.startTime;
+                const rawEnd = targetEvt.raw?.endTime;
+                const parsedStartMs = rawStart ? new Date(rawStart).getTime() : NaN;
+                const parsedEndMs = rawEnd ? new Date(rawEnd).getTime() : NaN;
+                const nowUnix = Math.floor(Date.now() / 1000);
+                const startTimeUnix = Number.isFinite(parsedStartMs)
+                    ? Math.floor(parsedStartMs / 1000)
+                    : nowUnix + 3600;
+                let endTimeUnix = Number.isFinite(parsedEndMs)
+                    ? Math.floor(parsedEndMs / 1000)
+                    : startTimeUnix + 86400;
+                if (endTimeUnix <= startTimeUnix) {
+                    endTimeUnix = startTimeUnix + 3600;
+                }
+                if (endTimeUnix <= nowUnix) {
+                    throw new Error('Thời gian kết thúc sự kiện phải ở tương lai để có thể công bố lên Blockchain.');
+                }
 
-                    // 1. Tạo sự kiện on-chain: createEvent(startTime, endTime)
+                // Bước 1: Tạo sự kiện on-chain (chỉ chạy nếu chưa tạo ở checkpoint)
+                if (!onChainEventId) {
+                    setPublishProgress((prev) => ({
+                        ...prev,
+                        currentStep: 1,
+                        stepLabel: `Bước 1/${totalSteps}: Vui lòng ký xác nhận tạo sự kiện trên MetaMask...`,
+                    }));
+
                     const tx = await contract.createEvent(startTimeUnix, endTimeUnix);
-                    showSnackbar('Đang chờ thợ đào xác nhận sự kiện trên mạng Sepolia...', 'info');
+                    setPublishProgress((prev) => ({
+                        ...prev,
+                        stepLabel: `Bước 1/${totalSteps}: Đang chờ thợ đào xác nhận sự kiện trên Sepolia...`,
+                    }));
                     const receipt = await tx.wait();
 
-                    // Đọc EventCreated log để lấy eventId
-                    const iface = new ethers.Interface(EventTicketABI);
                     for (const log of receipt.logs) {
                         try {
                             const parsed = iface.parseLog(log);
@@ -554,77 +624,133 @@ const OrganizerDashboardPage = () => {
                     }
 
                     if (!onChainEventId) {
-                        throw new Error('Không thể lấy mã Event ID từ Blockchain.');
+                        throw new Error('Không thể đọc mã Event ID từ log Blockchain.');
                     }
 
-                    // 2. Thêm từng hạng vé lên contract: addTicketTier(...)
-                    if (targetEvt.ticketTypes && targetEvt.ticketTypes.length > 0) {
-                        showSnackbar(`Khởi tạo thành công sự kiện ID #${onChainEventId}. Đang thêm các hạng vé on-chain...`, 'info');
-                        for (const tier of targetEvt.ticketTypes) {
-                            const priceWei = ethers.parseEther(Number(tier.originalPrice || tier.price || 0.01).toFixed(6));
-                            const maxSupply = BigInt(tier.maxSupply || tier.capacity || 100);
-                            const tierSaleStartMs = tier.saleStartTime ? new Date(tier.saleStartTime).getTime() : NaN;
-                            const tierSaleEndMs = tier.saleEndTime ? new Date(tier.saleEndTime).getTime() : NaN;
-                            let saleEndUnix = Number.isFinite(tierSaleEndMs)
-                                ? Math.floor(tierSaleEndMs / 1000)
-                                : startTimeUnix;
-                            if (saleEndUnix > endTimeUnix) saleEndUnix = endTimeUnix;
-                            let saleStartUnix = Number.isFinite(tierSaleStartMs)
-                                ? Math.floor(tierSaleStartMs / 1000)
-                                : Math.min(nowUnix, Math.max(0, saleEndUnix - 3600));
-                            if (saleEndUnix <= saleStartUnix) {
-                                saleStartUnix = Math.max(0, saleEndUnix - 3600);
-                            }
+                    // Lưu checkpoint ngay sau khi tạo sự kiện thành công
+                    saveCheckpoint({ onChainEventId, tierMappings });
+                }
 
-                            const tierTx = await contract.addTicketTier(
-                                onChainEventId,
-                                priceWei,
-                                maxSupply,
-                                saleStartUnix,
-                                saleEndUnix
-                            );
-                            const tierReceipt = await tierTx.wait();
+                // Bước 2: Đẩy từng hạng vé chưa có onChainTierId lên contract
+                for (let idx = 0; idx < tiers.length; idx++) {
+                    const tier = tiers[idx];
+                    const alreadyMapped =
+                        tier.onChainTierId ||
+                        tierMappings.some((m) => Number(m.ticketTypeId) === Number(tier.id));
+                    if (alreadyMapped) continue;
 
-                            let onChainTierId = null;
-                            for (const log of tierReceipt.logs) {
-                                try {
-                                    const parsed = iface.parseLog(log);
-                                    if (parsed && parsed.name === 'TicketTierAdded') {
-                                        onChainTierId = Number(parsed.args.tierId);
-                                        break;
-                                    }
-                                } catch (_) {}
-                            }
-                            if (!onChainTierId) {
-                                throw new Error(`Không thể đọc mã Tier ID on-chain cho hạng vé "${tier.name}".`);
-                            }
-                            tierMappings.push({
-                                ticketTypeId: tier.id,
-                                onChainTierId,
-                            });
-                        }
+                    const stepNum = idx + 2;
+                    setPublishProgress((prev) => ({
+                        ...prev,
+                        currentStep: stepNum,
+                        stepLabel: `Bước ${stepNum}/${totalSteps}: Vui lòng ký MetaMask thêm hạng vé "${tier.name}" (${idx + 1}/${tiers.length})...`,
+                    }));
+
+                    const priceWei = ethers.parseEther(Number(tier.originalPrice || tier.price || 0.01).toFixed(6));
+                    const maxSupply = BigInt(tier.maxSupply || tier.capacity || 100);
+                    const tierSaleStartMs = tier.saleStartTime ? new Date(tier.saleStartTime).getTime() : NaN;
+                    const tierSaleEndMs = tier.saleEndTime ? new Date(tier.saleEndTime).getTime() : NaN;
+                    let saleEndUnix = Number.isFinite(tierSaleEndMs)
+                        ? Math.floor(tierSaleEndMs / 1000)
+                        : startTimeUnix;
+                    if (saleEndUnix > endTimeUnix) saleEndUnix = endTimeUnix;
+                    let saleStartUnix = Number.isFinite(tierSaleStartMs)
+                        ? Math.floor(tierSaleStartMs / 1000)
+                        : Math.min(nowUnix, Math.max(0, saleEndUnix - 3600));
+                    if (saleEndUnix <= saleStartUnix) {
+                        saleStartUnix = Math.max(0, saleEndUnix - 3600);
                     }
-                } catch (onChainErr) {
-                    console.error('Lỗi khởi tạo sự kiện on-chain:', onChainErr);
-                    const errMsg = onChainErr?.reason || onChainErr?.info?.error?.message || onChainErr?.message || 'Lỗi khi gọi Smart Contract';
-                    if (onChainErr?.code === 4001 || onChainErr?.info?.error?.code === 4001) {
-                        showSnackbar('Bạn đã từ chối ký giao dịch trên ví MetaMask. Sự kiện chưa được công bố.', 'warning');
-                    } else {
-                        showSnackbar(`Lỗi khởi tạo on-chain: ${errMsg}`, 'error');
+
+                    const tierTx = await contract.addTicketTier(
+                        onChainEventId,
+                        priceWei,
+                        maxSupply,
+                        saleStartUnix,
+                        saleEndUnix
+                    );
+                    setPublishProgress((prev) => ({
+                        ...prev,
+                        stepLabel: `Bước ${stepNum}/${totalSteps}: Đang chờ xác nhận hạng vé "${tier.name}" trên Sepolia...`,
+                    }));
+                    const tierReceipt = await tierTx.wait();
+
+                    let onChainTierId = null;
+                    for (const log of tierReceipt.logs) {
+                        try {
+                            const parsed = iface.parseLog(log);
+                            if (parsed && parsed.name === 'TicketTierAdded') {
+                                onChainTierId = Number(parsed.args.tierId);
+                                break;
+                            }
+                        } catch (_) {}
                     }
-                    return; // Chặn không công bố vào database nếu on-chain chưa xong!
+                    if (!onChainTierId) {
+                        throw new Error(`Không thể đọc mã Tier ID on-chain cho hạng vé "${tier.name}".`);
+                    }
+
+                    tierMappings.push({
+                        ticketTypeId: tier.id,
+                        onChainTierId,
+                    });
+                    // Lưu checkpoint ngay sau mỗi hạng vé
+                    saveCheckpoint({ onChainEventId, tierMappings });
                 }
             }
 
-            // 3. Sau khi on-chain thành công mới cập nhật trạng thái và lưu ánh xạ tierId trong database
+            // Bước cuối: Đồng bộ trạng thái "published" + onChainEventId + tierMappings về Backend MySQL
+            setPublishProgress((prev) => ({
+                ...prev,
+                currentStep: totalSteps,
+                stepLabel: `Bước ${totalSteps}/${totalSteps}: Đang đồng bộ trạng thái Mở bán & mã Tier vào hệ thống...`,
+            }));
+
             await organizerAPI.publishEvent(
                 eventId,
                 onChainEventId ? { onChainEventId, tierMappings } : {}
             );
+
+            // Xóa checkpoint sau khi đã đồng bộ hoàn tất vào DB
+            try {
+                sessionStorage.removeItem(cpKey);
+            } catch (_) {}
+
+            // Cập nhật ngay trạng thái UI + tải lại danh sách mới nhất từ Backend
+            setEvents((prev) =>
+                prev.map((ev) =>
+                    ev.id === eventId
+                        ? { ...ev, status: 'published', statusText: 'ĐANG MỞ BÁN', onChainEventId }
+                        : ev
+                )
+            );
+            setPublishProgress((prev) => ({
+                ...prev,
+                status: 'success',
+                stepLabel: `Hoàn tất! Sự kiện đã lên Sepolia (Event #${onChainEventId}) và mở bán thành công.`,
+                error: '',
+            }));
             showSnackbar('Đã công khai mở bán sự kiện thành công trên cả Hệ Thống và Blockchain Sepolia!', 'success');
-            loadOrganizerData();
+            await loadOrganizerData();
         } catch (err) {
-            showSnackbar(err.message || 'Lỗi khi công bố sự kiện', 'error');
+            console.error('Lỗi công bố sự kiện on-chain:', err);
+            const rawMsg =
+                err?.response?.data?.message ||
+                err?.reason ||
+                err?.info?.error?.message ||
+                err?.message ||
+                'Lỗi khi công bố sự kiện';
+            const friendlyMsg =
+                err?.code === 4001 || err?.info?.error?.code === 4001
+                    ? 'Bạn đã từ chối ký giao dịch trên ví MetaMask. Các bước đã ký trước đó đã được lưu tạm — bạn có thể bấm "Tiếp tục" để hoàn tất mà không phải tạo lại từ đầu.'
+                    : rawMsg;
+
+            setPublishProgress((prev) => ({
+                ...prev,
+                status: 'error',
+                error: friendlyMsg,
+            }));
+            showSnackbar(friendlyMsg, 'error');
+        } finally {
+            isPublishingRef.current = false;
         }
     };
 
@@ -1840,13 +1966,11 @@ const OrganizerDashboardPage = () => {
                                 <Button
                                     variant="contained"
                                     color="success"
-                                    onClick={() => {
-                                        handlePublishEvent(selectedEvent.id);
-                                        setOpenDetailModal(false);
-                                    }}
+                                    disabled={publishProgress.status === 'running'}
+                                    onClick={() => handlePublishEvent(selectedEvent.id)}
                                     sx={{ borderRadius: '8px', fontWeight: 700, mr: 'auto' }}
                                 >
-                                    Mở Bán Sự Kiện Ngay
+                                    {publishProgress.status === 'running' ? 'Đang đưa lên Sepolia...' : 'Mở Bán Sự Kiện Ngay'}
                                 </Button>
                             )}
 
@@ -1875,6 +1999,88 @@ const OrganizerDashboardPage = () => {
                         </DialogActions>
                     </>
                 )}
+            </Dialog>
+
+            {/* MODAL TIẾN TRÌNH ĐƯA SỰ KIỆN LÊN BLOCKCHAIN SEPOLIA */}
+            <Dialog
+                open={publishProgress.open}
+                onClose={() => {
+                    if (publishProgress.status !== 'running') {
+                        setPublishProgress((prev) => ({ ...prev, open: false }));
+                    }
+                }}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: '14px', p: 1 } }}
+            >
+                <DialogTitle sx={{ fontWeight: 700 }}>
+                    {publishProgress.status === 'success'
+                        ? 'Công Bố Sự Kiện On-Chain Thành Công'
+                        : publishProgress.status === 'error'
+                        ? 'Tạm Dừng Công Bố Sự Kiện'
+                        : 'Đang Đưa Sự Kiện Lên Blockchain Sepolia'}
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="subtitle2" fontWeight={700} color="primary.main" gutterBottom>
+                        {publishProgress.eventTitle}
+                    </Typography>
+
+                    {publishProgress.status === 'running' && (
+                        <>
+                            <Typography variant="body2" color="text.secondary" mb={2}>
+                                {publishProgress.detail}
+                            </Typography>
+                            <Stack direction="row" spacing={1.5} alignItems="center" mb={1.5}>
+                                <CircularProgress size={20} />
+                                <Typography variant="body2" fontWeight={600} color="text.primary">
+                                    {publishProgress.stepLabel}
+                                </Typography>
+                            </Stack>
+                            <LinearProgress
+                                variant="determinate"
+                                value={
+                                    publishProgress.totalSteps > 0
+                                        ? Math.round((publishProgress.currentStep / publishProgress.totalSteps) * 100)
+                                        : 10
+                                }
+                                sx={{ height: 8, borderRadius: 4 }}
+                            />
+                        </>
+                    )}
+
+                    {publishProgress.status === 'success' && (
+                        <Alert severity="success" sx={{ mt: 1, borderRadius: '10px' }}>
+                            {publishProgress.stepLabel}
+                        </Alert>
+                    )}
+
+                    {publishProgress.status === 'error' && (
+                        <Alert severity="error" sx={{ mt: 1, borderRadius: '10px' }}>
+                            {publishProgress.error}
+                        </Alert>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    {publishProgress.status === 'error' && publishProgress.eventId && (
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={() => handlePublishEvent(publishProgress.eventId)}
+                            sx={{ borderRadius: '8px', fontWeight: 700 }}
+                        >
+                            Tiếp tục bước còn lại (không tạo lại bước đã xong)
+                        </Button>
+                    )}
+                    {publishProgress.status !== 'running' && (
+                        <Button
+                            variant="outlined"
+                            onClick={() => setPublishProgress((prev) => ({ ...prev, open: false }))}
+                            sx={{ borderRadius: '8px', fontWeight: 600 }}
+                        >
+                            Đóng
+                        </Button>
+                    )}
+                </DialogActions>
             </Dialog>
 
             <Snackbar
